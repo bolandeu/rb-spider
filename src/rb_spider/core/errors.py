@@ -105,3 +105,19 @@ class CliTooOld(CliError):
 class Aborted(CliError):
     def __init__(self, description: str) -> None:
         super().__init__("ABORTED", f"{description}: aborted by user.", exit_code=1)
+
+
+class RenderUnavailable(CliError):
+    """`crawl.render = "always"` without the optional browser: the `render` extra or the browser binary."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            "RENDER_UNAVAILABLE",
+            f"JS rendering needs Playwright and a browser: {reason}",
+            action=(
+                f'Install it: uv tool install --reinstall "{DIST_NAME}[render] @ git+https://github.com/bolandeu/spider.git" '
+                "(in a checkout: uv sync --extra render), then: playwright install chromium. "
+                "Or crawl without rendering: --render never."
+            ),
+            exit_code=1,
+        )

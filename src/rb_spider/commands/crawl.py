@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from enum import StrEnum
 from pathlib import Path
 
 import typer
@@ -47,6 +48,11 @@ def crawl(
     detach: bool = typer.Option(
         False, "--detach", help="Запустить обход в фоне и сразу вернуться; следить — `spider status`."
     ),
+    render: Render | None = typer.Option(
+        None,
+        "--render",
+        help="JS-рендеринг HTML-страниц браузером: never или always (ключ crawl.render, по умолчанию never).",
+    ),
     store_html: bool | None = typer.Option(
         None, "--store-html", help="Сохранить HTML страниц сжатым рядом с базой (ключ crawl.store_html)."
     ),
@@ -79,6 +85,7 @@ def crawl(
       spider crawl https://example.com/ --set 'crawl.exclude=["\\?sort="]' --set crawl.max_rps=5
       spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
       spider --json crawl https://example.com/
+      spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000
       spider crawl --list old-urls.txt              # аудит списка, например после миграции
       cat urls.txt | spider crawl --list - --detach
 
@@ -88,6 +95,13 @@ def crawl(
     конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из
     списка. Результат — обычный обход: issues, urls, redirects, links работают.
 
+    JS-сайт (контент, ссылки или title появляются только после скриптов) —
+    `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и
+    открываются в браузере, SEO-данные берутся из готового DOM, а коды ответа,
+    редиректы и ресурсы проверяются как обычно. Нужен `rb-spider[render]` и
+    `playwright install chromium`; вкладок — crawl.render_tabs, ожидание скриптов —
+    crawl.render_wait_ms. Медленнее обычного обхода в разы.
+
     Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
 
@@ -95,7 +109,7 @@ def crawl(
     `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
     finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
     detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код
-    выхода 2.
+    выхода 2; `--render always` без Playwright — код 1, `RENDER_UNAVAILABLE`.
     """
     resolved = options.resolve(
         ctx,
@@ -109,6 +123,7 @@ def crawl(
             "crawl.user_agent": user_agent,
             "crawl.robots": "ignore" if ignore_robots else None,
             "crawl.store_html": store_html,
+            "crawl.render": render.value if render else None,
         },
     )
     if (url is None) == (url_list is None):
@@ -134,6 +149,11 @@ def crawl(
             return
         result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
+
+
+class Render(StrEnum):
+    never = "never"
+    always = "always"
 
 
 def _read_list(source: str) -> str:

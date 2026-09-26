@@ -21,7 +21,9 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python }}
       - run: uv lock --check
-      - run: uv sync
+      - run: uv sync --extra render
+      # the browser for the JS-rendering tests (`crawl.render = "always"`)
+      - run: uv run playwright install --only-shell chromium ${{ runner.os == 'Linux' && '--with-deps' || '' }}
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run ty check

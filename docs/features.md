@@ -570,9 +570,9 @@
 
 ### Рендеринг (Spider > Rendering)
 
-- [ ] `MVP` **Rendering mode: Text Only / JavaScript** (#15) → `render = "never" | "always"`
+- [x] `MVP` **Rendering mode: Text Only / JavaScript** (#15) → `crawl.render = "never" | "always"`, вкладки — `crawl.render_tabs`
 - [ ] `v2` **Автовыбор рендеринга** → `render = "auto"` (AdaptivePlaywrightCrawler, см. spec.md)
-- [ ] `MVP` **AJAX Timeout** (#15) — сколько ждать JS после загрузки → `render_options.wait_ms`
+- [x] `MVP` **AJAX Timeout** (#15) — сколько ждать JS после загрузки → `crawl.render_wait_ms`
 - [ ] `v2` **Window Size** (viewport, пресеты Googlebot desktop/mobile) → `render_options.viewport`
 - [ ] `v2` **JavaScript Error Reporting** → `render_options.console_log`
 - [ ] `v2` **Flatten Shadow DOM**, **Flatten iframes** → `render_options.flatten_shadow_dom`, `render_options.flatten_iframes`

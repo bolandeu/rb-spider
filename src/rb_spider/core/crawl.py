@@ -17,6 +17,7 @@ throttling queue isn't needed.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import logging
 import os
@@ -42,10 +43,11 @@ from crawlee.proxy_configuration import ProxyConfiguration
 from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
-from . import issues, storage
+from . import issues, render, storage
 from .errors import AuthRequired, InvalidArguments
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
+from .render import Renderer
 from .scope import PageReader, Reading, Scope, init_worker, read_in_worker
 from .settings import CrawlSettings, Settings
 
@@ -203,6 +205,13 @@ async def _run(
 
     queue = MemoryQueue(request)
     concurrency = settings.concurrency
+    renderer = (
+        Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms, timeout_s=settings.timeout_s,
+                 user_agent=user_agent, headers=settings.headers)
+        if settings.render == "always" else None
+    )  # fmt: skip
+    # a handler may first wait for a free browser tab: every tab busy with pages ahead of it
+    render_wait_s = (settings.timeout_s + settings.render_wait_ms / 1000) * -(-concurrency // settings.render_tabs)
     crawler = HttpCrawler(
         http_client=http_client,
         storage_client=storage_client,
@@ -218,7 +227,7 @@ async def _run(
         max_requests_per_crawl=settings.max_urls,
         max_request_retries=1,
         navigation_timeout=timedelta(seconds=settings.timeout_s),
-        request_handler_timeout=timedelta(seconds=settings.timeout_s + 60),
+        request_handler_timeout=timedelta(seconds=settings.timeout_s + 60 + (render_wait_s if renderer else 0)),
         ignore_http_error_status_codes=list(range(300, 600)),
         respect_robots_txt_file=False,  # RobotsGate, see the module docstring
         configure_logging=False,
@@ -271,8 +280,16 @@ async def _run(
         response = ctx.http_response
         body = await response.read()
         check = bool(ctx.request.user_data.get("check"))
-        reading = await parser.read(ctx.request.url, response.status_code, dict(response.headers), body, check=check)
+        headers = dict(response.headers)
+        source, rendered = body, None
+        if renderer and not check and response.status_code == 200 and _is_html(headers):
+            dom = await renderer.render(ctx.request.url)
+            source, rendered = dom or body, dom is not None
+        reading = await parser.read(ctx.request.url, response.status_code, headers, source, check=check)
         page = reading.page
+        page.bytes = len(body)  # the response's size, not the rendered DOM's
+        if rendered is not None:
+            page.onpage["rendered"] = rendered
         if settings.robots == "report" and not await robots.allowed(page.url):
             page.blocked = "robots_txt"  # fetched anyway, flagged as disallowed
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
@@ -302,18 +319,31 @@ async def _run(
             await admit([start_url], 0, start=True)
         writer.flush()  # the start URL (and a robots verdict on it) is on disk before any fetching
         if not await queue.is_empty():
-            await crawler.run()
+            async with renderer or contextlib.nullcontext():
+                await crawler.run()
     finally:
         parser.close()
         await queue.drop()
+
+
+def _is_html(headers: dict[str, str]) -> bool:
+    content_type = next((v for k, v in headers.items() if k.lower() == "content-type"), "text/html")
+    return "html" in content_type
 
 
 def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Settings | None = None) -> int:
     """Record a new crawl with its settings; `run_crawl` does the work (now, or in a detached process)."""
     settings = settings or Settings()
     start_url = _validate_start_url(start_url)
-    proxy_urls(settings.crawl)  # a missing proxy password fails before a crawl is registered
+    _ready(settings)
     return storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
+
+
+def _ready(settings: Settings) -> None:
+    """What a crawl needs, checked before it is registered: the proxy password, the browser for rendering."""
+    proxy_urls(settings.crawl)
+    if settings.crawl.render == "always":
+        render.ensure_available()
 
 
 def read_url_list(text: str) -> list[str]:
@@ -345,7 +375,7 @@ def register_list_crawl(engine: sa.Engine, urls: list[str], project: str, settin
     settings = (settings or Settings()).model_copy(deep=True)
     settings.crawl.mode = "list"
     urls = [_validate_start_url(url) for url in urls]
-    proxy_urls(settings.crawl)
+    _ready(settings)
     crawl_id = storage.start_crawl(engine, project, urls[0], settings.model_dump(mode="json"))
     storage.enqueue(engine, crawl_id, urls)
     return crawl_id

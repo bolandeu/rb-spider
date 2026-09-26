@@ -215,6 +215,19 @@ IMAGE_TRAPS: dict[str, str] = {
         + _IMG.format(src="{local}/img/gone.png", alt="Чужая пропавшая"),  # external 404
     ),
 }
+# JS rendering (#15): title, h1 and a link exist only after the script runs. Not linked from the main
+# graph — a crawl with rendering starts right at /js-only, so the other traps' expectations stay put.
+_JS = (
+    "<script>document.title = 'Заголовок из JS';"
+    "const h = document.createElement('h1'); h.textContent = 'H1 из JS'; document.body.prepend(h);"
+    "const a = document.createElement('a'); a.href = '/js-target'; a.textContent = 'ссылка из JS';"
+    "document.body.append(a);</script>"
+)
+JS_TRAPS: dict[str, str] = {
+    "/js-only": f"<html><head></head><body><p>Текст без JS.</p>{_JS}</body></html>",
+    "/js-target": _html("js-target", dead_end=True),
+}
+
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -283,6 +296,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in CONTENT_TRAPS.items()},
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).

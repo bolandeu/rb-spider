@@ -38,6 +38,13 @@ uv tool upgrade rb-spider                                      # обновит�
 spider                                                         # список команд
 ```
 
+JS-рендеринг (`spider crawl --render always`) — дополнительно, с Playwright и браузером:
+
+```bash
+uv tool install "rb-spider[render] @ git+https://github.com/bolandeu/spider.git"
+playwright install chromium        # или только headless-оболочка: playwright install --only-shell chromium
+```
+
 Отказ с ошибкой авторизации при установке — один раз `gh auth login` (или `gh auth setup-git`), либо ссылка вида `git+ssh://git@github.com/bolandeu/spider.git`.
 
 У каждой команды `--help` — это и есть документация. `--json` — вывод для агентов; `spider --ai` печатает инструкцию для ИИ-агентов, `spider skill install` ставит её в Claude Code.

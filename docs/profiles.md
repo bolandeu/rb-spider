@@ -54,6 +54,9 @@ concurrency = 10
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
 | `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
+| `crawl.render` | `Literal['never', 'always']` | `"never"` | JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS. |
+| `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при render = always. |
+| `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always. |
 | `crawl.parse_workers` | `int \| None` | — | Сколько отдельных процессов разбирают HTML на больших обходах; 0 — всё в основном процессе; не задано — по числу ядер, не больше 4. |
 | `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
 | `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |

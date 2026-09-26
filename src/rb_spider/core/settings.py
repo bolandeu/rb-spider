@@ -105,6 +105,22 @@ class CrawlSettings(BaseModel):
         None, gt=0, description="Не больше стольких запросов в секунду; не задано — без ограничения.", examples=[5]
     )
     timeout_s: float = Field(20, gt=0, description="Сколько секунд ждать ответа, прежде чем считать URL неответившим.")
+    render: Literal["never", "always"] = Field(
+        "never",
+        description=(
+            "JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и "
+            "открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS."
+        ),
+    )
+    render_tabs: int = Field(
+        4, ge=1, le=50, description="Сколько вкладок браузера открыто одновременно при render = always."
+    )
+    render_wait_ms: int = Field(
+        0,
+        ge=0,
+        le=60000,
+        description="Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always.",
+    )
     parse_workers: int | None = Field(
         None,
         ge=0,
