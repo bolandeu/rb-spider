@@ -21,10 +21,10 @@ from typing import IO, Any
 import sqlalchemy as sa
 from pydantic import ValidationError
 
-from . import enrich, issues, storage, structured
+from . import enrich, issues, serp, storage, structured
 from .errors import InvalidArguments
 from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
-from .settings import Settings
+from .settings import Settings, ThresholdSettings
 
 DATASETS = ("pages", "links", "issues")
 RESOURCE_KINDS = ("image", "css", "js", "media", "iframe")
@@ -253,7 +253,18 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
     return {"crawl_id": crawl_id, "page": page, "request_headers": _request_headers(engine, crawl_id),
             "issues": issue_rows, **counts, "resources": resource_rows,
             "metrics": enrich.metrics_of(engine, crawl_id, url),
+            "serp": serp.snippet(url, page.get("title"), page.get("meta_description"), _thresholds(engine, crawl_id))
+            if page.get("parsed") and (page.get("title") or page.get("meta_description")) else None,
             "structured_data": _structured_items(engine, crawl_id, url)}  # fmt: skip
+
+
+def _thresholds(engine: sa.Engine, crawl_id: int) -> ThresholdSettings:
+    """The thresholds the crawl ran with (its settings snapshot), the defaults for older crawls."""
+    _, snapshot = storage.get_crawl(engine, crawl_id)
+    try:
+        return Settings.model_validate(snapshot or {}).thresholds
+    except ValidationError:
+        return ThresholdSettings()
 
 
 def _structured_items(engine: sa.Engine, crawl_id: int, url: str) -> list[dict] | None:

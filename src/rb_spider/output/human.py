@@ -219,6 +219,37 @@ def sitemaps_built(data: dict) -> None:
     )
 
 
+def serp_view(snippet: dict, heading: str = "Сниппет") -> None:
+    console.print(
+        f"[bold]{heading}[/bold] (title {snippet['title_px']} px, description {snippet['description_px']} px)"
+    )
+    console.print(f"  {escape(snippet['url'])}", style="green")
+    console.print(f"  {escape(snippet['title'])}", style="bold blue")
+    console.print(f"  {escape(snippet['description'])}")
+
+
+def serp_summary(data: dict) -> None:
+    shown, total = len(data["pages"]), data["total"]
+    console.print(
+        f"[bold]SERP[/bold] — обход #{data['crawl_id']}: {total}"
+        + (f", показаны первые {shown}" if shown < total else "")
+    )
+    table = Table(box=None, pad_edge=False)
+    for column in ("URL", "title симв.", "title px", "description симв.", "description px"):
+        table.add_column(column)
+    for row in data["pages"]:
+        cells = [row["title_chars"], row["title_px"], row["description_chars"], row["description_px"]]
+        table.add_row(row["url"], *("—" if c is None else str(c) for c in cells))
+    console.print(table)
+
+
+def serp_preview(data: dict) -> None:
+    serp_view(data, heading="Предпросмотр сниппета")
+    if data["title_truncated"] or data["description_truncated"]:
+        cut = [name for name in ("title", "description") if data[f"{name}_truncated"]]
+        console.print(f"  обрезано: {', '.join(cut)}")
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -367,6 +398,8 @@ def url_details(data: dict) -> None:
         console.print("[bold]Заголовки запроса[/bold]")
         for name, value in data["request_headers"].items():
             console.print(f"  {escape(name)}: {escape(str(value))}")
+    if data.get("serp"):
+        serp_view(data["serp"], heading="Сниппет в Google")
     if page.get("sd_messages") or page.get("sd_types"):
         console.print(f"[bold]Микроразметка[/bold]: {escape((page.get('sd_types') or '').strip(','))}")
         for severity, scope, *_, text in page.get("sd_messages") or []:

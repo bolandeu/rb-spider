@@ -74,6 +74,9 @@ pages = sa.Table(
     sa.Column("meta_description", sa.String),
     sa.Column("meta_description_count", sa.Integer),
     sa.Column("meta_description_outside_head", sa.Integer),
+    # computed after the crawl (issues.analyze): the title and description's width in Google's results, pixels
+    sa.Column("title_px", sa.Integer),
+    sa.Column("description_px", sa.Integer),
     sa.Column("h1", sa.String),
     sa.Column("h1_count", sa.Integer),
     sa.Column("h1_from_alt", sa.Boolean),  # the first h1's text comes from an image alt inside it

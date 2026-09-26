@@ -24,6 +24,7 @@ from .commands import (
     profiles,
     projects,
     redirects,
+    serp,
     sitemaps,
     skill,
     status,
@@ -50,6 +51,7 @@ app.add_typer(profiles.app, name="profiles")
 app.add_typer(projects.app, name="projects")
 app.add_typer(db.app, name="db")
 app.add_typer(sitemaps.app, name="sitemaps")
+app.add_typer(serp.app, name="serp")
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

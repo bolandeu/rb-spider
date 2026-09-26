@@ -101,8 +101,8 @@
 - [x] `MVP` **Duplicate** — одинаковый title у нескольких страниц _(SF: Opportunity, Medium)_
 - [x] `MVP` **Over 60 Characters** — title длиннее 60 символов (может обрезаться в выдаче) _(SF: Opportunity, Medium)_
 - [x] `MVP` **Below 30 Characters** — title короче 30 символов _(SF: Opportunity, Medium)_
-- [ ] `v2` **Over 561 Pixels** — ширина title больше лимита выдачи Google в пикселях (нужна таблица ширин шрифта) _(SF: Opportunity, Medium)_
-- [ ] `v2` **Below 200 Pixels** — title заметно уже лимита выдачи в пикселях _(SF: Opportunity, Medium)_
+- [x] `v2` **Over 561 Pixels** — ширина title больше лимита выдачи Google в пикселях (нужна таблица ширин шрифта) _(SF: Opportunity, Medium)_
+- [x] `v2` **Below 200 Pixels** — title заметно уже лимита выдачи в пикселях _(SF: Opportunity, Medium)_
 - [x] `MVP` **Same as H1** — title дословно совпадает с `<h1>` _(SF: Opportunity, Low)_
 
 ### Meta Description
@@ -113,8 +113,8 @@
 - [x] `MVP` **Duplicate** — одинаковый meta description у нескольких страниц _(SF: Opportunity, Low)_
 - [x] `MVP` **Over 155 Characters** — длиннее 155 символов (обрежется в сниппете) _(SF: Opportunity, Low)_
 - [x] `MVP` **Below 70 Characters** — короче 70 символов _(SF: Opportunity, Low)_
-- [ ] `v2` **Over 985 Pixels** — шире лимита сниппета в пикселях _(SF: Opportunity, Low)_
-- [ ] `v2` **Below 400 Pixels** — заметно уже лимита сниппета в пикселях _(SF: Opportunity, Low)_
+- [x] `v2` **Over 985 Pixels** — шире лимита сниппета в пикселях _(SF: Opportunity, Low)_
+- [x] `v2` **Below 400 Pixels** — заметно уже лимита сниппета в пикселях _(SF: Opportunity, Low)_
 
 ### H1
 
@@ -500,7 +500,7 @@
 - [x] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
 - [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
-- [ ] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования)
+- [x] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования) → `spider url`
 - [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
@@ -602,7 +602,7 @@
 
 - [x] `MVP` **Page Title: мин/макс символов** (30 / 60) → `thresholds.title_chars`
 - [x] `MVP` **Meta Description: мин/макс символов** (70 / 155) → `thresholds.description_chars`
-- [ ] `v2` **Title / Description: мин/макс пикселей** (200 / 561, 400 / 985) → `thresholds.title_px`, `thresholds.description_px`
+- [x] `v2` **Title / Description: мин/макс пикселей** (200 / 561, 400 / 985) → `thresholds.title_min_px` / `title_max_px`, `description_min_px` / `description_max_px`; кегли `serp_title_font_px` (20), `serp_description_font_px` (14)
 - [x] `MVP` **Макс. длина H1 / H2** (70) → `thresholds.h1_chars`, `thresholds.h2_chars`
 - [x] `MVP` **Макс. длина alt** (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
 - [x] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
@@ -738,7 +738,7 @@
 - [x] `v2` **Pagination: Non-200, Unlinked** → `spider pagination --only …`
 - [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
 - [x] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами → `spider insecure`
-- [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях
+- [x] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях → `spider serp summary`
 - [x] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже) → `spider sitemaps show --only orphans`
 - [x] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)** → `spider structured [--report validation|features]`
 - [ ] `v2` **JavaScript: Chrome Console Log Summary**
@@ -769,7 +769,7 @@
 - [ ] `v3` **Link Score** — внутренний PageRank 0–100 после обхода
 - [x] `v2` **Readability** — Flesch Reading Ease
 - [ ] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt
-- [ ] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI)
+- [x] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI) → `spider serp preview`
 - [ ] `backlog` **N-grams**
 - [ ] `backlog` **Semantic search / similarity** (эмбеддинги)
 - [ ] `backlog` **Carbon footprint / rating** — CO₂ на загрузку страницы (шкала рейтинга — не подтверждено)

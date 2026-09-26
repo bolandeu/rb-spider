@@ -349,6 +349,22 @@ class ThresholdSettings(BaseModel):
     description_min_chars: int = Field(
         70, ge=1, description="Meta description короче — «Meta Description: Below … Characters»."
     )
+    title_max_px: int = Field(
+        561, ge=1, description="Title шире стольких пикселей в выдаче — «Page Titles: Over … Pixels»."
+    )
+    title_min_px: int = Field(200, ge=1, description="Title уже — «Page Titles: Below … Pixels».")
+    description_max_px: int = Field(
+        985,
+        ge=1,
+        description="Meta description шире (в сумме по строкам сниппета) — «Meta Description: Over … Pixels».",
+    )
+    description_min_px: int = Field(400, ge=1, description="Meta description уже — «Meta Description: Below … Pixels».")
+    serp_title_font_px: float = Field(
+        20, gt=0, description="Кегль title в выдаче Google (Arial), по нему считаются пиксели."
+    )
+    serp_description_font_px: float = Field(
+        14, gt=0, description="Кегль сниппета в выдаче Google (Arial), по нему считаются пиксели description."
+    )
     h1_max_chars: int = Field(70, ge=1, description="H1 длиннее — «H1: Over … Characters».")
     h2_max_chars: int = Field(70, ge=1, description="H2 длиннее — «H2: Over … Characters».")
     low_content_words: int = Field(

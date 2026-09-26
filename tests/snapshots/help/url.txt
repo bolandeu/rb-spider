@@ -15,8 +15,10 @@
  indexable, indexability_status, title, …все колонки страницы}, request_headers,                    
  issues: [{code, name, type, priority, detail}], inlinks,                                           
  outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}],                   
- metrics: [{source, name, value, text}], structured_data}`; `inlinks` / `outlinks` —                
+ metrics: [{source, name, value, text}], serp, structured_data}`; `inlinks` / `outlinks` —          
  число обычных ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`).           
+ `serp` — сниппет Google: `{url, title, title_px, title_truncated, description,                     
+ description_px, description_truncated}` (обрезка по порогам в пикселях обхода).                    
  Микроразметка (обход с `collect.structured_data`): в page — `sd_types`, счётчики и                 
  `sd_messages` ([важность, где, тип, свойство, текст]); `structured_data` — сами объекты            
  разметки, если обход шёл с `--store-html`, иначе null. URL нет в обходе — выход 2.                 

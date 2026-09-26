@@ -22,6 +22,7 @@ from . import duplicates as duplicates_module
 from . import hreflang as hreflang_module
 from . import pagination as pagination_module
 from . import security as security_module
+from . import serp as serp_module
 from . import settings as settings_module
 from . import sitemaps as sitemaps_module
 from . import storage
@@ -180,6 +181,12 @@ def _onpage_rules() -> list[Rule]:
         r("page_title_below_min", "Page Titles", "Below Min Characters", "opportunity", "medium",
           "Title короче thresholds.title_min_chars: место в выдаче используется не полностью.",
           _length("title", "<", "title_min_chars")),
+        r("page_title_over_px", "Page Titles", "Over Max Pixels", "opportunity", "medium",
+          "Title шире thresholds.title_max_px пикселей (Arial 20px): обрежется в выдаче Google.",
+          _sql(f"{HTML_OK} AND title_px > :title_max_px", "title_px || ' px: ' || title")),
+        r("page_title_below_px", "Page Titles", "Below Min Pixels", "opportunity", "medium",
+          "Title уже thresholds.title_min_px пикселей: место в выдаче используется не полностью.",
+          _sql(f"{HTML_OK} AND title_px < :title_min_px", "title_px || ' px: ' || title")),
         r("page_title_same_as_h1", "Page Titles", "Same as H1", "opportunity", "low",
           "Title дословно совпадает с H1: упущена возможность раскрыть страницу иначе.",
           _sql(f"{HTML_OK} AND trim(coalesce(title, '')) <> '' AND title = h1", "title")),
@@ -201,6 +208,12 @@ def _onpage_rules() -> list[Rule]:
         r("meta_description_below_min", "Meta Description", "Below Min Characters", "opportunity", "low",
           "Короче thresholds.description_min_chars: сниппет можно сделать информативнее.",
           _length("meta_description", "<", "description_min_chars")),
+        r("meta_description_over_px", "Meta Description", "Over Max Pixels", "opportunity", "low",
+          "Description шире thresholds.description_max_px пикселей (Arial 14px): обрежется в сниппете.",
+          _sql(f"{HTML_OK} AND description_px > :description_max_px", "description_px || ' px'")),
+        r("meta_description_below_px", "Meta Description", "Below Min Pixels", "opportunity", "low",
+          "Description уже thresholds.description_min_px пикселей: сниппет можно сделать информативнее.",
+          _sql(f"{HTML_OK} AND description_px < :description_min_px", "description_px || ' px'")),
         # --- H1
         r("h1_missing", "H1", "Missing", "issue", "medium",
           "Нет <h1>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='h1')}")),
@@ -1097,6 +1110,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         compute_indexability(conn, crawl_id)
         compute_link_counts(conn, crawl_id)
         compute_url_issues(conn, crawl_id, thresholds)
+        serp_module.compute(conn, crawl_id, thresholds)
         duplicates_module.compute_near(conn, crawl_id, thresholds)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         found = 0

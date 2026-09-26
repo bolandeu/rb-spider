@@ -107,6 +107,12 @@ concurrency = 10
 | `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |
 | `thresholds.description_max_chars` | `int` | `155` | Meta description длиннее — «Meta Description: Over … Characters». |
 | `thresholds.description_min_chars` | `int` | `70` | Meta description короче — «Meta Description: Below … Characters». |
+| `thresholds.title_max_px` | `int` | `561` | Title шире стольких пикселей в выдаче — «Page Titles: Over … Pixels». |
+| `thresholds.title_min_px` | `int` | `200` | Title уже — «Page Titles: Below … Pixels». |
+| `thresholds.description_max_px` | `int` | `985` | Meta description шире (в сумме по строкам сниппета) — «Meta Description: Over … Pixels». |
+| `thresholds.description_min_px` | `int` | `400` | Meta description уже — «Meta Description: Below … Pixels». |
+| `thresholds.serp_title_font_px` | `float` | `20` | Кегль title в выдаче Google (Arial), по нему считаются пиксели. |
+| `thresholds.serp_description_font_px` | `float` | `14` | Кегль сниппета в выдаче Google (Arial), по нему считаются пиксели description. |
 | `thresholds.h1_max_chars` | `int` | `70` | H1 длиннее — «H1: Over … Characters». |
 | `thresholds.h2_max_chars` | `int` | `70` | H2 длиннее — «H2: Over … Characters». |
 | `thresholds.low_content_words` | `int` | `200` | Меньше слов в видимом тексте — «Content: Low Content Pages». |

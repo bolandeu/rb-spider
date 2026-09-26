@@ -670,6 +670,8 @@ EXPECTED_ISSUES = {
     "page_title_over_max": {"/t-long"},
     "page_title_below_min": {"/t-short"},
     "page_title_same_as_h1": {"/t-same-h1"},
+    "page_title_over_px": {"/t-long"},
+    "page_title_below_px": {"/t-short"},
     # Meta Description
     "meta_description_multiple": {"/d-multiple"},
     "meta_description_outside_head": {"/d-outside"},
@@ -677,6 +679,8 @@ EXPECTED_ISSUES = {
     "meta_description_duplicate": DUPLICATES_B,
     "meta_description_over_max": {"/d-long"},
     "meta_description_below_min": {"/d-short"},
+    "meta_description_over_px": {"/d-long"},
+    "meta_description_below_px": {"/d-short"},
     # H1
     "h1_missing": {"/h1-missing"},
     "h1_multiple": {"/h1-multiple"},
