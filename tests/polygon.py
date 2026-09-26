@@ -297,6 +297,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
+    # not linked: a crawl or fetch starts right at it (response details, #25)
+    "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).

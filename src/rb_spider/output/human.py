@@ -252,11 +252,13 @@ def url_details(data: dict) -> None:
     page = data["page"]
     index = "да" if page["indexable"] else f"нет — {page['indexability_status']}"
     fields = {"код": page["status_code"], "тип": page["content_type"] or "—", "индексируется": index,
+              "ответ, мс": page.get("response_ms") if page.get("response_ms") is not None else "—",
               "глубина": page["depth"], "размер, байт": page["bytes"],
               "входящих / исходящих ссылок": f"{data['inlinks']} / {data['outlinks']}"}  # fmt: skip
     for key, label in (("redirect_url", "редирект на"), ("refresh_url", "refresh на"), ("canonical_url", "canonical"),
                        ("title", "title"), ("meta_description", "description"), ("h1", "h1"),
-                       ("word_count", "слов"), ("error", "ошибка"), ("blocked", "заблокирован")):  # fmt: skip
+                       ("word_count", "слов"), ("last_modified", "Last-Modified"), ("error", "ошибка"),
+                       ("blocked", "заблокирован")):  # fmt: skip
         if page.get(key) not in (None, ""):
             fields[label] = page[key]
     key_values(f"{page['url']} — обход #{data['crawl_id']}", fields)
@@ -265,6 +267,14 @@ def url_details(data: dict) -> None:
         for issue in data["issues"]:
             detail = f" — {issue['detail']}" if issue["detail"] else ""
             console.print(f"  {issue['priority'] or ''} {issue['name']} ({issue['code']}){detail}")
+    if page.get("headers"):
+        console.print("[bold]Заголовки ответа[/bold]")
+        for name, value in page["headers"].items():
+            console.print(f"  {escape(name)}: {escape(str(value))}")
+    if data.get("request_headers"):
+        console.print("[bold]Заголовки запроса[/bold]")
+        for name, value in data["request_headers"].items():
+            console.print(f"  {escape(name)}: {escape(str(value))}")
     if data.get("metrics"):
         console.print("[bold]Метрики[/bold]")
         for m in data["metrics"]:

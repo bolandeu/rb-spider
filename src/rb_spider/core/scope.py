@@ -7,6 +7,7 @@ as plain data. Settings are read once, in the constructors, in the crawl's own p
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -109,7 +110,9 @@ class PageReader:
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset)  # fmt: skip
         page.bytes = len(body)
-        page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check}
+        page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
+                        "headers": json.dumps({k.lower(): v for k, v in headers.items()}, ensure_ascii=False),
+                        "last_modified": next((v for k, v in headers.items() if k.lower() == "last-modified"), None)}  # fmt: skip
         if check:
             return Reading(page, [], [], [])
         follow, rows = self._links_to_follow(page)

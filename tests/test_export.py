@@ -156,3 +156,19 @@ def test_query_refuses_anything_but_reading(crawled, sql: str) -> None:
     assert code == 2 and data["error"]["code"] == "INVALID_ARGUMENTS"
     _, data = _json("query", "SELECT count(*) FROM pages")
     assert data["rows"][0][0] > 0  # nothing was changed
+
+
+def test_url_response_details_and_request_headers(tmp_path, monkeypatch) -> None:
+    from rb_spider.core.crawl import crawl_site
+    from rb_spider.core.settings import CrawlSettings, Settings
+
+    monkeypatch.setenv("SPIDER_DB_PATH", str(tmp_path / "spider.sqlite"))
+    with polygon.serve() as base_url, storage.database() as engine:
+        settings = Settings(crawl=CrawlSettings(max_urls=1, user_agent="googlebot", headers={"Accept-Language": "ru"}))
+        crawl_site(engine, f"{base_url}/dated", "polygon", settings)
+        code, data = _json("url", f"{base_url}/dated")
+    page = data["page"]
+    assert code == 0 and page["response_ms"] is not None and page["response_ms"] >= 0
+    assert page["last_modified"] == "Wed, 01 Jan 2025 10:00:00 GMT"
+    assert page["headers"]["last-modified"] == page["last_modified"] and "content-type" in page["headers"]
+    assert data["request_headers"]["Accept-Language"] == "ru" and "Googlebot" in data["request_headers"]["User-Agent"]

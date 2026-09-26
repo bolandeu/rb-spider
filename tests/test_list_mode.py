@@ -109,3 +109,17 @@ def test_list_mode_profile_with_a_single_url(base_url: str, engine) -> None:
     pages = _pages(engine, result.crawl_id)
     assert set(pages) == {f"{base_url}/old", f"{base_url}/a"}  # the URL and its redirect, no links followed
     assert not any(page["external"] for page in pages.values())
+
+
+def test_max_redirects_stops_a_long_chain(base_url: str, engine) -> None:
+    from rb_spider.core.settings import CrawlSettings, Settings
+
+    def fetched(max_redirects: int) -> set[str]:
+        settings = Settings(crawl=CrawlSettings(max_redirects=max_redirects))
+        crawl_id = register_list_crawl(engine, [f"{base_url}/chain1"], "polygon", settings)
+        run_crawl(engine, crawl_id)
+        return {url.removeprefix(base_url) for url in _pages(engine, crawl_id)}
+
+    assert fetched(20) == {"/chain1", "/chain2", "/a"}
+    assert fetched(1) == {"/chain1", "/chain2"}  # the second step (chain2 -> /a) is not followed
+    assert fetched(0) == {"/chain1"}

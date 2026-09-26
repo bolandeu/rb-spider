@@ -109,6 +109,10 @@ pages = sa.Table(
     sa.Column("uncrawlable_outlinks", sa.Integer),
     # crawl.render = "always": True — data from the rendered DOM; False — rendering failed, raw HTML used
     sa.Column("rendered", sa.Boolean),
+    # the response: time from sending the request to its headers, Last-Modified, all headers (JSON, lower-case names)
+    sa.Column("response_ms", sa.Integer),
+    sa.Column("last_modified", sa.String),
+    sa.Column("headers", sa.String),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,

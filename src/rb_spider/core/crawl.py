@@ -236,6 +236,19 @@ async def _run(
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
     parser = Parser(PageReader(scope, settings, collect), settings.parse_workers)
+    sent_at: dict[str, float] = {}  # requests in flight -> when they were sent (response time)
+    response_ms: dict[str, int] = {}
+    redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
+
+    @crawler.pre_navigation_hook
+    async def sending(ctx) -> None:
+        sent_at[ctx.request.url] = time.monotonic()
+
+    @crawler.post_navigation_hook
+    async def answered(ctx) -> None:
+        if (sent := sent_at.pop(ctx.request.url, None)) is not None:
+            response_ms[ctx.request.url] = round((time.monotonic() - sent) * 1000)
+
     last_progress = time.monotonic()
 
     def progress() -> None:
@@ -288,6 +301,13 @@ async def _run(
         reading = await parser.read(ctx.request.url, response.status_code, headers, source, check=check)
         page = reading.page
         page.bytes = len(body)  # the response's size, not the rendered DOM's
+        page.onpage["response_ms"] = response_ms.pop(ctx.request.url, None)
+        if page.redirect_url and page.redirect_url != page.url:
+            hops = redirect_hops.pop(page.url, 0) + 1
+            if hops > settings.max_redirects:  # the chain is long enough: its next step is not fetched
+                reading.follow = [url for url in reading.follow if url != page.redirect_url]
+            elif page.redirect_url not in depth_of:
+                redirect_hops[page.redirect_url] = hops
         if rendered is not None:
             page.onpage["rendered"] = rendered
         if settings.robots == "report" and not await robots.allowed(page.url):
@@ -303,6 +323,9 @@ async def _run(
     async def failed(ctx, error: Exception) -> None:
         # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
         url = ctx.request.url
+        sent_at.pop(url, None)
+        response_ms.pop(url, None)
+        redirect_hops.pop(url, None)
         page = Page.no_response(url, f"{type(error).__name__}: {error}"[:500])
         page.onpage = {"external": not scope.internal(url), "parsed": False}
         writer.add(page, depth=depth_of.get(url, 0))

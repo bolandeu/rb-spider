@@ -73,6 +73,9 @@ class CrawlSettings(BaseModel):
         10000, ge=1, description="Брать с одной страницы не больше стольких ссылок; не задано — все."
     )
     max_url_length: int = Field(2000, ge=1, description="Не обходить URL длиннее стольких символов.")
+    max_redirects: int = Field(
+        20, ge=0, le=100, description="Проходить не больше стольких шагов одной цепочки редиректов (3xx)."
+    )
     # --- what
     include: list[str] = Field(
         [],

@@ -48,7 +48,7 @@ def url(
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Всё об одном URL: ответ, on-page данные, индексируемость, проблемы, ссылки, ресурсы, метрики.
+    """Всё об одном URL: ответ и заголовки, on-page данные, индексируемость, проблемы, ссылки, ресурсы.
 
     Последний шаг drill-down: `spider issues` → `spider urls --issue <код>` →
     `spider url <url>`. Сами ссылки страницы — `spider links <url> --in|--out`,
@@ -58,8 +58,9 @@ def url(
       spider url https://example.com/
       spider --json url https://example.com/catalog/ --crawl 12
 
-    JSON: `{crawl_id, page: {url, status_code, indexable, indexability_status, title,
-    …все колонки страницы}, issues: [{code, name, type, priority, detail}], inlinks,
+    JSON: `{crawl_id, page: {url, status_code, response_ms, last_modified, headers,
+    indexable, indexability_status, title, …все колонки страницы}, request_headers,
+    issues: [{code, name, type, priority, detail}], inlinks,
     outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}],
     metrics: [{source, name, value, text}]}`; `inlinks` / `outlinks` — число обычных
     ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`). URL нет

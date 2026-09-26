@@ -19,9 +19,11 @@ from pathlib import Path
 from typing import IO, Any
 
 import sqlalchemy as sa
+from pydantic import ValidationError
 
 from . import enrich, issues, storage
 from .errors import InvalidArguments
+from .settings import Settings
 
 DATASETS = ("pages", "links", "issues")
 RESOURCE_KINDS = ("image", "css", "js", "media", "iframe")
@@ -188,6 +190,7 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
         if row is None:
             raise InvalidArguments(f"No {url} in crawl #{crawl_id} — see 'spider urls' or 'spider query'.")
         page = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "crawl_id"}
+        page["headers"] = json.loads(page["headers"]) if page.get("headers") else None
         found = conn.execute(
             sa.select(storage.issues.c.code, storage.issues.c.detail)
             .where(storage.issues.c.crawl_id == crawl_id, storage.issues.c.url == url)
@@ -230,5 +233,17 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
                 "detail": detail,
             }
         )
-    return {"crawl_id": crawl_id, "page": page, "issues": issue_rows, **counts, "resources": resource_rows,
+    return {"crawl_id": crawl_id, "page": page, "request_headers": _request_headers(engine, crawl_id),
+            "issues": issue_rows, **counts, "resources": resource_rows,
             "metrics": enrich.metrics_of(engine, crawl_id, url)}  # fmt: skip
+
+
+def _request_headers(engine: sa.Engine, crawl_id: int) -> dict[str, str]:
+    """What the crawl sent with every request: its settings' headers and User-Agent (the client adds the rest)."""
+    _, snapshot = storage.get_crawl(engine, crawl_id)
+    try:
+        crawl = Settings.model_validate(snapshot or {}).crawl
+    except ValidationError:  # a snapshot from an older spider
+        return {}
+    agent = crawl.resolved_user_agent
+    return {**crawl.headers, "User-Agent": agent or "(браузерный по умолчанию — Firefox)"}

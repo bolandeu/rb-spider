@@ -485,7 +485,7 @@
 ### Извлекаемые данные страницы (Spider > Extraction)
 
 - [x] `MVP` **Page details** — title, meta description, h1, h2, word count, page size, hash (md5)
-- [ ] `MVP` **URL details** — response time, заголовок Last-Modified, полные HTTP-заголовки запроса и ответа
+- [x] `MVP` **URL details** — response time, заголовок Last-Modified, полные HTTP-заголовки запроса и ответа
 - [ ] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении
 - [ ] `v2` **Text to Code Ratio** — доля текста в HTML
 - [ ] `v2` **Forms** — формы на странице (для проверок Security)
@@ -503,7 +503,7 @@
 - [ ] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования)
 - [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
-- [ ] `MVP` **HTTP Headers** — заголовки запроса и ответа
+- [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
 - [ ] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff
 - [ ] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации
 - [ ] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
@@ -558,7 +558,7 @@
 
 - [x] `MVP` **Limit Crawl Total** → `max_urls` / `--max-urls`
 - [x] `MVP` **Limit Crawl Depth** → `limits.max_depth`
-- [ ] `MVP` **Max Redirects to Follow** (#16) → `limits.max_redirects`
+- [x] `MVP` **Max Redirects to Follow** (#16) → `crawl.max_redirects`
 - [x] `MVP` **Max URL Length to Crawl** → `limits.max_url_length`
 - [x] `MVP` **Max Links per URL to Crawl** → `limits.max_links_per_page`
 - [ ] `v2` **Max Page Size (KB) to Crawl** → `limits.max_page_size_kb`
