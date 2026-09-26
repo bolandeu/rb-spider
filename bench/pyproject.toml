@@ -1,0 +1,6 @@
+[project]
+name = "spider-bench"
+version = "0.0.0"
+description = "Benchmark stand for rb-spider: deterministic fake site generator"
+requires-python = ">=3.12"
+dependencies = ["aiohttp>=3.10"]
