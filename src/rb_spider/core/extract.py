@@ -6,11 +6,12 @@ never a Crawlee context.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -26,6 +27,7 @@ class Link:
     alt: str | None = None  # alt of an image inside the link (image links)
     rel: str | None = None  # raw rel attribute, lower-case
     nofollow: bool = False
+    fragment: str | None = None  # the #bookmark the link jumps to, when it names one (see bookmark_fragment)
 
 
 @dataclass
@@ -216,10 +218,40 @@ def visible_text(body: bytes) -> str:
     return _WHITESPACE.sub(" ", root.text(separator=" ")).strip() if root else ""
 
 
+# Fragments that aren't bookmarks: "#top" scrolls up without an id (HTML spec), "#!" / "#/" are
+# client-side routes, "#:~:text=" is a text fragment.
+_NOT_BOOKMARK = re.compile(r"^(top|!|/|:~:)", re.IGNORECASE)
+
+
+def bookmark_fragment(href: str) -> str | None:
+    """The id a link's `#fragment` points at (percent-decoded), or None when it isn't a bookmark."""
+    _, sep, fragment = href.partition("#")
+    fragment = unquote(fragment.strip())
+    return fragment if sep and fragment and not _NOT_BOOKMARK.match(fragment) else None
+
+
+def anchor_hash(name: str) -> bytes:
+    """A 2-byte fingerprint of a bookmark target: a page keeps these instead of its ids (see anchor_ids)."""
+    return hashlib.blake2b(name.encode(), digest_size=2).digest()
+
+
+def anchor_ids(tree: LexborHTMLParser) -> str:
+    """What `#fragment` links can land on — every id and <a name> — as sorted 2-byte fingerprints, base64.
+
+    A page may have hundreds of ids; fingerprints keep that ~3 bytes each, with a ~1-in-20000 chance per id
+    that a missing bookmark passes for a present one. "" — the page has none.
+    """
+    names = {node.attributes.get("id") or "" for node in tree.css("[id]")}
+    names |= {node.attributes.get("name") or "" for node in tree.css("a[name]")}
+    fingerprints = sorted({anchor_hash(name) for name in names if name})
+    return base64.b64encode(b"".join(fingerprints)).decode()
+
+
 def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
     links = []
     for anchor in tree.css("a[href]"):
-        target = _absolute(url, anchor.attributes.get("href") or "")
+        href = anchor.attributes.get("href") or ""
+        target = _absolute(url, href)
         if target is None:
             continue
         rel = (anchor.attributes.get("rel") or "").lower() or None
@@ -231,6 +263,7 @@ def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
                 alt=(image.attributes.get("alt") or "").strip() if image else None,
                 rel=rel,
                 nofollow="nofollow" in (rel or "").split(),
+                fragment=bookmark_fragment(href),
             )
         )
     return links
@@ -324,5 +357,6 @@ def parse_page(
     page.links = _links(url, tree)
     page.resources = _resources(url, tree, srcset)
     page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
+    page.onpage["anchor_ids"] = anchor_ids(tree)
     page.onpage |= _content(tree, body, content_exclude)
     return page

@@ -12,15 +12,47 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
-from .extract import Page, parse_page
+from .extract import Page, normalize_url, parse_page
 
 if TYPE_CHECKING:
-    from .settings import CollectSettings, CrawlSettings
+    from .settings import CollectSettings, CrawlSettings, RewriteSettings
 
 # Columns of a `links` row as `PageReader` builds it (the crawl id is added by the writer).
-LINK_FIELDS = ("source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized")
+LINK_FIELDS = (
+    "source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment",
+)  # fmt: skip
+_PERCENT = re.compile(r"%[0-9a-fA-F]{2}")
+
+
+class Rewriter:
+    """`rewrite.*`: discovered URLs changed before anything else sees them — parameters dropped, regex
+    replacements, lower case, %-encoding case. In that order; the result loses its #fragment like any URL."""
+
+    def __init__(self, settings: RewriteSettings | None) -> None:
+        """None — rewrite nothing."""
+        self.remove = set(settings.remove_params) if settings else set()
+        self.regex = [(re.compile(pattern), repl) for pattern, repl in settings.regex] if settings else []
+        self.lowercase = bool(settings and settings.lowercase)
+        self.percent = settings.percent_encoding if settings else "keep"
+        self.active = bool(self.remove or self.regex or self.lowercase or self.percent != "keep")
+
+    def __call__(self, url: str) -> str:
+        if not self.active:
+            return url
+        if self.remove:
+            parts = urlsplit(url)
+            kept = [p for p in parts.query.split("&") if p and p.partition("=")[0] not in self.remove]
+            url = urlunsplit(parts._replace(query="&".join(kept)))
+        for pattern, replacement in self.regex:
+            url = pattern.sub(replacement, url)
+        if self.lowercase:
+            url = url.lower()
+        if self.percent != "keep":
+            recase = str.upper if self.percent == "upper" else str.lower
+            url = _PERCENT.sub(lambda m: recase(m.group()), url)
+        return normalize_url(url)
 
 
 class Scope:
@@ -92,8 +124,11 @@ class _Kind:
 class PageReader:
     """Parses a response and applies `collect.*`: what to follow and what to store, per kind of link."""
 
-    def __init__(self, scope: Scope, crawl: CrawlSettings, collect: CollectSettings) -> None:
+    def __init__(
+        self, scope: Scope, crawl: CrawlSettings, collect: CollectSettings, rewrite: RewriteSettings | None = None
+    ) -> None:
         self.scope = scope
+        self.rewrite = Rewriter(rewrite)
         self.content_exclude: Sequence[str] = list(crawl.content_exclude)
         self.srcset = collect.images_srcset
         self.follow_internal_nofollow = crawl.follow_internal_nofollow
@@ -115,10 +150,22 @@ class PageReader:
                         "last_modified": next((v for k, v in headers.items() if k.lower() == "last-modified"), None)}  # fmt: skip
         if check:
             return Reading(page, [], [], [])
+        if self.rewrite.active:
+            self._rewrite(page)
         follow, rows = self._links_to_follow(page)
         to_check, resource_rows = self._resources_to_check(page)
         page.links, page.resources = [], []  # consumed: don't carry them back to the crawl process
         return Reading(page, follow, to_check, rows + resource_rows)
+
+    def _rewrite(self, page: Page) -> None:
+        """Every URL the page leads to, as `rewrite.*` has it: links, resources, redirect, refresh, canonical."""
+        rewrite = self.rewrite
+        for item in (*page.links, *page.resources):
+            item.url = rewrite(item.url)
+        page.redirect_url = rewrite(page.redirect_url) if page.redirect_url else None
+        page.refresh_url = rewrite(page.refresh_url) if page.refresh_url else None
+        if page.onpage.get("canonical_url"):
+            page.onpage["canonical_url"] = rewrite(page.onpage["canonical_url"])
 
     def _links_to_follow(self, page: Page) -> tuple[list[str], list[tuple]]:
         """What to enqueue from a crawled page, and the link rows to keep (collect.* decides both)."""
@@ -135,7 +182,7 @@ class PageReader:
                 counts["internal_nofollow_outlinks"] += 1
             if kind.store:
                 rows.append((page.url, link.url, "hyperlink", internal, link.anchor, link.alt, link.rel,
-                             link.nofollow, None, None))  # fmt: skip
+                             link.nofollow, None, None, link.fragment))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
             if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)
@@ -152,7 +199,7 @@ class PageReader:
             if not target or target == page.url:
                 continue
             if option.store or kind == "redirect":
-                rows.append((page.url, target, kind, internal_of(target), None, None, None, False, None, None))
+                rows.append((page.url, target, kind, internal_of(target), None, None, None, False, None, None, None))
             always = ("redirect", "refresh") if self.listed else ("redirect",)
             if kind in always or (option.follow and not self.listed):
                 follow.append(target)
@@ -166,7 +213,7 @@ class PageReader:
             option = self.kinds[resource.kind]
             if option.store:
                 rows.append((page.url, resource.url, resource.kind, self.scope.internal(resource.url), None,
-                             resource.alt, None, False, resource.alt_attr, resource.sized))  # fmt: skip
+                             resource.alt, None, False, resource.alt_attr, resource.sized, None))  # fmt: skip
             if option.follow and not self.listed:
                 check.append(resource.url)
         return check, rows

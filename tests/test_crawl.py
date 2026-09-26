@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -11,8 +13,8 @@ from rb_spider.cli import app
 from rb_spider.core import crawl as crawl_module
 from rb_spider.core import issues, storage
 from rb_spider.core.crawl import crawl_site
-from rb_spider.core.extract import parse_page
-from rb_spider.core.settings import CrawlSettings, Settings
+from rb_spider.core.extract import anchor_hash, parse_page
+from rb_spider.core.settings import CrawlSettings, Settings, ThresholdSettings
 
 from . import polygon
 
@@ -261,3 +263,29 @@ def test_cli_store_html_flag(base_url: str) -> None:
     code, crawl = _invoke_json("crawl", f"{base_url}/", "--max-urls", "1", "--store-html")
     assert code == 0
     assert storage.get_html(crawl["crawl_id"], f"{base_url}/") is not None
+
+
+def test_link_fragments_and_page_anchor_ids() -> None:
+    body = (b'<h2 id="a">x</h2><a name="b"></a><a href="#a">1</a><a href="/p#top">2</a><a href="/p#!/r">3</a>'
+            b'<a href="/p#%D1%8F">4</a><a href="/p#">5</a>')  # fmt: skip
+    page = parse_page("https://s.example/", 200, {"Content-Type": "text/html"}, body)
+    assert [link.fragment for link in page.links] == ["a", None, None, "я", None]
+    stored = base64.b64decode(page.onpage["anchor_ids"])
+    assert {stored[i : i + 2] for i in range(0, len(stored), 2)} == {anchor_hash("a"), anchor_hash("b")}
+    assert parse_page("https://s.example/", 200, {}, b"<p>no ids</p>").onpage["anchor_ids"] == ""
+
+
+@pytest.mark.parametrize(
+    ("url", "flags"),
+    [
+        ("https://s.example/", None),
+        ("https://S.example/%D0%B0", None),  # host case and %-encoding are not "uppercase"
+        ("https://s.example/2024/05/05/", None),  # repeated numbers are dates, not a repetitive path
+        ("https://s.example/a_b/a_b?utm_campaign=x&_gl=1", ",repetitive_path,parameters,ga_tracking,underscores,"),
+        ("https://s.example/Поиск/?text=x", ",non_ascii,uppercase,internal_search,parameters,"),
+        ("https://s.example//x%20y", ",multiple_slashes,space,"),
+    ],
+)
+def test_url_issue_flags(url: str, flags: str | None) -> None:
+    search = [re.compile(p, re.IGNORECASE) for p in ThresholdSettings().internal_search]
+    assert issues.url_issue_flags(url, search) == flags

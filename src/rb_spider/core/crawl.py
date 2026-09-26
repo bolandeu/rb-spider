@@ -247,7 +247,7 @@ async def _run(
     )
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
-    parser = Parser(PageReader(scope, settings, collect), settings.parse_workers)
+    parser = Parser(PageReader(scope, settings, collect, all_settings.rewrite), settings.parse_workers)
     response_ms: dict[str, int] = {}  # answered requests -> response time, until their handler stores it
     redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
     # Response time around the client's own request: Crawlee's navigation hooks cost ~15% of a big crawl.

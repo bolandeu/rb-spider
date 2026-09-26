@@ -228,6 +228,24 @@ JS_TRAPS: dict[str, str] = {
     "/js-target": _html("js-target", dead_end=True),
 }
 
+# URL checks (#26): the address itself is the trap. Keys are what a link's href says; ROUTES serves them
+# by path (the server sees the decoded path, without the query).
+LONG_PATH = "/u/" + "long-" * 20
+URL_TRAPS: dict[str, str] = {
+    "/u//double": _html("u-double"),
+    "/u/with space": _html("u-space"),
+    "/u/кириллица": _html("u-cyrillic"),
+    "/u/UPPER": _html("u-upper"),
+    "/u/shoes/shoes": _html("u-repetitive"),
+    "/search?q=test": _html("u-search"),
+    "/u/landing?utm_source=news": _html("u-landing"),
+    "/u/under_score": _html("u-underscore"),
+    LONG_PATH: _html("u-long"),
+    # "#top" and "#/route" are not bookmarks; "#exists" names an id of /u/anchors, "#missing" does not
+    "/u/bookmarks": _html("u-bookmarks", "/u/anchors#exists", "/u/anchors#missing", "#top", "/u/anchors#/route"),
+    "/u/anchors": _html("u-anchors", body=f'<h1>{H1.format("u-anchors")}</h1><h2 id="exists">{H2.format("u-anchors")}</h2>'),
+}  # fmt: skip
+
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -260,6 +278,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *LINKED_FROM_HOME,
             "/l-mixed",
             *IMAGE_TRAPS,
+            *URL_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -297,6 +316,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
+    **{path.partition("?")[0]: (200, {}, html) for path, html in URL_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -330,6 +350,7 @@ REACHABLE = {
     *IMAGE_TRAPS,
     *RESOURCES,
     "/img/broken.png",
+    *URL_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -441,6 +462,18 @@ EXPECTED_ISSUES = {
     "images_missing_size": {"/img/nosize.png", "/logo.png", "/pic.png"},  # the h1-alt and no-anchor traps too
     "internal_blocked_resource": {"/img/broken.png", "/private/hidden.png"},
     "external_blocked_resource": {"LOCAL/img/gone.png"},
+    # URL
+    "url_multiple_slashes": {"/u//double"},
+    "url_contains_space": {"/u/with space"},
+    "url_broken_bookmark": {"/u/anchors", "/a"},  # /a: home links to /a#reviews, and /a has no such id
+    "url_non_ascii": {"/u/кириллица"},
+    "url_uppercase": {"/u/UPPER"},
+    "url_repetitive_path": {"/u/shoes/shoes"},
+    "url_internal_search": {"/search?q=test"},
+    "url_parameters": {"/b?sort=price", "/search?q=test", "/u/landing?utm_source=news"},
+    "url_ga_tracking": {"/u/landing?utm_source=news"},
+    "url_underscores": {"/u/under_score"},
+    "url_over_max": {LONG_PATH},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
@@ -464,7 +497,9 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     base = f"http://{request.host}"
     local = f"http://localhost:{request.host.rsplit(':', 1)[1]}"
     if status == 200 and "<head>" in body and 'rel="canonical"' not in body and request.path not in NO_CANONICAL:
-        body = body.replace("<head>", f"<head>{_canonical(base + request.path_qs)}", 1)  # clean pages: self
+        # clean pages: self, as the page's link spelled it (decoded path — a space, not %20)
+        self_url = base + request.path + (f"?{request.query_string}" if request.query_string else "")
+        body = body.replace("<head>", f"<head>{_canonical(self_url)}", 1)
     headers = {"Content-Type": "text/html; charset=utf-8", **{k: v.replace("{base}", base) for k, v in headers.items()}}
     return web.Response(status=status, headers=headers, text=body.replace("{base}", base).replace("{local}", local))
 

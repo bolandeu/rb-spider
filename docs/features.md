@@ -81,17 +81,17 @@
 
 ### URL — адреса
 
-- [ ] `v2` **Multiple Slashes** — в пути несколько слешей подряд (`/page1//`) _(SF: Issue, Low)_
-- [ ] `v2` **Contains A Space** — в URL есть пробел _(SF: Issue, Low)_
-- [ ] `v2` **Broken Bookmark** — ссылка на якорь `#id`, которого нет на целевой странице _(SF: Issue, Low)_
-- [ ] `v2` **Non ASCII Characters** — в URL символы вне ASCII (кириллица и т.п. без кодирования) _(SF: Warning, Low)_
-- [ ] `v2` **Uppercase** — в URL заглавные буквы (риск дублей: URL чувствительны к регистру) _(SF: Warning, Low)_
-- [ ] `v2` **Repetitive Path** — повторяющиеся сегменты пути (`/example/example/`) _(SF: Warning, Low)_
-- [ ] `v2` **Internal Search** — URL похож на страницу внутреннего поиска сайта _(SF: Warning, Low)_
-- [ ] `v2` **Parameters** — URL содержит GET-параметры (`?`, `&`) _(SF: Warning, Low)_
-- [ ] `v2` **GA Tracking Parameters** — в URL метки Google Analytics (`utm_*` и т.п.) _(SF: Warning, Low)_
-- [ ] `v2` **Underscores** — подчёркивания в URL (поисковики не всегда считают их разделителем слов) _(SF: Opportunity, Low)_
-- [ ] `v2` **Over 115 Characters** — URL длиннее 115 символов _(SF: Opportunity, Low)_
+- [x] `v2` **Multiple Slashes** — в пути несколько слешей подряд (`/page1//`) _(SF: Issue, Low)_
+- [x] `v2` **Contains A Space** — в URL есть пробел _(SF: Issue, Low)_
+- [x] `v2` **Broken Bookmark** — ссылка на якорь `#id`, которого нет на целевой странице _(SF: Issue, Low)_
+- [x] `v2` **Non ASCII Characters** — в URL символы вне ASCII (кириллица и т.п. без кодирования) _(SF: Warning, Low)_
+- [x] `v2` **Uppercase** — в URL заглавные буквы (риск дублей: URL чувствительны к регистру) _(SF: Warning, Low)_
+- [x] `v2` **Repetitive Path** — повторяющиеся сегменты пути (`/example/example/`) _(SF: Warning, Low)_
+- [x] `v2` **Internal Search** — URL похож на страницу внутреннего поиска сайта _(SF: Warning, Low)_
+- [x] `v2` **Parameters** — URL содержит GET-параметры (`?`, `&`) _(SF: Warning, Low)_
+- [x] `v2` **GA Tracking Parameters** — в URL метки Google Analytics (`utm_*` и т.п.) _(SF: Warning, Low)_
+- [x] `v2` **Underscores** — подчёркивания в URL (поисковики не всегда считают их разделителем слов) _(SF: Opportunity, Low)_
+- [x] `v2` **Over 115 Characters** — URL длиннее 115 символов _(SF: Opportunity, Low)_
 
 ### Page Titles — title
 
@@ -608,7 +608,7 @@
 - [x] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
 - [x] `MVP` **High Crawl Depth, High Internal / External Outlinks** → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
 - [x] `MVP` **Список неинформативных анкоров** → `thresholds.non_descriptive_anchors`
-- [ ] `v2` **Макс. длина URL** (115) → `thresholds.url_chars`
+- [x] `v2` **Макс. длина URL** (115) → `thresholds.url_max_chars`
 
 ### Контент (Config > Content)
 
@@ -629,9 +629,9 @@
 ### URL и домены
 
 - [x] `MVP` **Include / Exclude** (regex) → `include`, `exclude`
-- [ ] `v2` **URL Rewriting: Remove Parameters** → `rewrite.remove_params`
-- [ ] `v2` **URL Rewriting: Regex Replace** → `rewrite.regex`
-- [ ] `v2` **URL Rewriting: Lowercase Discovered URLs, Percent Encoding Mode** → `rewrite.lowercase`, `rewrite.percent_encoding`
+- [x] `v2` **URL Rewriting: Remove Parameters** → `rewrite.remove_params`
+- [x] `v2` **URL Rewriting: Regex Replace** → `rewrite.regex`
+- [x] `v2` **URL Rewriting: Lowercase Discovered URLs, Percent Encoding Mode** → `rewrite.lowercase`, `rewrite.percent_encoding`
 - [ ] `v2` **CDNs** — домены, которые считать внутренними → `scope.cdns`
 
 ### Запросы

@@ -237,6 +237,41 @@ class CollectSettings(BaseModel):
     iframes: FollowStore = Field(default_factory=FollowStore, description="Встроенные фреймы <iframe>.")
 
 
+class RewriteSettings(BaseModel):
+    """URL Rewriting: how discovered URLs are changed before they are stored and crawled (Screaming Frog's
+    Configuration > URL Rewriting). The start URL and the URLs of a list crawl stay as given."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    remove_params: list[str] = Field(
+        [],
+        description="Удалять из найденных URL эти GET-параметры (точное имя, с учётом регистра).",
+        examples=[["sid", "utm_source", "utm_medium"]],
+    )
+    regex: list[tuple[str, str]] = Field(
+        [],
+        description=(
+            "Замены по регулярным выражениям, по порядку: пары [выражение, замена]; группы в замене — \\1, \\2."
+        ),
+        examples=[[["^http://", "https://"]]],
+    )
+    lowercase: bool = Field(False, description="Переводить найденные URL в нижний регистр целиком.")
+    percent_encoding: Literal["keep", "upper", "lower"] = Field(
+        "keep",
+        description="Регистр шестнадцатеричных цифр в %-кодировании (%D0 или %d0): keep — как на странице.",
+    )
+
+    @field_validator("regex")
+    @classmethod
+    def _valid_regexes(cls, rules: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        for pattern, _ in rules:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regular expression {pattern!r}: {exc}") from exc
+        return rules
+
+
 class ThresholdSettings(BaseModel):
     """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
 
@@ -272,6 +307,24 @@ class ThresholdSettings(BaseModel):
          "подробнее", "читать далее", "далее", "здесь", "тут", "ссылка", "перейти", "узнать больше"],
         description="Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text».",
     )  # fmt: skip
+    url_max_chars: int = Field(115, ge=1, description="URL длиннее — «URL: Over … Characters».")
+    internal_search: list[str] = Field(
+        [r"[?&](q|s|query|search|text|keyword|keywords)=", r"/(search|poisk|find)(/|$|\?)"],
+        description=(
+            "Регулярные выражения (без учёта регистра) по пути и параметрам URL: совпало — страница внутреннего "
+            "поиска, «URL: Internal Search»."
+        ),
+    )
+
+    @field_validator("internal_search")
+    @classmethod
+    def _valid_regexes(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regular expression {pattern!r}: {exc}") from exc
+        return patterns
 
 
 class Settings(BaseModel):
@@ -282,6 +335,9 @@ class Settings(BaseModel):
     crawl: CrawlSettings = Field(default_factory=CrawlSettings, description="Как обходить сайт.")
     collect: CollectSettings = Field(
         default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
+    )
+    rewrite: RewriteSettings = Field(
+        default_factory=RewriteSettings, description="Переписывание найденных URL: параметры, замены, регистр."
     )
     thresholds: ThresholdSettings = Field(
         default_factory=ThresholdSettings, description="Пороги проверок; пересчёт без обхода — `spider analyze`."

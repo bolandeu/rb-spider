@@ -50,6 +50,8 @@
 - Колонки ссылок у каждой страницы: `inlinks`, `unique_inlinks`, `unique_outlinks` (считаются в `analyze` одним проходом); `spider export pages --type html|js|css|image|pdf|other|unknown` и колонка `content_kind`; в `spider issues` — доля URL сайта (`percent`).
 - `crawl.http_client = "curl"` — запасной HTTP-клиент (curl-impersonate, extra `rb-spider[curl]`) для обхода и `spider fetch`; без extra — ошибка `HTTP_CLIENT_UNAVAILABLE` до начала обхода.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
+- 11 проверок группы URL: несколько слешей подряд, пробел, битый якорь (`#id`, которого нет на целевой странице), символы вне ASCII, заглавные буквы, повтор сегмента пути, внутренний поиск (`thresholds.internal_search`), GET-параметры, метки аналитики (`utm_*`, `_ga`, `_gl`), подчёркивания, длина больше `thresholds.url_max_chars` (115). Признаки адреса считаются в `analyze` одним проходом пачками (`pages.url_issues`); якоря страницы хранятся 2-байтовыми отпечатками (`pages.anchor_ids`), фрагмент ссылки — в `links.fragment`.
+- Переписывание найденных URL, раздел `[rewrite]`: `remove_params` (удалить параметры), `regex` (замены по порядку), `lowercase`, `percent_encoding` (`keep` / `upper` / `lower`). Действует на ссылки, ресурсы, редиректы, refresh и canonical; стартовый URL и URL списка не меняются.
 
 ### Changed
 

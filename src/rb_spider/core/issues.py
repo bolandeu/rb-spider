@@ -8,9 +8,12 @@ priorities follow Screaming Frog's issue library (docs/features.md, docs/referen
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import base64
+import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 from pydantic import ValidationError
@@ -18,9 +21,11 @@ from pydantic import ValidationError
 from . import settings as settings_module
 from . import storage
 from .errors import InvalidArguments
+from .extract import anchor_hash
 from .settings import Settings, ThresholdSettings
 
 Finding = tuple[str, str | None]  # (url, detail)
+RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], Iterable[Finding]]
 
 
 @dataclass(frozen=True)
@@ -31,11 +36,9 @@ class Rule:
     type: Literal["issue", "warning", "opportunity"]
     priority: Literal["high", "medium", "low"]
     description: str
-    find: Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
+    find: RuleFinder
     requires: tuple[str, ...] = ()  # settings keys (collect.*) that must have been on during the crawl
 
-
-RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
 # Rules look at the site's own URLs unless they say otherwise; on-page checks at the site's HTML pages
 # that answered 200 and were read (not only checked); duplicates only among indexable ones.
@@ -547,6 +550,122 @@ def _link_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+# --- URL: checks of the address itself. One Python pass after the crawl writes the flags a URL fails into
+# pages.url_issues (",uppercase,parameters,"), the rules are then plain SQL filters — thresholds included,
+# so `spider analyze` re-applies them to an old crawl.
+URL_PAGES = "parsed"  # the site's crawled URLs (pages, redirects, errors), not resources or other sites
+_URL_BATCH = 5000
+_HEX = re.compile(r"%[0-9a-fA-F]{2}")
+_GA_PARAM = re.compile(r"^(utm_[a-z_]+|_ga|_gl)$", re.IGNORECASE)
+
+
+def url_issue_flags(url: str, internal_search: list[re.Pattern]) -> str | None:
+    """The URL checks `url` fails, as ",flag,flag," (None — none): what `url_issues` stores."""
+    parts = urlsplit(url)
+    local = url[len(parts.scheme) + 3 + len(parts.netloc) :]  # path and query: the host is case-insensitive
+    segments = [s for s in parts.path.split("/") if s and not s.isdigit()]
+    checks = {
+        "multiple_slashes": "//" in parts.path,
+        "space": " " in url or "%20" in url,
+        "non_ascii": not url.isascii(),
+        "uppercase": any(c.isupper() for c in _HEX.sub("", local)),  # %D0 is encoding, not an uppercase letter
+        "repetitive_path": len(segments) != len(set(segments)),
+        "internal_search": any(p.search(local) for p in internal_search),
+        "parameters": bool(parts.query),
+        "ga_tracking": any(_GA_PARAM.match(p.partition("=")[0]) for p in parts.query.split("&")),
+        "underscores": "_" in parts.path,
+    }
+    flags = [name for name, failed in checks.items() if failed]
+    return f",{','.join(flags)}," if flags else None
+
+
+def compute_url_issues(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> None:
+    """Fill pages.url_issues for the site's crawled URLs, a batch at a time (memory stays flat)."""
+    conn.execute(sa.text("UPDATE pages SET url_issues = NULL WHERE crawl_id = :crawl_id"), {"crawl_id": crawl_id})
+    search = [re.compile(p, re.IGNORECASE) for p in thresholds.internal_search]
+    select = sa.text(
+        f"SELECT url FROM pages WHERE crawl_id = :crawl_id AND {INTERNAL} AND {URL_PAGES}"  # noqa: S608 — fixed text
+        " AND url > :after ORDER BY url LIMIT :limit"
+    )
+    update = sa.text("UPDATE pages SET url_issues = :flags WHERE crawl_id = :crawl_id AND url = :url")
+    after = ""
+    while urls := conn.execute(select, {"crawl_id": crawl_id, "after": after, "limit": _URL_BATCH}).scalars().all():
+        rows = [{"crawl_id": crawl_id, "url": url, "flags": flags} for url in urls
+                if (flags := url_issue_flags(url, search))]  # fmt: skip
+        if rows:
+            conn.execute(update, rows)
+        after = urls[-1]
+
+
+def _broken_bookmarks(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> Iterable[Finding]:
+    """Pages linked to with a #fragment that names no id / <a name> on them (by the page's fingerprints)."""
+    query = sa.text(
+        "SELECT t.url, p.anchor_ids, l.fragment, count(*), min(s.url) FROM link_rows l"
+        " JOIN urls t ON t.id = l.target_id JOIN urls s ON s.id = l.source_id"
+        " JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        " WHERE l.crawl_id = :crawl_id AND l.kind = 'hyperlink' AND l.internal AND l.fragment IS NOT NULL"
+        " AND p.status_code = 200 AND p.anchor_ids IS NOT NULL"
+        " GROUP BY t.url, p.anchor_ids, l.fragment ORDER BY t.url, l.fragment"
+    )
+    current: str | None = None
+    broken: list[tuple[str, int, str]] = []
+
+    def finding() -> Finding:
+        links = sum(n for _, n, _ in broken)
+        names = ", ".join(f"#{fragment}" for fragment, _, _ in broken)
+        return current or "", f"{names} — {links} ссылк., например с {broken[0][2]}"
+
+    for url, ids, fragment, n, example in conn.execute(query, {"crawl_id": crawl_id}):
+        if url != current:
+            if broken:
+                yield finding()
+            current, broken = url, []
+        raw = base64.b64decode(ids)
+        present = {raw[i : i + 2] for i in range(0, len(raw), 2)}
+        if anchor_hash(fragment) not in present:
+            broken.append((fragment, n, example))
+    if broken:
+        yield finding()
+
+
+def _url_rules() -> list[Rule]:
+    def r(code, name, kind, description, flag=None, find=None, requires=()) -> Rule:
+        find = find or _sql(
+            f"{URL_PAGES} AND url_issues LIKE '%,{flag},%'",
+            "substr(url, instr(url, '?') + 1)" if flag in ("parameters", "ga_tracking") else "NULL",
+        )
+        return Rule(code, "URL", f"URL: {name}", kind, "low", description, find, requires)  # fmt: skip
+
+    return [
+        r("url_multiple_slashes", "Multiple Slashes", "issue",
+          "В пути несколько слешей подряд (/page//): обычно ошибка шаблона, дубль адреса.", "multiple_slashes"),
+        r("url_contains_space", "Contains A Space", "issue",
+          "В URL пробел (или %20): такие ссылки ломаются при пересылке; разделяйте слова дефисом.", "space"),
+        r("url_broken_bookmark", "Broken Bookmark", "issue",
+          "Ссылка ведёт на якорь #id, которого нет на целевой странице: переход не прокрутит к нужному месту.",
+          find=_broken_bookmarks, requires=(STORE_INTERNAL,)),
+        r("url_non_ascii", "Non ASCII Characters", "warning",
+          "В URL символы вне ASCII (кириллица и т.п.) без %-кодирования: не все клиенты передают их одинаково.",
+          "non_ascii"),
+        r("url_uppercase", "Uppercase", "warning",
+          "В URL заглавные буквы: адреса чувствительны к регистру, легко получить дубль.", "uppercase"),
+        r("url_repetitive_path", "Repetitive Path", "warning",
+          "Сегмент пути повторяется (/shoes/shoes/): признак ошибки в относительных ссылках.", "repetitive_path"),
+        r("url_internal_search", "Internal Search", "warning",
+          "URL похож на страницу внутреннего поиска (thresholds.internal_search): их обычно закрывают от индекса.",
+          "internal_search"),
+        r("url_parameters", "Parameters", "warning",
+          "URL с GET-параметрами (?, &): риск дублей и лишнего обхода.", "parameters"),
+        r("url_ga_tracking", "GA Tracking Parameters", "warning",
+          "В URL метки аналитики (utm_*, _ga, _gl): внутренние ссылки с метками плодят дубли.", "ga_tracking"),
+        r("url_underscores", "Underscores", "opportunity",
+          "Подчёркивания в пути: поисковики не всегда считают их разделителем слов, лучше дефис.", "underscores"),
+        r("url_over_max", "Over Max Characters", "opportunity",
+          "URL длиннее thresholds.url_max_chars: короткие адреса удобнее людям.",
+          find=_sql(f"{URL_PAGES} AND length(url) > :url_max_chars", "length(url) || ' симв.'")),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -603,6 +722,7 @@ RULES += _directive_canonical_rules()
 RULES += _content_rules()
 RULES += _link_rules()
 RULES += _image_rules()
+RULES += _url_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -644,6 +764,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         conn.exec_driver_sql("ANALYZE")
         compute_indexability(conn, crawl_id)
         compute_link_counts(conn, crawl_id)
+        compute_url_issues(conn, crawl_id, thresholds)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         found = 0
         for r in RULES:
@@ -652,12 +773,21 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
             if isinstance(r.find, SqlFinder):
                 found += r.find.store(conn, crawl_id, r.code, thresholds)
                 continue
-            rows = [{"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}
-                    for url, detail in r.find(conn, crawl_id, thresholds)]  # fmt: skip
-            if rows:
-                conn.execute(sa.insert(storage.issues), rows)
-            found += len(rows)
+            found += _store_findings(conn, crawl_id, r.code, r.find(conn, crawl_id, thresholds))
     return found
+
+
+def _store_findings(conn: sa.Connection, crawl_id: int, code: str, findings: Iterable[Finding]) -> int:
+    """A Python rule's findings, inserted as they come, a batch at a time: a generator rule never holds them all."""
+    stored, rows = 0, []
+    for url, detail in findings:
+        rows.append({"crawl_id": crawl_id, "code": code, "url": url, "detail": detail})
+        if len(rows) >= _URL_BATCH:
+            conn.execute(sa.insert(storage.issues), rows)
+            stored, rows = stored + len(rows), []
+    if rows:
+        conn.execute(sa.insert(storage.issues), rows)
+    return stored + len(rows)
 
 
 @dataclass

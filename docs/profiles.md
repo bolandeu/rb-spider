@@ -86,6 +86,10 @@ concurrency = 10
 | `collect.media.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.iframes.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.iframes.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `rewrite.remove_params` | `list[str]` | `[]` | Удалять из найденных URL эти GET-параметры (точное имя, с учётом регистра). |
+| `rewrite.regex` | `list[tuple[str, str]]` | `[]` | Замены по регулярным выражениям, по порядку: пары [выражение, замена]; группы в замене — \1, \2. |
+| `rewrite.lowercase` | `bool` | `false` | Переводить найденные URL в нижний регистр целиком. |
+| `rewrite.percent_encoding` | `Literal['keep', 'upper', 'lower']` | `"keep"` | Регистр шестнадцатеричных цифр в %-кодировании (%D0 или %d0): keep — как на странице. |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 | `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
 | `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |
@@ -100,6 +104,8 @@ concurrency = 10
 | `thresholds.internal_outlinks` | `int` | `1000` | Больше внутренних follow-ссылок — «Links: High Internal Outlinks». |
 | `thresholds.external_outlinks` | `int` | `10` | Больше внешних follow-ссылок — «Links: High External Outlinks». |
 | `thresholds.non_descriptive_anchors` | `list[str]` | `["click here", "here", "read more", "more", "learn more", "link", "подробнее", "читать далее", "далее", "здесь", "тут", "ссылка", "перейти", "узнать больше"]` | Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text». |
+| `thresholds.url_max_chars` | `int` | `115` | URL длиннее — «URL: Over … Characters». |
+| `thresholds.internal_search` | `list[str]` | `["[?&](q|s|query|search|text|keyword|keywords)=", "/(search|poisk|find)(/|$|\\?)"]` | Регулярные выражения (без учёта регистра) по пути и параметрам URL: совпало — страница внутреннего поиска, «URL: Internal Search». |
 <!-- keys:end -->
 
 ## Рецепты

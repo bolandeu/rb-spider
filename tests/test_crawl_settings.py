@@ -17,8 +17,8 @@ from rb_spider.core import storage
 from rb_spider.core.crawl import crawl_site, proxy_urls, requests_per_minute
 from rb_spider.core.errors import AuthRequired
 from rb_spider.core.extract import parse_page
-from rb_spider.core.scope import Scope
-from rb_spider.core.settings import USER_AGENT_PRESETS, CrawlSettings, Settings
+from rb_spider.core.scope import Rewriter, Scope
+from rb_spider.core.settings import USER_AGENT_PRESETS, CrawlSettings, RewriteSettings, Settings
 
 from . import polygon
 
@@ -172,3 +172,43 @@ def test_curl_http_client_without_its_extra(monkeypatch) -> None:
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "curl_cffi" else real(name, *a))
     with pytest.raises(HttpClientUnavailable):
         http_client(CrawlSettings(http_client="curl"))
+
+
+# --- rewrite.* (#26) ----------------------------------------------------------------
+
+
+def _crawl_rewritten(base_url: str, **rewrite) -> dict[str, dict]:
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{base_url}/", "polygon", Settings(rewrite=RewriteSettings(**rewrite)))
+        with engine.connect() as conn:
+            rows = conn.execute(sa.select(storage.pages).where(storage.pages.c.crawl_id == result.crawl_id)).mappings()
+            return {row["url"].removeprefix(base_url): dict(row) for row in rows}
+
+
+def test_rewrite_remove_params(base_url: str) -> None:
+    pages = _crawl_rewritten(base_url, remove_params=["sort", "utm_source"])
+    assert "/b?sort=price" not in pages  # became /b, already crawled
+    assert "/u/landing" in pages
+    assert "/u/landing?utm_source=news" not in pages
+    assert "/search?q=test" in pages  # other parameters stay
+
+
+def test_rewrite_regex_and_lowercase(base_url: str) -> None:
+    pages = _crawl_rewritten(base_url, regex=[("/old$", "/a"), (r"/shoes/shoes$", r"/c")], lowercase=True)
+    assert "/old" not in pages and "/u/shoes/shoes" not in pages
+    assert "/u/UPPER" not in pages
+    assert pages["/u/upper"]["status_code"] == 404  # the lower-case address doesn't exist on the polygon
+
+
+def test_rewriter_percent_encoding_and_order() -> None:
+    rewrite = Rewriter(
+        RewriteSettings(remove_params=["sid"], regex=[("^http://", "https://")], percent_encoding="upper")
+    )
+    assert rewrite("http://s.example/%d0%b0?sid=1&page=2#x") == "https://s.example/%D0%B0?page=2"
+    assert Rewriter(RewriteSettings(percent_encoding="lower"))("https://s.example/%D0%B0") == "https://s.example/%d0%b0"
+    assert not Rewriter(None).active
+
+
+def test_rewrite_regex_is_validated() -> None:
+    with pytest.raises(ValueError, match="invalid regular expression"):
+        RewriteSettings(regex=[("(", "x")])
