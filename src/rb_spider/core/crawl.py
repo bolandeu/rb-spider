@@ -45,7 +45,7 @@ from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
 from . import issues, render, storage
-from .errors import AuthRequired, HttpClientUnavailable, InvalidArguments
+from .errors import AuthRequired, HttpClientUnavailable, InvalidArguments, NearDuplicatesUnavailable
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
 from .render import Renderer
@@ -405,6 +405,8 @@ def _ready(settings: Settings) -> None:
     http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
     if settings.crawl.render == "always":
         render.ensure_available()
+    if settings.collect.near_duplicates and importlib.util.find_spec("datasketch") is None:
+        raise NearDuplicatesUnavailable
 
 
 def read_url_list(text: str) -> list[str]:

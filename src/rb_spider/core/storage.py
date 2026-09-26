@@ -132,6 +132,12 @@ pages = sa.Table(
     sa.Column("forms", sa.Integer),
     sa.Column("unsafe_blank_links", sa.Integer),
     sa.Column("protocol_relative", sa.Integer),
+    # content measures of the page's own text: Flesch Reading Ease, words per sentence, visible text as % of the
+    # HTML, MinHash signature (collect.near_duplicates) for near duplicates
+    sa.Column("flesch", sa.Float),
+    sa.Column("words_per_sentence", sa.Float),
+    sa.Column("text_ratio", sa.Float),
+    sa.Column("minhash", sa.String),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
@@ -215,6 +221,17 @@ url_metrics = sa.Table(
     sa.Column("name", sa.String, primary_key=True),
     sa.Column("value", sa.Float),
     sa.Column("text", sa.String),
+)
+# Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
+near_duplicates = sa.Table(
+    "near_duplicates",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url_a", sa.String, nullable=False),
+    sa.Column("url_b", sa.String, nullable=False),
+    sa.Column("similarity", sa.Float, nullable=False),  # estimated Jaccard similarity of the texts, 0–1
+    sa.Index("near_duplicates_by_a", "crawl_id", "url_a"),
+    sa.Index("near_duplicates_by_b", "crawl_id", "url_b"),
 )
 issues = sa.Table(
     "issues",

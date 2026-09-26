@@ -137,3 +137,18 @@ class HttpClientUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class NearDuplicatesUnavailable(CliError):
+    """`collect.near_duplicates = true` without the `near` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "NEAR_DUPLICATES_UNAVAILABLE",
+            "Near duplicates need datasketch (MinHash), which is not installed.",
+            action=(
+                f'Install it: uv tool install --reinstall "{DIST_NAME}[near] @ git+https://github.com/bolandeu/spider.git" '
+                "(in a checkout: uv sync --extra near), or turn it off: --set collect.near_duplicates=false."
+            ),
+            exit_code=1,
+        )

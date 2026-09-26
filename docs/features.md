@@ -138,14 +138,14 @@
 - [x] `MVP` **Exact Duplicates** — страницы полностью идентичны (совпадает md5-хэш) _(SF: Issue, High)_
 - [ ] `backlog` **Spelling Errors** — орфографические ошибки в тексте _(SF: Issue, Medium)_
 - [ ] `backlog` **Grammar Errors** — грамматические ошибки в тексте _(SF: Issue, Medium)_
-- [ ] `v2` **Soft 404 Pages** — страница отдаёт 200, но по содержимому — «страница не найдена» (эвристика) _(SF: Warning, High)_
+- [x] `v2` **Soft 404 Pages** — страница отдаёт 200, но по содержимому — «страница не найдена» (эвристика) _(SF: Warning, High)_
 - [x] `MVP` **Lorem Ipsum Placeholder** — на странице остался текст-заглушка «Lorem ipsum» _(SF: Warning, High)_
-- [ ] `v2` **Near Duplicates** — почти-дубли по тексту, сходство ≥ порога (90 %), MinHash _(SF: Warning, Medium)_
+- [x] `v2` **Near Duplicates** — почти-дубли по тексту, сходство ≥ порога (90 %), MinHash _(SF: Warning, Medium)_
 - [ ] `backlog` **Semantically Similar** — страницы близки по смыслу (косинусная близость эмбеддингов) _(SF: Warning, Medium)_
 - [ ] `backlog` **Low Relevance Content** — страница выбивается из общей тематики сайта (эмбеддинги) _(SF: Warning, Low)_
 - [x] `MVP` **Low Content Pages** — мало текста: меньше 200 слов (порог настраивается) _(SF: Opportunity, Medium)_
-- [ ] `v2` **Readability Difficult** — текст трудно читать по формуле Flesch _(SF: Opportunity, Low)_
-- [ ] `v2` **Readability Very Difficult** — текст очень трудно читать по формуле Flesch _(SF: Opportunity, Low)_
+- [x] `v2` **Readability Difficult** — текст трудно читать по формуле Flesch _(SF: Opportunity, Low)_
+- [x] `v2` **Readability Very Difficult** — текст очень трудно читать по формуле Flesch _(SF: Opportunity, Low)_
 
 ### Images — изображения
 
@@ -486,8 +486,8 @@
 
 - [x] `MVP` **Page details** — title, meta description, h1, h2, word count, page size, hash (md5)
 - [x] `MVP` **URL details** — response time, заголовок Last-Modified, полные HTTP-заголовки запроса и ответа
-- [ ] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении
-- [ ] `v2` **Text to Code Ratio** — доля текста в HTML
+- [x] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении (`pages.flesch`, `words_per_sentence`; для русского — формула Оборневой)
+- [x] `v2` **Text to Code Ratio** — доля текста в HTML (`pages.text_ratio`, %)
 - [x] `v2` **Forms** — формы на странице (для проверок Security): число в `pages.forms`, action — ссылки вида `form`
 - [ ] `v2` **Cookies** — cookies каждого URL
 - [ ] `backlog` **PDF** — свойства PDF (автор, даты, страницы, слова), анкоры ссылок внутри PDF, сохранение PDF
@@ -504,7 +504,7 @@
 - [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
-- [ ] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff
+- [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
 - [ ] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации
 - [ ] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
 - [ ] `v3` **Lighthouse Details** — метрики PSI по URL
@@ -613,8 +613,8 @@
 ### Контент (Config > Content)
 
 - [x] `MVP` **Content Area** — какие элементы учитывать в тексте (по умолчанию `<body>` без `<nav>` и `<footer>`) → `content.include` / `content.exclude`
-- [ ] `v2` **Exact duplicates (hash)** + **Only Check Indexable Pages** → `duplicates.exact`, `duplicates.indexable_only`
-- [ ] `v2` **Near Duplicates** + порог сходства (90 %) → `duplicates.near`, `duplicates.near_threshold`
+- [x] `v2` **Exact duplicates (hash)** + **Only Check Indexable Pages** → `thresholds.duplicates_indexable_only` (точные дубли считаются всегда: md5 хранится у каждой страницы)
+- [x] `v2` **Near Duplicates** + порог сходства (90 %) → `collect.near_duplicates` (extra `rb-spider[near]`), `thresholds.near_duplicate_similarity`
 - [ ] `backlog` **Spelling & Grammar** (языки, правила, словарь)
 - [ ] `backlog` **Embeddings** (Semantic Similarity, Low Relevance через AI-провайдера)
 
@@ -766,7 +766,7 @@
 ### Прочий анализ
 
 - [ ] `v3` **Link Score** — внутренний PageRank 0–100 после обхода
-- [ ] `v2` **Readability** — Flesch Reading Ease
+- [x] `v2` **Readability** — Flesch Reading Ease
 - [ ] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt
 - [ ] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI)
 - [ ] `backlog` **N-grams**

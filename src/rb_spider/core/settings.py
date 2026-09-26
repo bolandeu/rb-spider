@@ -252,6 +252,13 @@ class CollectSettings(BaseModel):
         description="Пагинация <link rel=next / prev> (и заголовок Link): follow — обходить соседние страницы.",
     )
     images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
+    near_duplicates: bool = Field(
+        False,
+        description=(
+            "Считать подписи MinHash текста страниц — для проверки «Content: Near Duplicates» (extra "
+            "`rb-spider[near]`; ~0,7 КБ на страницу)."
+        ),
+    )
     css: FollowStore = Field(default_factory=FollowStore, description="Стили <link rel=stylesheet>.")
     js: FollowStore = Field(default_factory=FollowStore, description="Скрипты <script src>.")
     media: FollowStore = Field(default_factory=FollowStore, description="Видео и аудио <video>, <audio>, <source>.")
@@ -329,6 +336,29 @@ class ThresholdSettings(BaseModel):
         description="Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text».",
     )  # fmt: skip
     url_max_chars: int = Field(115, ge=1, description="URL длиннее — «URL: Over … Characters».")
+    duplicates_indexable_only: bool = Field(
+        True, description="Искать дубли (точные, почти-дубли, title и т.д.) только среди индексируемых страниц."
+    )
+    near_duplicate_similarity: int = Field(
+        90, ge=50, le=100, description="С какого сходства текста (%) страницы — почти-дубли (MinHash)."
+    )
+    readability_difficult: float = Field(
+        50, description="Индекс Флеша ниже — «Content: Readability Difficult» (для русского — формула Оборневой)."
+    )
+    readability_very_difficult: float = Field(
+        30, description="Индекс Флеша ниже — «Content: Readability Very Difficult»."
+    )
+    readability_min_words: int = Field(
+        100, ge=1, description="Читаемость оценивается у страниц хотя бы со стольких слов текста."
+    )
+    soft_404_patterns: list[str] = Field(
+        [r"\b404\b", r"not found", r"page (does not|doesn't|no longer) exist", r"не найден", r"не существует",
+         r"нет такой страницы", r"страница удалена"],
+        description=(
+            "Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — "
+            "«Content: Soft 404 Pages»."
+        ),
+    )  # fmt: skip
     ignore_paginated_duplicates: bool = Field(
         True,
         description=(
@@ -344,7 +374,7 @@ class ThresholdSettings(BaseModel):
         ),
     )
 
-    @field_validator("internal_search")
+    @field_validator("internal_search", "soft_404_patterns")
     @classmethod
     def _valid_regexes(cls, patterns: list[str]) -> list[str]:
         for pattern in patterns:

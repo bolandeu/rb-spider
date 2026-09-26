@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 import sqlalchemy as sa
 from pydantic import ValidationError
 
+from . import duplicates as duplicates_module
 from . import hreflang as hreflang_module
 from . import pagination as pagination_module
 from . import security as security_module
@@ -44,11 +45,10 @@ class Rule:
 
 
 # Rules look at the site's own URLs unless they say otherwise; on-page checks at the site's HTML pages
-# that answered 200 and were read (not only checked); duplicates only among indexable ones.
+# that answered 200 and were read (not only checked); duplicates among indexable ones (thresholds.duplicates_indexable_only).
 INTERNAL = "NOT coalesce(external, 0)"
 EXTERNAL = "coalesce(external, 0)"
 HTML_OK = f"{INTERNAL} AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
-INDEXABLE_HTML = f"{HTML_OK} AND indexable"
 
 # Why a URL can't be indexed — Screaming Frog's Indexability Status, first matching reason wins.
 _INDEXABILITY = sa.text(
@@ -131,12 +131,14 @@ def _sql(where: str, detail: str = "NULL", *, external: bool = False) -> RuleFin
     )
 
 
-def _duplicate(column: str, among: str = INDEXABLE_HTML, *, skip_paginated: bool = True) -> RuleFinder:
+def _duplicate(column: str, *, skip_paginated: bool = True) -> RuleFinder:
     """Pages whose `column` value is shared with another page (one pass: a window count per value).
 
-    `skip_paginated` — pages 2+ of a rel next/prev series are left out when thresholds.ignore_paginated_duplicates
-    says so: a list's pages share their title and headings by design.
+    Among the site's HTML pages — indexable ones only while thresholds.duplicates_indexable_only; `skip_paginated`
+    — pages 2+ of a rel next/prev series are left out while thresholds.ignore_paginated_duplicates says so: a
+    list's pages share their title and headings by design.
     """
+    among = f"{HTML_OK} AND (indexable OR NOT :duplicates_indexable_only)"
     paginated = " AND NOT (:ignore_paginated_duplicates AND coalesce(pagination, '') = 'paginated')"
     return _run_sql(
         sa.text(
@@ -423,19 +425,54 @@ def _directive_canonical_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _soft_404(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> Iterable[Finding]:
+    """200 pages whose title or H1 reads like an error page (thresholds.soft_404_patterns), streamed."""
+    patterns = [re.compile(p, re.IGNORECASE) for p in thresholds.soft_404_patterns]
+    if not patterns:
+        return
+    rows = conn.execution_options(yield_per=1000).execute(
+        sa.text(f"SELECT url, title, h1 FROM pages WHERE crawl_id = :crawl_id AND {HTML_OK} ORDER BY url"),  # noqa: S608
+        {"crawl_id": crawl_id},
+    )
+    for url, title, h1 in rows:
+        for text in (title, h1):
+            if text and any(p.search(text) for p in patterns):
+                yield url, text
+                break
+
+
+def _readability(low: str, high: str | None) -> RuleFinder:
+    band = f"flesch < :{low}" + (f" AND flesch >= :{high}" if high else "")
+    return _sql(f"{HTML_OK} AND word_count >= :readability_min_words AND {band}",
+                "'индекс Флеша ' || flesch || ', слов в предложении ' || words_per_sentence")  # fmt: skip
+
+
 def _content_rules() -> list[Rule]:
-    def r(code, name, kind, priority, description, find) -> Rule:
-        return Rule(code, "Content", f"Content: {name}", kind, priority, description, find)
+    def r(code, name, kind, priority, description, find, requires=()) -> Rule:
+        return Rule(code, "Content", f"Content: {name}", kind, priority, description, find, requires)
 
     return [
         r("content_exact_duplicates", "Exact Duplicates", "issue", "high",
           "Страница побайтно совпадает с другой (одинаковый md5 HTML): дубль под разными URL.",
-          _duplicate("content_md5", among=HTML_OK, skip_paginated=False)),
+          _duplicate("content_md5", skip_paginated=False)),
+        r("content_soft_404", "Soft 404 Pages", "warning", "high",
+          "Страница отвечает 200, но по title / H1 — «страница не найдена» (thresholds.soft_404_patterns): "
+          "поисковик сочтёт её ошибкой, а обход — рабочей.", _soft_404),
         r("content_lorem_ipsum", "Lorem Ipsum Placeholder", "warning", "high",
           "На странице остался текст-заглушка «Lorem ipsum».", _sql(f"{HTML_OK} AND lorem_ipsum")),
+        r("content_near_duplicates", "Near Duplicates", "warning", "medium",
+          "Текст почти совпадает с другой страницей (сходство MinHash ≥ thresholds.near_duplicate_similarity): "
+          "пары — `spider duplicates`.",
+          _run_sql(sa.text(duplicates_module.PAIRS + duplicates_module.NEAR_FINDINGS)), ("collect.near_duplicates",)),
         r("content_low_content", "Low Content Pages", "opportunity", "medium",
           "Мало текста: меньше thresholds.low_content_words слов в видимом тексте.",
           _sql(f"{HTML_OK} AND word_count < :low_content_words", "word_count || ' слов'")),
+        r("content_readability_difficult", "Readability Difficult", "opportunity", "low",
+          "Текст трудно читать: индекс Флеша ниже thresholds.readability_difficult (длинные предложения и слова).",
+          _readability("readability_difficult", "readability_very_difficult")),
+        r("content_readability_very_difficult", "Readability Very Difficult", "opportunity", "low",
+          "Текст очень трудно читать: индекс Флеша ниже thresholds.readability_very_difficult.",
+          _readability("readability_very_difficult", None)),
     ]  # fmt: skip
 
 
@@ -999,6 +1036,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         compute_indexability(conn, crawl_id)
         compute_link_counts(conn, crawl_id)
         compute_url_issues(conn, crawl_id, thresholds)
+        duplicates_module.compute_near(conn, crawl_id, thresholds)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         found = 0
         for r in RULES:

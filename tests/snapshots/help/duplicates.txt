@@ -1,0 +1,42 @@
+                                                                                                    
+ Usage: spider duplicates [OPTIONS] [crawl_id]                                                      
+                                                                                                    
+ Пары дублей страниц: точные (одинаковый HTML) и почти-дубли (сходство текста MinHash).             
+                                                                                                    
+ Duplicate Details из Screaming Frog: для проверок `content_exact_duplicates` и                     
+ `content_near_duplicates` из `spider issues`. Точный дубль показан парой со первой                 
+ страницей своей группы, почти-дубль — каждой парой один раз. Почти-дубли есть только               
+ у обходов с `collect.near_duplicates = true` (extra `rb-spider`); порог сходства                   
+ и «только индексируемые» — `thresholds.near_duplicate_similarity` и                                
+ `thresholds.duplicates_indexable_only`, меняются через `spider analyze`.                           
+                                                                                                    
+ Примеры:                                                                                           
+   spider duplicates                                                                                
+   spider duplicates --kind near --limit 1000                                                       
+   spider duplicates --url https://site.ru/a --diff                                                 
+                                                                                                    
+ JSON: `{crawl_id, kind, total, pairs: [{url, other, similarity, kind, diff?}]}`;                   
+ `similarity` — 0–1 (у точных 1); `diff` — строки unified diff текста (по предложениям),            
+ null — HTML не сохранялся. `--diff` без `--url` — выход 2.                                         
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --kind           <all|exact|near>    all — все пары; exact — точные дубли; near — почти-дубли.   │
+│                                      [default: all]                                              │
+│ --url            <str>               Только пары с этой страницей.                               │
+│ --diff                               С --url: разница текста страницы с каждой парой (нужен      │
+│                                      обход с --store-html).                                      │
+│ --limit          <int range> [x>=1]  Сколько пар показать (всего — в поле total). [default: 100] │
+│ --profile        <str>               Профиль настроек: встроенный (`spider profiles list`) или   │
+│                                      из `.spider/profiles/`.                                     │
+│ --config         <path>              TOML-файл настроек поверх профиля (формат как у профиля).   │
+│ --set            KEY=VALUE           Переопределить любой ключ: `--set crawl.max_urls=500`;      │
+│                                      можно повторять.                                            │
+│ --json                               Вывод в JSON для агентов и скриптов (одна строка-конверт    │
+│                                      `{ok, ...}`).                                               │
+│ --quiet                              Печатать только основной результат, без пояснений.          │
+│ --help                               Show this message and exit.                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

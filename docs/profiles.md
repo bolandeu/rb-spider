@@ -84,6 +84,7 @@ concurrency = 10
 | `collect.pagination.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.pagination.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
+| `collect.near_duplicates` | `bool` | `false` | Считать подписи MinHash текста страниц — для проверки «Content: Near Duplicates» (extra `rb-spider[near]`; ~0,7 КБ на страницу). |
 | `collect.css.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.css.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.js.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
@@ -111,6 +112,12 @@ concurrency = 10
 | `thresholds.external_outlinks` | `int` | `10` | Больше внешних follow-ссылок — «Links: High External Outlinks». |
 | `thresholds.non_descriptive_anchors` | `list[str]` | `["click here", "here", "read more", "more", "learn more", "link", "подробнее", "читать далее", "далее", "здесь", "тут", "ссылка", "перейти", "узнать больше"]` | Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text». |
 | `thresholds.url_max_chars` | `int` | `115` | URL длиннее — «URL: Over … Characters». |
+| `thresholds.duplicates_indexable_only` | `bool` | `true` | Искать дубли (точные, почти-дубли, title и т.д.) только среди индексируемых страниц. |
+| `thresholds.near_duplicate_similarity` | `int` | `90` | С какого сходства текста (%) страницы — почти-дубли (MinHash). |
+| `thresholds.readability_difficult` | `float` | `50` | Индекс Флеша ниже — «Content: Readability Difficult» (для русского — формула Оборневой). |
+| `thresholds.readability_very_difficult` | `float` | `30` | Индекс Флеша ниже — «Content: Readability Very Difficult». |
+| `thresholds.readability_min_words` | `int` | `100` | Читаемость оценивается у страниц хотя бы со стольких слов текста. |
+| `thresholds.soft_404_patterns` | `list[str]` | `["\\b404\\b", "not found", "page (does not|doesn't|no longer) exist", "не найден", "не существует", "нет такой страницы", "страница удалена"]` | Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — «Content: Soft 404 Pages». |
 | `thresholds.ignore_paginated_duplicates` | `bool` | `true` | Не считать дублями title / description / H1 / H2 страниц пагинации 2+ (с rel=prev): у страниц одного списка они обычно одинаковы. |
 | `thresholds.internal_search` | `list[str]` | `["[?&](q|s|query|search|text|keyword|keywords)=", "/(search|poisk|find)(/|$|\\?)"]` | Регулярные выражения (без учёта регистра) по пути и параметрам URL: совпало — страница внутреннего поиска, «URL: Internal Search». |
 <!-- keys:end -->

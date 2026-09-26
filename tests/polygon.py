@@ -22,7 +22,7 @@ TITLE = "Полигон spider: страница {} для проверок"  # 
 DESCRIPTION = "Описание страницы {} полигона spider: достаточно длинное, чтобы уложиться в норму сниппета."
 H1 = "Заголовок страницы {}"
 H2 = "Раздел страницы {}"
-FILLER = "<p>" + "Обычный текст страницы полигона, достаточный по объёму. " * 30 + "</p>"  # 240 words
+FILLER = "<p>" + "Это простой текст для полигона и он легко читается. " * 30 + "</p>"  # 270 easy words
 
 
 def _links(links: tuple[str, ...]) -> str:
@@ -136,13 +136,53 @@ DIRECTIVE_CANONICAL_TRAPS: dict[str, tuple[dict[str, str], str]] = {
     "/r-noydir": ({}, _html("r-noydir", head=_head("r-noydir", extra=_robots("noydir")))),
     "/r-notranslate": ({}, _html("r-notranslate", head=_head("r-notranslate", extra=_robots("notranslate")))),
 }  # fmt: skip
+_BODY = "<h1>{h1}</h1><h2>{h2}</h2>"
+# readability (Oborneva's Flesch for Russian): long sentences of long words; the filler scores ~75 (easy)
+READ_HARD = "Мы долго обсуждали правила работы и решили сменить порядок проверки всех документов. " * 18  # ~41
+READ_VERY_HARD = (
+    "Высококвалифицированные специалисты исследовательского подразделения систематически анализируют "
+    "многочисленные характеристики экспериментальных технологических процессов производства, "
+    "обеспечивающих конкурентоспособность отечественной промышленности. "
+) * 16
+NEAR_TEXT = " ".join(f"слово{i}" + ("." if i % 8 == 7 else "") for i in range(240))  # 240 distinct words
 CONTENT_TRAPS: dict[str, str] = {
     "/thin": _html("thin", thin=True),
-    "/lorem": _html("lorem", body=f"<h1>{H1.format('lorem')}</h1><h2>{H2.format('lorem')}</h2><p>Lorem ipsum dolor sit amet.</p>"),
-    # byte-identical pages; the copy points its canonical at the original, as sites usually do
+    "/lorem": _html(
+        "lorem", body=f"<h1>{H1.format('lorem')}</h1><h2>{H2.format('lorem')}</h2><p>Lorem ipsum dolor sit amet.</p>"
+    ),
+    # byte-identical pages; the copy points its canonical at the original, as sites usually do — so the copy is
+    # not indexable and, with thresholds.duplicates_indexable_only (default), not a duplicate
     "/dup-1": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
     "/dup-2": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
-}  # fmt: skip
+    # byte-identical and both indexable: each has its self-canonical in the Link header (see CONTENT_HEADERS)
+    "/dup-3": _html("dup-b"),
+    "/dup-4": _html("dup-b"),
+    "/soft-404": _html("soft-404", head=_head("soft-404", title="Страница не найдена — полигон spider, раздел ошибок")),
+    "/read-hard": _html(
+        "read-hard",
+        thin=True,
+        body=_BODY.format(h1=H1.format("read-hard"), h2=H2.format("read-hard")) + "<p>" + READ_HARD + "</p>",
+    ),
+    "/read-very-hard": _html(
+        "read-very-hard",
+        thin=True,
+        body=_BODY.format(h1=H1.format("read-very-hard"), h2=H2.format("read-very-hard"))
+        + "<p>"
+        + READ_VERY_HARD
+        + "</p>",
+    ),
+    "/near-1": _html(
+        "near-1", thin=True, body=f"<h1>{H1.format('near-1')}</h1><h2>{H2.format('near-1')}</h2><p>{NEAR_TEXT}</p>"
+    ),
+    "/near-2": _html(
+        "near-2",
+        thin=True,
+        body=f"<h1>{H1.format('near-2')}</h1><h2>{H2.format('near-2')}</h2><p>{NEAR_TEXT.replace('слово7 ', 'иное7 ')}</p>",
+    ),
+}
+CONTENT_HEADERS = {path: {"Link": f'<{{base}}{path}>; rel="canonical"'} for path in ("/dup-3", "/dup-4")}
+# collect.near_duplicates on: pages whose texts are ≥ 90 % alike (the polygon's other pages share only the filler)
+NEAR_DUPLICATES = {"/near-1", "/near-2", "/dup-3", "/dup-4", "/b", "/b?sort=price"}  # fmt: skip
 # `{local}` becomes http://localhost:port — the polygon under another host name, i.e. an external site.
 LINK_TRAPS: dict[str, str] = {
     "/l-external": _html("l-external", "{local}/missing", "{local}/error", "https://unreachable.invalid/", "/"),
@@ -334,7 +374,6 @@ SECURE_HEADERS = {
     "Referrer-Policy": "strict-origin-when-cross-origin",
 }
 HSTS = {"Strict-Transport-Security": "max-age=31536000"}  # HTTPS responses only
-_BODY = "<h1>{h1}</h1><h2>{h2}</h2>"
 SECURITY_TRAPS: dict[str, tuple[dict[str, str], str]] = {
     "/s-form": ({}, _html("s-form", body=_BODY.format(h1=H1.format("s-form"), h2=H2.format("s-form"))
                           + '<form action="/s-form-submit" method="post"><input name="q"></form>')),
@@ -368,7 +407,7 @@ HTTPS_EXPECTED = {
     "security_missing_hsts": {"/nohsts"},
 }
 
-NO_CANONICAL = {"/c-missing"}
+NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/": (
@@ -438,7 +477,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     # "/reset" closes the connection without answering (see _handle)
     **{path: (200, {}, html) for path, html in ONPAGE_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in DIRECTIVE_CANONICAL_TRAPS.items()},
-    **{path: (200, {}, html) for path, html in CONTENT_TRAPS.items()},
+    **{path: (200, CONTENT_HEADERS.get(path, {}), html) for path, html in CONTENT_TRAPS.items()},
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
@@ -501,6 +540,7 @@ EXTERNAL = {
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
+DUPLICATES_B = DUPLICATES | {"/dup-3", "/dup-4"}  # the same title / description / headings too
 
 # issue code -> polygon paths the rule must report (and nothing else).
 EXPECTED_ISSUES = {
@@ -518,7 +558,7 @@ EXPECTED_ISSUES = {
     "page_title_missing": {"/t-missing"},
     "page_title_multiple": {"/t-multiple"},
     "page_title_outside_head": {"/t-outside"},
-    "page_title_duplicate": DUPLICATES,
+    "page_title_duplicate": DUPLICATES_B,
     "page_title_over_max": {"/t-long"},
     "page_title_below_min": {"/t-short"},
     "page_title_same_as_h1": {"/t-same-h1"},
@@ -526,7 +566,7 @@ EXPECTED_ISSUES = {
     "meta_description_multiple": {"/d-multiple"},
     "meta_description_outside_head": {"/d-outside"},
     "meta_description_missing": {"/d-missing"},
-    "meta_description_duplicate": DUPLICATES,
+    "meta_description_duplicate": DUPLICATES_B,
     "meta_description_over_max": {"/d-long"},
     "meta_description_below_min": {"/d-short"},
     # H1
@@ -534,13 +574,13 @@ EXPECTED_ISSUES = {
     "h1_multiple": {"/h1-multiple"},
     "h1_alt_text": {"/h1-alt"},
     "h1_non_sequential": {"/h1-nonseq"},
-    "h1_duplicate": DUPLICATES,
+    "h1_duplicate": DUPLICATES_B,
     "h1_over_max": {"/h1-long"},
     # H2
     "h2_missing": {"/h2-missing"},
     "h2_multiple": {"/h2-multiple"},
     "h2_non_sequential": {"/h2-nonseq", "/h1-missing"},
-    "h2_duplicate": DUPLICATES,
+    "h2_duplicate": DUPLICATES_B,
     "h2_over_max": {"/h2-long"},
     # Canonicals
     "canonical_multiple_conflicting": {"/c-conflict", "/c-header-conflict"},
@@ -571,7 +611,11 @@ EXPECTED_ISSUES = {
     "directives_noydir": {"/r-noydir"},
     "directives_notranslate": {"/r-notranslate"},
     # Content
-    "content_exact_duplicates": {"/dup-1", "/dup-2"},
+    "content_exact_duplicates": {"/dup-3", "/dup-4"},
+    "content_soft_404": {"/soft-404"},
+    "content_near_duplicates": set(),  # collect.near_duplicates is off in this crawl: see NEAR_DUPLICATES
+    "content_readability_difficult": {"/read-hard"},
+    "content_readability_very_difficult": {"/read-very-hard"},
     "content_lorem_ipsum": {"/lorem"},
     "content_low_content": {"/thin"},
     # Links

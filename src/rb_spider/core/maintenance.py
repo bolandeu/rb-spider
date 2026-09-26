@@ -23,7 +23,8 @@ from .storage import crawls, projects
 
 # Child tables of a crawl, deleted explicitly by crawl_id: faster than SQLite's per-row cascade on
 # millions of link rows (the cascade stays as a safety net).
-_CRAWL_TABLES = (storage.link_rows, storage.urls, storage.issues, storage.frontier, storage.url_metrics, storage.pages)
+_CRAWL_TABLES = (storage.link_rows, storage.urls, storage.issues, storage.frontier, storage.url_metrics,
+                 storage.near_duplicates, storage.pages)  # fmt: skip
 _DURATION = re.compile(r"^\s*(\d+)\s*([hdwy])\s*$")
 _UNITS = {"h": timedelta(hours=1), "d": timedelta(days=1), "w": timedelta(weeks=1), "y": timedelta(days=365)}
 

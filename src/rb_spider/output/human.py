@@ -168,6 +168,20 @@ def insecure_list(data: dict) -> None:
     console.print(table)
 
 
+def duplicates_list(data: dict) -> None:
+    shown, total = len(data["pairs"]), data["total"]
+    head = f"[bold]Дубли ({data['kind']})[/bold] — обход #{data['crawl_id']}: {total} пар"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    for pair in data["pairs"]:
+        console.print(
+            f"{round(100 * pair['similarity'])}% {pair['kind']}: {pair['url']} ≈ {pair['other']}", markup=False
+        )
+        if pair.get("diff"):
+            console.print("\n".join(pair["diff"]), markup=False, highlight=False)
+        elif "diff" in pair:
+            console.print("  (HTML не сохранялся — нужен обход с --store-html)")
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"

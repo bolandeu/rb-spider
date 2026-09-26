@@ -15,6 +15,8 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from selectolax.lexbor import LexborHTMLParser
 
+from . import content
+
 _FOLLOWABLE_SCHEMES = {"http", "https"}
 # `<meta http-equiv="refresh">` content and the `Refresh` header share a format: "5; url=/next".
 _REFRESH_URL = re.compile(r"""^\s*\d*(?:\.\d+)?\s*[;,]\s*url\s*=\s*['"]?([^'"]+)""", re.IGNORECASE)
@@ -252,17 +254,24 @@ _LOREM = re.compile(r"lorem\s+ipsum", re.IGNORECASE)
 DEFAULT_CONTENT_EXCLUDE = ("nav", "footer")
 
 
-def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str]) -> dict:
-    """Exact-duplicate hash and the page's own text (menus and footers aside). Mutates `tree`: call it last."""
+def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str], minhash: bool) -> dict:
+    """Exact-duplicate hash, the page's own text (menus and footers aside) and measures of it. Mutates `tree`: call it last."""
     tree.strip_tags(["script", "style", "noscript", "template"])
     for selector in exclude:
         for node in tree.css(selector):
             node.decompose()
     text = tree.body.text(separator=" ") if tree.body else ""
+    tokens = text.split()
+    readable = content.readability(text)
     return {
         "content_md5": hashlib.md5(body).hexdigest(),  # noqa: S324 — a fingerprint, not security
-        "word_count": len(text.split()),
+        "word_count": len(tokens),
         "lorem_ipsum": bool(_LOREM.search(text)),
+        "flesch": readable[0] if readable else None,
+        "words_per_sentence": readable[1] if readable else None,
+        # visible text (single spaces between words), % of the HTML
+        "text_ratio": round(100 * (sum(map(len, tokens)) + len(tokens)) / len(body), 1) if body else None,
+        "minhash": content.signature(text) if minhash else None,
     }
 
 
@@ -472,6 +481,7 @@ def parse_page(
     *,
     content_exclude: Sequence[str] = DEFAULT_CONTENT_EXCLUDE,
     srcset: bool = False,
+    minhash: bool = False,
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -510,5 +520,5 @@ def parse_page(
     page.forms = _forms(url, tree)
     page.onpage |= {"forms": len(page.forms), "unsafe_blank_links": _unsafe_blank_links(url, tree),
                     "protocol_relative": _protocol_relative_resources(tree)}  # fmt: skip
-    page.onpage |= _content(tree, body, content_exclude)
+    page.onpage |= _content(tree, body, content_exclude, minhash)
     return page

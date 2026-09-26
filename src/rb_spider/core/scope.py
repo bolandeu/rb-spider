@@ -132,6 +132,7 @@ class PageReader:
         self.rewrite = Rewriter(rewrite)
         self.content_exclude: Sequence[str] = list(crawl.content_exclude)
         self.srcset = collect.images_srcset
+        self.minhash = collect.near_duplicates
         self.follow_internal_nofollow = crawl.follow_internal_nofollow
         self.follow_external_nofollow = crawl.follow_external_nofollow
         self.max_links_per_page = crawl.max_links_per_page
@@ -144,7 +145,7 @@ class PageReader:
     def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
         """A checked URL (`check`) is not read: status, headers and redirect target only."""
         page = parse_page(url, status_code, headers, b"" if check else body,
-                          content_exclude=self.content_exclude, srcset=self.srcset)  # fmt: skip
+                          content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash)  # fmt: skip
         page.bytes = len(body)
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,

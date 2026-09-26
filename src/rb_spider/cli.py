@@ -11,6 +11,7 @@ from .commands import (
     crawls,
     db,
     doctor,
+    duplicates,
     enrich,
     export,
     fetch,
@@ -58,6 +59,7 @@ app.command(name="redirects")(redirects.redirects)
 app.command(name="hreflang")(hreflang.hreflang)
 app.command(name="pagination")(pagination.pagination)
 app.command(name="insecure")(insecure.insecure)
+app.command(name="duplicates")(duplicates.duplicates)
 app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="overview")(export.overview)

@@ -18,7 +18,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 | Хранилище результатов | **Своя схема на SQLAlchemy 2 + Alembic** | Нужны нормальные таблицы и связи (граф ссылок, отчёты SQL-ом); один код для SQLite / Postgres / MySQL | Датасет Crawlee — JSON-блобы без колонок, SQL-запросов нет |
 | Очередь обхода | **Своя очередь** (`RequestManager` Crawlee): в памяти + свой фильтр виденных URL, сохраняется пачками в ту же SQLite **в одной транзакции с результатами** | Прототип (#3): в 5–7× быстрее дисковых очередей Crawlee; возобновление без потерь | `SqlStorageClient` (180 стр/с, при `kill -9` потерял 266 из 10k страниц); `FileSystemStorageClient` (319 стр/с, тот же риск потерь) |
 | Структурированные данные (v2) | extruct | JSON-LD, microdata, RDFa, OpenGraph | — |
-| Почти-дубли (v2) | datasketch (MinHash/LSH) | Поддерживается | пакет `simhash` — заброшен |
+| Почти-дубли (v2) | datasketch (MinHash), extra `rb-spider[near]` — тянет numpy и scipy | Поддерживается; подпись считается при обходе (`collect.near_duplicates`), пары — полосами LSH во временных таблицах SQLite (`core/duplicates.py`), без индекса LSH в памяти | пакет `simhash` — заброшен; `MinHashLSH` datasketch — держит весь индекс в памяти |
 | robots.txt | protego (через Crawlee) | Уже внутри Crawlee | reppy — заброшен |
 | Sitemap | соседний пакет **rb-sitemap-xml** | Свой, развиваем | ultimate-sitemap-parser — GPL-3.0 |
 | Конфиг | **pydantic** + своё слияние слоёв (~40 строк, `core/settings.py`) | Слияние плоских `раздел.ключ` запоминает слой каждого значения — это нужно `config show`; схема и описания — из pydantic | pydantic-settings — не хранит, из какого слоя пришло значение |

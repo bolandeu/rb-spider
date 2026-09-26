@@ -26,6 +26,8 @@ dependencies = [
 render = ["crawlee[playwright]>=1.10,<1.11"]
 # the fallback HTTP client (`crawl.http_client = "curl"`): curl-impersonate via Crawlee
 curl = ["crawlee[curl-impersonate]>=1.10,<1.11"]
+# near duplicates (`collect.near_duplicates`): MinHash signatures of page text
+near = ["datasketch>=2.0"]
 
 [project.scripts]
 spider = "rb_spider.cli:main"
