@@ -63,11 +63,14 @@ def dataset(
     target_status: str | None = None,
     external: bool = False,
     kind: str | None = None,
+    scheme: str | None = None,
 ) -> Table:
     """A crawl's `pages`, `links` (with the target's status code) or `issues` (with rule names), filtered."""
     params: dict[str, Any] = {"crawl_id": crawl_id}
     if kind is not None and what != "pages":
         raise InvalidArguments("--type filters pages, not links or issues.")
+    if scheme is not None and (what != "pages" or scheme not in ("http", "https")):
+        raise InvalidArguments("--scheme is http or https, and filters pages only.")
     if what == "pages":
         columns = [c.name for c in storage.pages.columns if c.name != "crawl_id"] + ["content_kind"]
         where = "p.crawl_id = :crawl_id"
@@ -76,6 +79,9 @@ def dataset(
                 raise InvalidArguments(f"Unknown --type {kind}: one of {', '.join(CONTENT_KINDS)}.")
             where += f" AND ({CONTENT_KIND_SQL}) = :kind"
             params["kind"] = kind
+        if scheme is not None:
+            where += " AND p.url GLOB :scheme_prefix"
+            params["scheme_prefix"] = f"{scheme}://*"
         if issue is not None:
             issues.rule(issue)
             where += " AND p.url IN (SELECT url FROM issues WHERE crawl_id = :crawl_id AND code = :code)"

@@ -57,6 +57,7 @@ class Page:
     blocked: str | None = None  # not fetched on purpose: "robots_txt" (status_code is 0)
     hreflang: list[tuple[str, str]] = field(default_factory=list)  # (code as written, absolute URL): HTML + Link
     pagination: list[tuple[str, str]] = field(default_factory=list)  # ("next" | "prev", absolute URL): HTML + Link
+    forms: list[str] = field(default_factory=list)  # each <form>'s action, absolute (no action: the page itself)
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -357,6 +358,95 @@ def _resources(url: str, tree: LexborHTMLParser, srcset: bool) -> list[Resource]
     return found
 
 
+# --- security (#29)
+_SECURE_REFERRER = {"no-referrer", "no-referrer-when-downgrade", "strict-origin", "strict-origin-when-cross-origin"}
+
+
+def missing_security_headers(headers: dict[str, str]) -> str | None:
+    """Security headers a response lacks (or sets to a weak value), as ",hsts,csp,xcto,xfo,referrer,".
+
+    Header names must be lower-case. HSTS is listed whatever the scheme; the rule looks at HTTPS pages only.
+    """
+    referrer = [t.strip().lower() for t in headers.get("referrer-policy", "").split(",") if t.strip()]
+    checks = {
+        "hsts": not headers.get("strict-transport-security", "").strip(),
+        "csp": not headers.get("content-security-policy", "").strip(),
+        "xcto": headers.get("x-content-type-options", "").strip().lower() != "nosniff",
+        "xfo": headers.get("x-frame-options", "").strip().upper() not in ("DENY", "SAMEORIGIN"),
+        "referrer": not referrer or referrer[-1] not in _SECURE_REFERRER,  # the last known policy wins
+    }
+    missing = [name for name, failed in checks.items() if failed]
+    return f",{','.join(missing)}," if missing else None
+
+
+_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image"), (b"\xff\xd8\xff", "image"), (b"GIF8", "image"), (b"%PDF-", "pdf"),
+)  # fmt: skip
+_HTML_START = re.compile(rb"^\s*(<!--.*?-->\s*)*<(!doctype\s+html|html|head|body)\b", re.IGNORECASE | re.DOTALL)
+
+
+def _declared_kind(content_type: str | None) -> str | None:
+    value = (content_type or "").split(";")[0].strip().lower()
+    if not value:
+        return None
+    if "html" in value:
+        return "html"
+    if value.startswith("image/"):
+        return "image"
+    return "pdf" if value == "application/pdf" else "other"
+
+
+def sniffed_mismatch(content_type: str | None, body: bytes) -> str | None:
+    """What the body really is ("html", "image", "pdf") when its first bytes say otherwise than Content-Type.
+
+    Only unmistakable signatures count — image and PDF magic bytes, an HTML document start — so a JSON or
+    text body is never "wrong"; None — they agree, or the body can't be told.
+    """
+    head = body[:1024].removeprefix(b"\xef\xbb\xbf")
+    sniffed = next((kind for magic, kind in _MAGIC if head.startswith(magic)), None)
+    if sniffed is None and (head[:4] == b"RIFF" and head[8:12] == b"WEBP"):
+        sniffed = "image"
+    if sniffed is None and _HTML_START.match(head):
+        sniffed = "html"
+    declared = _declared_kind(content_type)
+    if sniffed is None or declared is None or declared == sniffed:
+        return None
+    return f"{declared} → {sniffed}"
+
+
+def _forms(url: str, tree: LexborHTMLParser) -> list[str]:
+    actions = []
+    for form in tree.css("form"):
+        action = (form.attributes.get("action") or "").strip()
+        if target := (_absolute(url, action) if action else normalize_url(url)):
+            actions.append(target)
+    return actions
+
+
+def _unsafe_blank_links(url: str, tree: LexborHTMLParser) -> int:
+    """<a target="_blank"> to another origin without rel="noopener" / "noreferrer"."""
+    origin = urlsplit(url)[:2]
+    count = 0
+    for anchor in tree.css("a[target]"):
+        if (anchor.attributes.get("target") or "").strip().lower() != "_blank":
+            continue
+        target = _absolute(url, anchor.attributes.get("href") or "")
+        rel = (anchor.attributes.get("rel") or "").lower().split()
+        count += bool(target) and urlsplit(target)[:2] != origin and not {"noopener", "noreferrer"} & set(rel)
+    return count
+
+
+def _protocol_relative_resources(tree: LexborHTMLParser) -> int:
+    """Resources loaded as `//host/path`: they follow the page's scheme, HTTP on an HTTP page."""
+    values = [img.attributes.get("src") for img in tree.css("img[src]")]
+    values += [n.attributes.get("href") for n in tree.css("link[rel]")
+               if "stylesheet" in (n.attributes.get("rel") or "").lower().split()]  # fmt: skip
+    values += [
+        n.attributes.get("src") for n in tree.css("script[src], video[src], audio[src], source[src], iframe[src]")
+    ]
+    return sum((value or "").strip().startswith("//") for value in values)
+
+
 _JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
 
 
@@ -417,5 +507,8 @@ def parse_page(
     page.resources = _resources(url, tree, srcset)
     page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
     page.onpage["anchor_ids"] = anchor_ids(tree)
+    page.forms = _forms(url, tree)
+    page.onpage |= {"forms": len(page.forms), "unsafe_blank_links": _unsafe_blank_links(url, tree),
+                    "protocol_relative": _protocol_relative_resources(tree)}  # fmt: skip
     page.onpage |= _content(tree, body, content_exclude)
     return page

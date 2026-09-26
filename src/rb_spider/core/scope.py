@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from .extract import Page, normalize_url, parse_page
+from .extract import Page, missing_security_headers, normalize_url, parse_page, sniffed_mismatch
 
 if TYPE_CHECKING:
     from .settings import CollectSettings, CrawlSettings, RewriteSettings
@@ -146,9 +146,11 @@ class PageReader:
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset)  # fmt: skip
         page.bytes = len(body)
+        lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
-                        "headers": json.dumps({k.lower(): v for k, v in headers.items()}, ensure_ascii=False),
-                        "last_modified": next((v for k, v in headers.items() if k.lower() == "last-modified"), None)}  # fmt: skip
+                        "headers": json.dumps(lower, ensure_ascii=False), "last_modified": lower.get("last-modified"),
+                        "security_missing": missing_security_headers(lower),
+                        "sniffed_type": sniffed_mismatch(page.content_type, body) if status_code == 200 else None}  # fmt: skip
         if check:
             return Reading(page, [], [], [])
         if self.rewrite.active:
@@ -165,6 +167,7 @@ class PageReader:
             item.url = rewrite(item.url)
         page.hreflang = [(code, rewrite(target)) for code, target in page.hreflang]
         page.pagination = [(rel, rewrite(target)) for rel, target in page.pagination]
+        page.forms = [rewrite(action) for action in page.forms]
         page.redirect_url = rewrite(page.redirect_url) if page.redirect_url else None
         page.refresh_url = rewrite(page.refresh_url) if page.refresh_url else None
         if page.onpage.get("canonical_url"):
@@ -222,7 +225,11 @@ class PageReader:
                              None, None))  # fmt: skip
             if pagination.follow and not self.listed and target != page.url:
                 follow.append(target)
-        page.hreflang, page.pagination = [], []
+        for action in page.forms:  # kept with the links of its kind, never fetched
+            internal = internal_of(action)
+            if self.kinds["internal_links" if internal else "external_links"].store:
+                rows.append((page.url, action, "form", internal, None, None, None, False, None, None, None, None))
+        page.hreflang, page.pagination, page.forms = [], [], []
         return follow, rows
 
     def _resources_to_check(self, page: Page) -> tuple[list[str], list[tuple]]:

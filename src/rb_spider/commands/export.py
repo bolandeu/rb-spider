@@ -90,6 +90,7 @@ def export(
     kind: str | None = typer.Option(
         None, "--type", help="Только URL этого типа (pages): html, js, css, image, pdf, other, unknown."
     ),
+    scheme: str | None = typer.Option(None, "--scheme", help="Только URL по этому протоколу (pages): https или http."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
@@ -109,17 +110,25 @@ def export(
       spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
       spider export links --external                           # все внешние ссылки
       spider export pages --type css --status 4xx              # битые стили
+      spider export pages --scheme http                        # что осталось на HTTP
 
     Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает). С `-o`
     печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`. Неизвестная
-    проверка или тип, неверный `--status`, `--issue` для links, `--type` не для pages —
-    выход 2.
+    проверка или тип, неверный `--status`, `--issue` для links, `--type` / `--scheme` не
+    для pages — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         with engine.connect() as conn:
             table = export_service.dataset(
-                conn, crawl_id, what.value, issue=issue, target_status=target_status, external=external, kind=kind
+                conn,
+                crawl_id,
+                what.value,
+                issue=issue,
+                target_status=target_status,
+                external=external,
+                kind=kind,
+                scheme=scheme,
             )
             _stream(ctx, table, fmt, path, {"crawl_id": crawl_id, "dataset": what.value})
 
@@ -185,12 +194,13 @@ def overview(
 
     JSON: `{crawl_id, totals: {stored, internal, external, blocked_by_robots,
     no_response, indexable, queued_ever, still_queued}, content_types,
-    external_content_types, status, indexability, canonicals, directives, depth, hreflang, pagination}`;
+    external_content_types, status, indexability, canonicals, directives, depth, hreflang, pagination, security}`;
     разделы — `{значение: число URL}`: status — 2xx…5xx, blocked, no_response;
     canonicals — missing / self_referencing / canonicalised; directives, depth и hreflang
     (contains / missing, пусто — hreflang на сайте нет; списки — `spider hreflang`) — среди
     HTML-страниц сайта с кодом 200; pagination — contains / first_page / paginated (страницы
-    2+) по rel next/prev, пусто — пагинации нет. Нет обхода — выход 2.
+    2+) по rel next/prev, пусто — пагинации нет; security — URL сайта по https / http
+    (список — `spider export pages --scheme http`). Нет обхода — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)

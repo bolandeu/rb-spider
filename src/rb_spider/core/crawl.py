@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from importlib.machinery import ModuleSpec
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy as sa
 from crawlee import ConcurrencySettings, Request
@@ -176,8 +176,8 @@ def http_client(settings: CrawlSettings) -> HttpClient:
             raise HttpClientUnavailable
         from crawlee.http_clients import CurlImpersonateHttpClient
 
-        return CurlImpersonateHttpClient(allow_redirects=False)
-    return ImpitHttpClient(follow_redirects=False)
+        return CurlImpersonateHttpClient(allow_redirects=False, **({} if settings.verify_tls else {"verify": False}))
+    return ImpitHttpClient(follow_redirects=False, verify=settings.verify_tls)
 
 
 def requests_per_minute(settings: CrawlSettings, crawl_delay: int | None) -> float:
@@ -261,6 +261,14 @@ async def _run(
 
     client.crawl = timed_crawl  # ty: ignore[invalid-assignment]
     last_progress = time.monotonic()
+    hsts_hosts: set[str] = set()  # hosts that answered over HTTPS with Strict-Transport-Security (respect_hsts)
+
+    def hsts_upgrade(url: str) -> str | None:
+        """The https:// URL a browser would go to instead of this http:// one, under a known HSTS policy."""
+        parts = urlsplit(url)
+        if not settings.respect_hsts or parts.scheme != "http" or parts.hostname not in hsts_hosts:
+            return None
+        return urlunsplit(parts._replace(scheme="https"))
 
     def progress() -> None:
         nonlocal last_progress
@@ -290,14 +298,22 @@ async def _run(
         new = [u for u, role in roles.items() if role]
         if settings.max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests in flight
             new = new[: max(0, settings.max_urls - len(depth_of))]
+        upgraded: list[str] = []
         for url in new:
             depth_of[url] = depth
             check = roles[url] == "check"
             writer.queued(url, depth, check)
+            if secure := hsts_upgrade(url):  # not fetched: recorded as the browser's own 307 to HTTPS
+                writer.add(_hsts_redirect(url, secure, scope), depth=depth)
+                writer.add_links([(url, secure, "redirect", scope.internal(secure), *[None] * 3, False, *[None] * 4)])
+                upgraded.append(secure)
+                continue
             if settings.robots == "respect" and not await robots.allowed(url):
                 writer.add(Page.blocked_by_robots(url), depth=depth)  # never fetched, but part of the report
                 continue
             queue.push(url, check)
+        if upgraded:
+            await admit(upgraded, depth, resources=resources)
 
     @crawler.router.default_handler
     async def handle(ctx: HttpCrawlingContext) -> None:
@@ -305,6 +321,8 @@ async def _run(
         body = await response.read()
         check = bool(ctx.request.user_data.get("check"))
         headers = dict(response.headers)
+        if ctx.request.url.startswith("https://") and any(k.lower() == "strict-transport-security" for k in headers):
+            hsts_hosts.add(urlsplit(ctx.request.url).hostname or "")
         source, rendered = body, None
         if renderer and not check and response.status_code == 200 and _is_html(headers):
             dom = await renderer.render(ctx.request.url)
@@ -357,6 +375,13 @@ async def _run(
     finally:
         parser.close()
         await queue.drop()
+
+
+def _hsts_redirect(url: str, secure: str, scope: Scope) -> Page:
+    page = Page(url=url, status_code=307, content_type=None, bytes=0, redirect_url=secure,
+                error="HSTS Policy: не скачивался — браузер сам переходит на HTTPS")  # fmt: skip
+    page.onpage = {"external": not scope.internal(url), "parsed": False}
+    return page
 
 
 def _is_html(headers: dict[str, str]) -> bool:

@@ -66,18 +66,18 @@
 
 ### Security — безопасность
 
-- [ ] `v2` **HTTP URLs** — на сайте встречаются URL по незащищённому HTTP _(SF: Issue, High)_
-- [ ] `v2` **Mixed Content** — HTTPS-страница грузит ресурсы (картинки, JS, CSS) по HTTP _(SF: Issue, High)_
-- [ ] `v2` **Form URL Insecure** — у формы `action` ведёт на HTTP-адрес _(SF: Issue, High)_
-- [ ] `v2` **Form On HTTP URL** — форма расположена на HTTP-странице, введённые данные не защищены _(SF: Issue, High)_
-- [ ] `v2` **Missing HSTS Header** — нет заголовка `Strict-Transport-Security` (браузер не обязан ходить только по HTTPS) _(SF: Warning, Low)_
-- [ ] `v2` **Unsafe Cross Origin Links** — внешние ссылки с `target="_blank"` без `rel="noopener"`/`noreferrer` _(SF: Warning, Low)_
-- [ ] `v2` **Protocol-Relative Resource Links** — ресурсы подключены протокол-относительными ссылками `//example.com/…` _(SF: Warning, Low)_
-- [ ] `v2` **Missing Content-Security-Policy Header** — нет заголовка CSP, ограничивающего источники ресурсов _(SF: Warning, Low)_
-- [ ] `v2` **Missing X-Content-Type-Options Header** — нет `X-Content-Type-Options: nosniff` _(SF: Warning, Low)_
-- [ ] `v2` **Missing X-Frames-Options Header** — нет `X-Frame-Options: DENY|SAMEORIGIN` (защита от встраивания во фрейм) _(SF: Warning, Low)_
-- [ ] `v2` **Missing Secure Referrer-Policy Header** — `Referrer-Policy` отсутствует или небезопасен _(SF: Warning, Low)_
-- [ ] `v2` **Bad Content Type** — реальный тип содержимого не совпадает с заголовком `Content-Type` _(SF: Warning, Low)_
+- [x] `v2` **HTTP URLs** — на сайте встречаются URL по незащищённому HTTP _(SF: Issue, High)_
+- [x] `v2` **Mixed Content** — HTTPS-страница грузит ресурсы (картинки, JS, CSS) по HTTP _(SF: Issue, High)_
+- [x] `v2` **Form URL Insecure** — у формы `action` ведёт на HTTP-адрес _(SF: Issue, High)_
+- [x] `v2` **Form On HTTP URL** — форма расположена на HTTP-странице, введённые данные не защищены _(SF: Issue, High)_
+- [x] `v2` **Missing HSTS Header** — нет заголовка `Strict-Transport-Security` (браузер не обязан ходить только по HTTPS) _(SF: Warning, Low)_
+- [x] `v2` **Unsafe Cross Origin Links** — внешние ссылки с `target="_blank"` без `rel="noopener"`/`noreferrer` _(SF: Warning, Low)_
+- [x] `v2` **Protocol-Relative Resource Links** — ресурсы подключены протокол-относительными ссылками `//example.com/…` _(SF: Warning, Low)_
+- [x] `v2` **Missing Content-Security-Policy Header** — нет заголовка CSP, ограничивающего источники ресурсов _(SF: Warning, Low)_
+- [x] `v2` **Missing X-Content-Type-Options Header** — нет `X-Content-Type-Options: nosniff` _(SF: Warning, Low)_
+- [x] `v2` **Missing X-Frames-Options Header** — нет `X-Frame-Options: DENY|SAMEORIGIN` (защита от встраивания во фрейм) _(SF: Warning, Low)_
+- [x] `v2` **Missing Secure Referrer-Policy Header** — `Referrer-Policy` отсутствует или небезопасен _(SF: Warning, Low)_
+- [x] `v2` **Bad Content Type** — реальный тип содержимого не совпадает с заголовком `Content-Type` _(SF: Warning, Low)_
 
 ### URL — адреса
 
@@ -461,7 +461,7 @@
 
 - [x] `MVP` **Internal / External: тип содержимого** — фильтры HTML, JavaScript, CSS, Images, PDF, Other, Unknown (Flash — `skip`)
 - [x] `MVP` **Response Codes: Success (2XX)** — список успешных URL; колонки Response Time, Redirect URL, Redirect Type
-- [ ] `v2` **Security: HTTPS URLs** — список URL по HTTPS
+- [x] `v2` **Security: HTTPS URLs** — список URL по HTTPS (`spider overview` — счёт, `spider export pages --scheme https`)
 - [ ] `v2` **Meta Keywords** — сбор meta keywords и фильтры Missing / Duplicate / Multiple
 - [x] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
 - [x] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev (`spider overview`, колонка `pages.pagination`)
@@ -488,7 +488,7 @@
 - [x] `MVP` **URL details** — response time, заголовок Last-Modified, полные HTTP-заголовки запроса и ответа
 - [ ] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении
 - [ ] `v2` **Text to Code Ratio** — доля текста в HTML
-- [ ] `v2` **Forms** — формы на странице (для проверок Security)
+- [x] `v2` **Forms** — формы на странице (для проверок Security): число в `pages.forms`, action — ссылки вида `form`
 - [ ] `v2` **Cookies** — cookies каждого URL
 - [ ] `backlog` **PDF** — свойства PDF (автор, даты, страницы, слова), анкоры ссылок внутри PDF, сохранение PDF
 
@@ -591,7 +591,7 @@
 - [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
 - [x] `v2` **Ignore Paginated URLs for Duplicate Filters** → `thresholds.ignore_paginated_duplicates` (параметр проверок, меняется через `spider analyze`)
 - [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
-- [ ] `v2` **Respect HSTS Policy** → `http.respect_hsts`
+- [x] `v2` **Respect HSTS Policy** → `crawl.respect_hsts` (307 «HSTS Policy» без запроса)
 - [ ] `v2` **Crawl Fragment Identifiers** — считать `#fragment` отдельными URL → `scope.keep_fragments`
 - [ ] `v2` **Perform HTML Validation** → `extract.html_validation`
 - [ ] `v2` **Assume Pages are HTML** (нет Content-Type → HTML) → `http.assume_html`
@@ -736,7 +736,7 @@
 - [ ] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals**
 - [x] `v2` **Pagination: Non-200, Unlinked** → `spider pagination --only …`
 - [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
-- [ ] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами
+- [x] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами → `spider insecure`
 - [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях
 - [ ] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже)
 - [ ] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)**

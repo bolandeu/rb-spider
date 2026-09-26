@@ -9,11 +9,13 @@ own thread and event loop, because the crawler under test calls `asyncio.run` it
 from __future__ import annotations
 
 import asyncio
+import ssl
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import PurePosixPath
 
+import trustme
 from aiohttp import web
 
 TITLE = "Полигон spider: страница {} для проверок"  # 30–60 characters
@@ -324,6 +326,48 @@ PAGINATION_TRAPS: dict[str, str] = {
 }  # fmt: skip
 PAGINATION_LINKED = [p for p in PAGINATION_TRAPS if p != "/pg-un/2"]
 
+# Security (#29). Every response carries sound security headers (SECURE_HEADERS); a trap drops one ("" value).
+SECURE_HEADERS = {
+    "Content-Security-Policy": "default-src 'self' 'unsafe-inline'",  # inline: the JS rendering traps
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+HSTS = {"Strict-Transport-Security": "max-age=31536000"}  # HTTPS responses only
+_BODY = "<h1>{h1}</h1><h2>{h2}</h2>"
+SECURITY_TRAPS: dict[str, tuple[dict[str, str], str]] = {
+    "/s-form": ({}, _html("s-form", body=_BODY.format(h1=H1.format("s-form"), h2=H2.format("s-form"))
+                          + '<form action="/s-form-submit" method="post"><input name="q"></form>')),
+    "/s-blank": ({}, _html("s-blank", "/", body=_BODY.format(h1=H1.format("s-blank"), h2=H2.format("s-blank"))
+                           + '<a href="{local}/a" target="_blank">чужой сайт</a>'
+                           + '<a href="{local}/b" target="_blank" rel="noopener">безопасно</a>')),
+    "/s-protocol": ({}, _html("s-protocol", body=_BODY.format(h1=H1.format("s-protocol"), h2=H2.format("s-protocol"))
+                              + '<img src="//{localhost}/logo.png" alt="Логотип" width="10" height="10">')),
+    "/s-no-csp": ({"Content-Security-Policy": ""}, _html("s-no-csp")),
+    "/s-no-xcto": ({"X-Content-Type-Options": ""}, _html("s-no-xcto")),
+    "/s-no-xfo": ({"X-Frame-Options": "ALLOW-FROM https://x.example"}, _html("s-no-xfo")),
+    "/s-bad-referrer": ({"Referrer-Policy": "unsafe-url"}, _html("s-bad-referrer")),
+    "/s-badtype": ({"Content-Type": "image/png"}, _html("s-badtype")),  # an HTML page served as an image
+}  # fmt: skip
+# The HTTPS polygon (serve(https=True)): `{insecure}` is the same host over plain http://.
+HTTPS_ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
+    "/": (200, {}, _html("https-home", "/mixed", "/form-insecure", "/nohsts", "/plain", "{insecure}/plain")),
+    "/mixed": (200, {}, _html("mixed", body=_BODY.format(h1="mixed", h2="mixed")
+                              + '<img src="{insecure}/img.png" alt="По HTTP" width="10" height="10">')),
+    "/form-insecure": (200, {}, _html("form-insecure", body=_BODY.format(h1="form", h2="form")
+                                      + '<form action="{insecure}/submit" method="post"></form>')),
+    "/nohsts": (200, {"Strict-Transport-Security": ""}, _html("nohsts")),
+    "/plain": (200, {}, _html("plain")),
+}  # fmt: skip
+# security rules on the HTTPS polygon crawl; "INSECURE" stands for http://host:port (the HTTPS polygon's own port)
+HTTPS_EXPECTED = {
+    "security_http_urls": {"INSECURE/plain", "INSECURE/img.png"},
+    "security_mixed_content": {"/mixed"},
+    "security_form_url_insecure": {"/form-insecure"},
+    "security_form_on_http": set(),
+    "security_missing_hsts": {"/nohsts"},
+}
+
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -360,6 +404,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *HREFLANG_LINKED,
             "/hl/header",
             *PAGINATION_LINKED,
+            *SECURITY_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -401,6 +446,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in HREFLANG_TRAPS.items()},
     "/hl/header": (200, {"Link": HREFLANG_HEADER}, _html("hl-header")),
     **{path: (200, {}, html) for path, html in PAGINATION_TRAPS.items()},
+    **{path: (200, headers, html) for path, (headers, html) in SECURITY_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -438,6 +484,7 @@ REACHABLE = {
     *HREFLANG_TRAPS,
     "/hl/header",
     *PAGINATION_TRAPS,
+    *SECURITY_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -448,6 +495,9 @@ EXTERNAL = {
     "LOCAL/missing",
     "LOCAL/error",
     "LOCAL/img/gone.png",
+    "LOCAL/a",  # the target=_blank trap's links
+    "LOCAL/b",
+    "LOCAL/logo.png",  # the protocol-relative image
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -525,7 +575,7 @@ EXPECTED_ISSUES = {
     "content_lorem_ipsum": {"/lorem"},
     "content_low_content": {"/thin"},
     # Links
-    "links_outlinks_to_localhost": {"/l-external"},
+    "links_outlinks_to_localhost": {"/l-external", "/s-blank"},  # /s-blank: its "other site" is the localhost alias
     "links_uncrawlable_outlinks": {"/l-uncrawlable"},
     "links_no_internal_outlinks": {"/l-dead-end"},
     "links_non_indexable_inlinks_only": {"/l-only-from-noindex"},
@@ -583,6 +633,19 @@ EXPECTED_ISSUES = {
     "pagination_loop": {"/pg-loop/1", "/pg-loop/2"},
     "pagination_sequence_error": {"/pg-multi", "/pg-seq/1", "/pg-seq/2"},
     "pagination_non_indexable": {"/pg-ni/2"},
+    # Security (the HTTP polygon: every URL is plain HTTP; HTTPS-only checks — HTTPS_EXPECTED)
+    "security_http_urls": set(REACHABLE),
+    "security_mixed_content": set(),
+    "security_form_url_insecure": set(),
+    "security_form_on_http": {"/s-form"},
+    "security_missing_hsts": set(),
+    "security_unsafe_cross_origin": {"/s-blank"},
+    "security_protocol_relative": {"/s-protocol"},
+    "security_missing_csp": {"/s-no-csp"},
+    "security_missing_x_content_type_options": {"/s-no-xcto"},
+    "security_missing_x_frame_options": {"/s-no-xfo"},
+    "security_missing_referrer_policy": {"/s-bad-referrer"},
+    "security_bad_content_type": {"/s-badtype"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
@@ -602,32 +665,46 @@ async def _handle(request: web.Request) -> web.StreamResponse:
         assert request.transport is not None
         request.transport.abort()
         return web.Response()
-    status, headers, body = ROUTES.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
-    base = f"http://{request.host}"
-    local = f"http://localhost:{request.host.rsplit(':', 1)[1]}"
+    routes = HTTPS_ROUTES if request.secure else ROUTES
+    status, headers, body = routes.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
+    port = request.host.rsplit(":", 1)[1]
+    base = f"{request.scheme}://{request.host}"
+    fill = {"{base}": base, "{localhost}": f"localhost:{port}", "{local}": f"http://localhost:{port}",
+            "{insecure}": f"http://{request.host}"}  # fmt: skip
     if status == 200 and "<head>" in body and 'rel="canonical"' not in body and request.path not in NO_CANONICAL:
         # clean pages: self, as the page's link spelled it (decoded path — a space, not %20)
         self_url = base + request.path + (f"?{request.query_string}" if request.query_string else "")
         body = body.replace("<head>", f"<head>{_canonical(self_url)}", 1)
-    headers = {"Content-Type": "text/html; charset=utf-8", **{k: v.replace("{base}", base) for k, v in headers.items()}}
-    return web.Response(status=status, headers=headers, text=body.replace("{base}", base).replace("{local}", local))
+    for token, value in fill.items():
+        body = body.replace(token, value)
+    defaults = {"Content-Type": "text/html; charset=utf-8", **SECURE_HEADERS, **(HSTS if request.secure else {})}
+    merged = defaults | {k: v.replace("{base}", base) for k, v in headers.items()}
+    return web.Response(status=status, headers={k: v for k, v in merged.items() if v}, text=body)
 
 
 @contextmanager
-def serve() -> Iterator[str]:
-    """Run the polygon on a free local port; yields its base URL (no trailing slash)."""
+def serve(*, https: bool = False) -> Iterator[str]:
+    """Run the polygon on a free local port; yields its base URL (no trailing slash).
+
+    `https` — the HTTPS polygon (HTTPS_ROUTES) with a throwaway self-signed certificate: crawl it with
+    `crawl.verify_tls = false`.
+    """
     loop = asyncio.new_event_loop()
     app = web.Application()
     app.router.add_get("/{tail:.*}", _handle)
     runner = web.AppRunner(app, access_log=None)
     loop.run_until_complete(runner.setup())
-    site = web.TCPSite(runner, "127.0.0.1", 0)
+    context = None
+    if https:
+        context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        trustme.CA().issue_cert("127.0.0.1", "localhost").configure_cert(context)
+    site = web.TCPSite(runner, "127.0.0.1", 0, ssl_context=context)
     loop.run_until_complete(site.start())
     port = runner.addresses[0][1]
     thread = threading.Thread(target=loop.run_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{port}"
+        yield f"{'https' if https else 'http'}://127.0.0.1:{port}"
     finally:
         loop.call_soon_threadsafe(loop.stop)
         thread.join()

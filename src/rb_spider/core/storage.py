@@ -124,6 +124,14 @@ pages = sa.Table(
     sa.Column("url_issues", sa.String),
     sa.Column("hreflang_outside_head", sa.Integer),  # <link rel=alternate hreflang> elements outside <head>
     sa.Column("pagination", sa.String),  # the page's own rel next/prev: "first" (next only) | "paginated" (has prev)
+    # security: response headers missing or weak (",hsts,csp,xcto,xfo,referrer,"), what the body really is when
+    # Content-Type says otherwise ("image → html"), forms, target=_blank links to other origins without noopener,
+    # resources loaded protocol-relative (//host/...)
+    sa.Column("security_missing", sa.String),
+    sa.Column("sniffed_type", sa.String),
+    sa.Column("forms", sa.Integer),
+    sa.Column("unsafe_blank_links", sa.Integer),
+    sa.Column("protocol_relative", sa.Integer),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
@@ -157,7 +165,7 @@ link_rows = sa.Table(
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
     sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
-    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | image | css | js | media | iframe (resources the page loads)
+    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | form | image | css | js | media | iframe (resources the page loads)
     sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
     sa.Column("anchor", sa.String),

@@ -76,7 +76,7 @@ def test_not_following_external_links(base_url: str) -> None:
             ).fetchall()
         skipped = {r.code for r in issues.not_checked(engine, crawl_id)}
     # no other site's link was checked; the external <img> still is — collect.images decides that
-    assert [row.url.rsplit("/", 2)[-2:] for row in externals] == [["img", "gone.png"]]
+    assert sorted(row.url.rsplit("/", 1)[-1] for row in externals) == ["gone.png", "logo.png"]  # logo: //host/ src
     assert {"external_no_response", "external_client_error", "external_server_error"} <= skipped
 
 

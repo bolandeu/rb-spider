@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 
-from . import hreflang, pagination
+from . import hreflang, pagination, security
 from .extract import DIRECTIVES
 
 # What a URL is, from its Content-Type — Screaming Frog's Internal / External filters.
@@ -42,7 +42,7 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
         totals = conn.execute(
             sa.text(
                 f"SELECT count(*), sum({_OWN}), sum(coalesce(external, 0)), sum(blocked IS NOT NULL),"  # noqa: S608
-                " sum(status_code = 0 AND blocked IS NULL), sum(coalesce(indexable, 0)) FROM pages"
+                f" sum(status_code = 0 AND blocked IS NULL), sum({_OWN} AND coalesce(indexable, 0)) FROM pages"
                 " WHERE crawl_id = :crawl_id"
             ),
             {"crawl_id": crawl_id},
@@ -82,5 +82,6 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
             "depth": _counts(conn, crawl_id, "depth", html_ok),
             "hreflang": hreflang.counts(conn, crawl_id),
             "pagination": pagination.counts(conn, crawl_id),
+            "security": security.counts(conn, crawl_id),
         }
     return data

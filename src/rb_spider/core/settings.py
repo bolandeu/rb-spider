@@ -115,6 +115,19 @@ class CrawlSettings(BaseModel):
             "`rb-spider[curl]`), если сайт плохо отвечает impit."
         ),
     )
+    verify_tls: bool = Field(
+        True,
+        description=(
+            "Проверять сертификат HTTPS; false — принимать и самоподписанные / просроченные (тестовые стенды)."
+        ),
+    )
+    respect_hsts: bool = Field(
+        True,
+        description=(
+            "Как браузер: после ответа с Strict-Transport-Security http-ссылки на тот же хост не скачивать, а "
+            "записывать как 307 на https-адрес (HSTS Policy); false — скачивать и видеть настоящий редирект."
+        ),
+    )
     render: Literal["never", "always"] = Field(
         "never",
         description=(

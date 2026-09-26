@@ -156,6 +156,18 @@ def pagination_list(data: dict) -> None:
     console.print(table)
 
 
+def insecure_list(data: dict) -> None:
+    shown, total = len(data["links"]), data["total"]
+    head = f"[bold]Insecure Content[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    table = Table(box=None, pad_edge=False)
+    for column in ("HTTPS-страница", "тип", "HTTP-адрес"):
+        table.add_column(column)
+    for row in data["links"]:
+        table.add_row(row["source"], row["kind"], row["target"])
+    console.print(table)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -360,7 +372,7 @@ _OVERVIEW_LABELS = {
     "totals": "Итого", "content_types": "Типы (сайт)", "external_content_types": "Типы (чужие сайты)",
     "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
     "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)", "hreflang": "Hreflang (HTML 200)",
-    "pagination": "Пагинация",
+    "pagination": "Пагинация", "security": "Протокол (сайт)",
 }  # fmt: skip
 
 

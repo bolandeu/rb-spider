@@ -20,6 +20,7 @@ from pydantic import ValidationError
 
 from . import hreflang as hreflang_module
 from . import pagination as pagination_module
+from . import security as security_module
 from . import settings as settings_module
 from . import storage
 from .errors import InvalidArguments
@@ -842,6 +843,60 @@ def _pagination_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+# --- Security: headers and page facts are columns written by the crawl; mixed content and forms are link rows.
+def _https_to_http(kinds: str) -> RuleFinder:
+    """HTTPS pages pointing at HTTP URLs through links of these kinds, one finding per page."""
+    return _links_sql(
+        f"SELECT source, group_concat(kind || ' ' || target, '; ') FROM ({security_module.insecure_links(kinds)})"  # noqa: S608
+        " GROUP BY source ORDER BY source"
+    )
+
+
+def _security_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, find, requires=()) -> Rule:
+        return Rule(code, "Security", f"Security: {name}", kind, priority, description, find, requires)
+
+    def header(code, name, flag, description, where=HTML_OK) -> Rule:
+        return r(code, name, "warning", "low", description, _sql(f"{where} AND security_missing LIKE '%,{flag},%'"))
+
+    return [
+        r("security_http_urls", "HTTP URLs", "issue", "high",
+          "URL сайта по незащищённому HTTP: данные между браузером и сайтом не шифруются.",
+          _sql("url LIKE 'http://%'")),
+        r("security_mixed_content", "Mixed Content", "issue", "high",
+          "HTTPS-страница грузит картинки, CSS, JS или фреймы по HTTP: браузер их блокирует или предупреждает.",
+          _https_to_http(security_module.RESOURCES), ("collect.images.store",)),
+        r("security_form_url_insecure", "Form URL Insecure", "issue", "high",
+          "На HTTPS-странице форма отправляется на HTTP-адрес: введённые данные уйдут незашифрованными.",
+          _https_to_http("('form')"), (STORE_INTERNAL,)),
+        r("security_form_on_http", "Form On HTTP URL", "issue", "high",
+          "Форма на HTTP-странице: логины, пароли и прочие данные передаются незашифрованными.",
+          _sql(f"{HTML_OK} AND forms > 0 AND url LIKE 'http://%'", "forms || ' форм'")),
+        header("security_missing_hsts", "Missing HSTS Header", "hsts",
+               "Нет Strict-Transport-Security: браузер не обязан открывать сайт только по HTTPS.",
+               f"{HTML_OK} AND url LIKE 'https://%'"),
+        r("security_unsafe_cross_origin", "Unsafe Cross Origin Links", "warning", "low",
+          "Ссылки target=\"_blank\" на чужие сайты без rel=\"noopener\" / \"noreferrer\": открытая вкладка "
+          "получает доступ к window.opener.",
+          _sql(f"{HTML_OK} AND unsafe_blank_links > 0", "unsafe_blank_links || ' шт.'")),
+        r("security_protocol_relative", "Protocol-Relative Resource Links", "warning", "low",
+          "Ресурсы подключены как //host/…: на HTTP-странице они тоже грузятся по HTTP. Лучше явный https://.",
+          _sql(f"{HTML_OK} AND protocol_relative > 0", "protocol_relative || ' шт.'")),
+        header("security_missing_csp", "Missing Content-Security-Policy Header", "csp",
+               "Нет Content-Security-Policy: браузер не ограничивает, откуда странице грузить скрипты и ресурсы."),
+        header("security_missing_x_content_type_options", "Missing X-Content-Type-Options Header", "xcto",
+               "Нет X-Content-Type-Options: nosniff — браузер может «угадывать» тип файла вопреки заголовку."),
+        header("security_missing_x_frame_options", "Missing X-Frame-Options Header", "xfo",
+               "Нет X-Frame-Options: DENY или SAMEORIGIN — страницу можно встроить в чужой фрейм (кликджекинг)."),
+        header("security_missing_referrer_policy", "Missing Secure Referrer-Policy Header", "referrer",
+               "Referrer-Policy нет или он небезопасный (не no-referrer, no-referrer-when-downgrade, strict-origin, "
+               "strict-origin-when-cross-origin): адрес страницы уходит чужим сайтам целиком."),
+        r("security_bad_content_type", "Bad Content Type", "warning", "low",
+          "Содержимое не совпадает с заголовком Content-Type (например, HTML под image/png): браузер и поисковик "
+          "могут обработать его неверно.", _sql("sniffed_type IS NOT NULL", "sniffed_type")),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -901,6 +956,7 @@ RULES += _image_rules()
 RULES += _url_rules()
 RULES += _hreflang_rules()
 RULES += _pagination_rules()
+RULES += _security_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

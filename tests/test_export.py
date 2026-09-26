@@ -111,7 +111,9 @@ def test_export_all_issues_to_file(crawled, tmp_path: Path) -> None:
     code, data = _json("export", "issues", "-o", str(target))
     assert code == 0 and data["crawl_id"] == crawl_id and data["dataset"] == "issues"
     rows = _csv(target.read_text(encoding="utf-8"))
-    assert data["rows"] == len(rows) and set(polygon.EXPECTED_ISSUES) <= {r["code"] for r in rows}
+    assert data["rows"] == len(rows) and {c for c, found in polygon.EXPECTED_ISSUES.items() if found} <= {
+        r["code"] for r in rows
+    }
 
 
 @pytest.mark.parametrize(
