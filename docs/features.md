@@ -729,9 +729,9 @@
 
 - [ ] `MVP` **Crawl Overview** — итоги: найдено / заблокировано / обойдено, типы содержимого, коды ответа
 - [ ] `MVP` **Issues Overview** — сводка всех проблем → `spider issues` (не подтверждено)
-- [ ] `MVP` **Redirects: All Redirects** — все редиректы
-- [ ] `MVP` **Redirects: Redirect Chains** — цепочки из 2+ прыжков и петли, тип (HTTP / JS / meta refresh)
-- [ ] `MVP` **Redirects: Redirects to Errors** — редиректы на заблокированные, неотвечающие, 4xx, 5xx
+- [x] `MVP` **Redirects: All Redirects** — все редиректы
+- [x] `MVP` **Redirects: Redirect Chains** — цепочки из 2+ прыжков и петли, тип (HTTP / JS / meta refresh)
+- [x] `MVP` **Redirects: Redirects to Errors** — редиректы на заблокированные, неотвечающие, 4xx, 5xx
 - [ ] `v2` **Redirects: Redirect & Canonical Chains** — цепочки с учётом canonical
 - [ ] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals**
 - [ ] `v2` **Pagination: Non-200, Unlinked**

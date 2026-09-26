@@ -31,7 +31,7 @@ from crawlee.storages import RequestQueue
 from . import issues, storage
 from .errors import InvalidArguments
 from .extract import Page, normalize_url, parse_page
-from .settings import CrawlSettings
+from .settings import CrawlSettings, Settings
 
 PROGRESS_EVERY_S = 5.0
 
@@ -148,23 +148,22 @@ def crawl_site(
     engine: sa.Engine,
     start_url: str,
     project: str,
-    settings: CrawlSettings | None = None,
+    settings: Settings | None = None,
     *,
     on_progress: Callable[[int], None] | None = None,
-    snapshot: dict | None = None,
 ) -> CrawlResult:
-    """Crawl `start_url`'s host breadth-first and store every response under a new crawl.
+    """Crawl `start_url`'s host breadth-first, store every response under a new crawl, run the checks.
 
-    `snapshot` is the full resolved settings to keep with the crawl (the CLI passes it).
+    The resolved settings are kept with the crawl (`spider crawls show`).
     """
-    settings = settings or CrawlSettings()
+    settings = settings or Settings()
     start_url = _validate_start_url(start_url)
-    crawl_id = storage.start_crawl(engine, project, start_url, snapshot)
+    crawl_id = storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
     writer = storage.PageWriter(engine, crawl_id)
     started = time.monotonic()
     status = "failed"
     try:
-        asyncio.run(_run(start_url, writer, settings, on_progress))
+        asyncio.run(_run(start_url, writer, settings.crawl, on_progress))
         status = "finished"
     except KeyboardInterrupt:
         status = "interrupted"
@@ -172,5 +171,5 @@ def crawl_site(
     finally:
         writer.flush()
         pages = storage.finish_crawl(engine, crawl_id, status)
-        issues.analyze(engine, crawl_id)  # an interrupted crawl is still worth a report
+        issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
     return CrawlResult(crawl_id, project, start_url, status, pages, round(time.monotonic() - started, 1))

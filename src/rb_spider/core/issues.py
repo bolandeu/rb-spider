@@ -16,6 +16,7 @@ import sqlalchemy as sa
 
 from . import storage
 from .errors import InvalidArguments
+from .settings import ThresholdSettings
 
 Finding = tuple[str, str | None]  # (url, detail)
 
@@ -28,14 +29,14 @@ class Rule:
     type: Literal["issue", "warning", "opportunity"]
     priority: Literal["high", "medium", "low"]
     description: str
-    find: Callable[[sa.Connection, int], list[Finding]]
+    find: Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
 
-def _sql(where: str, detail: str = "NULL") -> Callable[[sa.Connection, int], list[Finding]]:
+def _sql(where: str, detail: str = "NULL") -> Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]:
     """A rule that is a filter over the crawl's pages."""
     query = sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND ({where}) ORDER BY url")  # noqa: S608 — fixed rule text, crawl_id is bound
 
-    def find(conn: sa.Connection, crawl_id: int) -> list[Finding]:
+    def find(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> list[Finding]:
         return [(url, detail) for url, detail in conn.execute(query, {"crawl_id": crawl_id})]
 
     return find
@@ -62,7 +63,7 @@ def _follow(graph: dict[str, str], start: str) -> tuple[list[str], bool]:
     return path, False
 
 
-def _redirect_loops(conn: sa.Connection, crawl_id: int) -> list[Finding]:
+def _redirect_loops(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> list[Finding]:
     graph = _redirect_graph(conn, crawl_id)
     found = []
     for url in sorted(graph):
@@ -72,13 +73,13 @@ def _redirect_loops(conn: sa.Connection, crawl_id: int) -> list[Finding]:
     return found
 
 
-def _redirect_chains(conn: sa.Connection, crawl_id: int) -> list[Finding]:
-    """Redirects that land on another redirect: 2+ hops before the final URL (loops are their own rule)."""
+def _redirect_chains(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> list[Finding]:
+    """Redirects that land on another redirect: `redirect_chain_hops`+ hops to the final URL (loops: own rule)."""
     graph = _redirect_graph(conn, crawl_id)
     found = []
     for url in sorted(graph):
         path, loops = _follow(graph, url)
-        if not loops and len(path) > 2:
+        if not loops and len(path) - 1 >= thresholds.redirect_chain_hops:
             found.append((url, f"{len(path) - 1} hops: " + " → ".join(path)))
     return found
 
@@ -176,14 +177,15 @@ def rule(code: str) -> Rule:
     return BY_CODE[code]
 
 
-def analyze(engine: sa.Engine, crawl_id: int) -> int:
+def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | None = None) -> int:
     """(Re)compute every rule for a crawl, replacing earlier findings. Returns the number of findings."""
+    thresholds = thresholds or ThresholdSettings()
     with engine.begin() as conn:
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         rows = [
             {"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}
             for r in RULES
-            for url, detail in r.find(conn, crawl_id)
+            for url, detail in r.find(conn, crawl_id, thresholds)
         ]
         if rows:
             conn.execute(sa.insert(storage.issues), rows)

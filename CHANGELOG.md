@@ -18,4 +18,5 @@
 - Настройки обхода слоями (встроенные → глобальный → проект → профиль → `--config` → `SPIDER_<РАЗДЕЛ>__<КЛЮЧ>` → флаги → `--set`), любой ключ меняется через `--set`; `spider config show` — итог и слой каждого значения, `config validate`, `config schema` (JSON Schema), `config get/set` понимают ключи настроек.
 - Профили: встроенные `default`, `googlebot`, `yandexbot`, `fast`, свои в `.spider/profiles/` с наследованием `extends`; `spider profiles list|show|init`. Ключ `crawl.user_agent`.
 - `spider crawls show` — обход и снимок настроек, с которыми он шёл. `docs/profiles.md` — слои, формат профиля и таблица ключей, сгенерированная из схемы.
+- `spider redirects [--only all|chains|errors]` — отчёт по редиректам: каждый шаг (3xx / meta / HTTP Refresh) до конечного URL и кода. Порог цепочки `thresholds.redirect_chain_hops`; `spider analyze` берёт пороги из текущих настроек (`--profile`, `--set`).
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.

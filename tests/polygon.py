@@ -41,6 +41,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/meta-refresh",
             "/http-refresh",
             "/reset",
+            "/to-missing",
         ),
     ),
     "/a": (200, {}, _html("Страница A", "/c")),
@@ -56,6 +57,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/chain2": (302, {"Location": "/a"}, ""),
     "/loop1": (301, {"Location": "/loop2"}, ""),
     "/loop2": (301, {"Location": "/loop1"}, ""),
+    "/to-missing": (301, {"Location": "/missing"}, ""),  # a redirect that lands on an error
     "/meta-refresh": (200, {}, '<html><head><meta http-equiv="refresh" content="0; url=/c"></head></html>'),
     "/http-refresh": (200, {"Refresh": "0; url=/c"}, _html("Обновление заголовком")),
     # "/reset" closes the connection without answering (see _handle)
@@ -79,6 +81,7 @@ REACHABLE = {
     "/meta-refresh",
     "/http-refresh",
     "/reset",
+    "/to-missing",
 }
 
 # issue code -> polygon paths the rule must report (and nothing else).
@@ -89,7 +92,7 @@ EXPECTED_ISSUES = {
     "internal_redirect_loop": {"/loop1", "/loop2"},
     "internal_blocked_by_robots": {"/private/secret"},
     "internal_redirect_chain": {"/chain1"},
-    "internal_redirection_3xx": {"/old", "/chain1", "/chain2", "/loop1", "/loop2"},
+    "internal_redirection_3xx": {"/old", "/chain1", "/chain2", "/loop1", "/loop2", "/to-missing"},
     "internal_redirection_meta_refresh": {"/meta-refresh"},
     "internal_redirection_http_refresh": {"/http-refresh"},
 }

@@ -33,7 +33,8 @@ def crawl(
     проходятся автоматически: каждый шаг цепочки сохраняется как отдельная
     страница, цель редиректа обходится следом. Коды 3xx/4xx/5xx — это данные,
     а не ошибки. robots.txt соблюдается: запрещённые URL не скачиваются, но
-    попадают в отчёт. После обхода сразу считаются проверки — `spider issues`.
+    попадают в отчёт. После обхода сразу считаются проверки с порогами из
+    раздела `thresholds` — смотреть в `spider issues`.
 
     Настройки — слоями: встроенные → глобальный конфиг → проект → `--profile` →
     `--config` → переменные `SPIDER_<РАЗДЕЛ>__<КЛЮЧ>` → флаги → `--set`. Итог
@@ -66,9 +67,8 @@ def crawl(
             engine,
             url,
             project,
-            resolved.settings.crawl,
+            resolved.settings,
             on_progress=progress,
-            snapshot=resolved.settings.model_dump(mode="json"),
         )
     output.emit_success(
         ctx,

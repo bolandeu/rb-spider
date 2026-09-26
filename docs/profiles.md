@@ -42,6 +42,7 @@ concurrency = 10
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.respect_robots` | `bool` | `true` | Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт. |
 | `crawl.user_agent` | `str \| None` | — | Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox). |
+| `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 <!-- keys:end -->
 
 ## Рецепты

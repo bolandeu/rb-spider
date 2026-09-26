@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from .. import output
 from ..core import issues as issues_service
 from ..core import storage
+from . import options
 
 CrawlIdArgument = typer.Argument(None, help="Номер обхода (`spider crawls list`); по умолчанию — последний.")
 
@@ -72,24 +75,29 @@ def urls(
 def analyze(
     ctx: typer.Context,
     crawl_id: int | None = CrawlIdArgument,
+    profile: str | None = options.ProfileOption,
+    config_file: Path | None = options.ConfigFileOption,
+    assignments: list[str] | None = options.SetOption,
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
     """Пересчитать проверки обхода без повторного скачивания сайта.
 
-    Нужен после обновления spider (новые проверки) или смены порогов в
-    конфиге: данные страниц уже в базе, пересчёт занимает секунды. Прежние
-    результаты проверок этого обхода заменяются.
+    Нужен после обновления spider (новые проверки) или смены порогов: данные
+    страниц уже в базе, пересчёт занимает секунды. Пороги (раздел `thresholds`)
+    берутся из текущих настроек — со всеми слоями, как у `spider crawl`, — а не
+    из снимка обхода. Прежние результаты проверок этого обхода заменяются.
 
     Примеры:
       spider analyze
-      spider analyze 12
+      spider analyze 12 --set thresholds.redirect_chain_hops=3
 
     JSON: `{crawl_id, findings}` — сколько пар «проверка — URL» найдено.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
-        findings = issues_service.analyze(engine, crawl_id)
+        thresholds = options.resolve(ctx, profile, config_file, assignments).settings.thresholds
+        findings = issues_service.analyze(engine, crawl_id, thresholds)
     output.emit_success(
         ctx,
         {"crawl_id": crawl_id, "findings": findings},

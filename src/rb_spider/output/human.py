@@ -111,3 +111,13 @@ def crawl_details(data: dict) -> None:
         for section, values in data["settings"].items():
             for key, value in values.items():
                 console.print(f"  {section}.{key} = {'—' if value is None else value}")
+
+
+def redirects_list(data: dict) -> None:
+    shown, total = len(data["redirects"]), data["total"]
+    head = f"[bold]Редиректы ({data['only']})[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    for r in data["redirects"]:
+        steps = " → ".join(f"{hop['url']} [{hop['status_code'] or '—'} {hop['type']}]" for hop in r["hops"])
+        end = "петля" if r["loop"] else f"{r['final_url']} [{r['final_status'] or 'не скачан'}]"
+        console.print(f"{steps} → {end}", markup=False)

@@ -48,12 +48,25 @@ class CrawlSettings(BaseModel):
     )
 
 
+class ThresholdSettings(BaseModel):
+    """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    redirect_chain_hops: int = Field(
+        2, ge=2, description="Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain)."
+    )
+
+
 class Settings(BaseModel):
-    """Everything a crawl can be configured with. Sections are TOML tables: `[crawl]`."""
+    """Everything a crawl can be configured with. Sections are TOML tables: `[crawl]`, `[thresholds]`."""
 
     model_config = ConfigDict(extra="forbid")
 
     crawl: CrawlSettings = Field(default_factory=CrawlSettings, description="Как обходить сайт.")
+    thresholds: ThresholdSettings = Field(
+        default_factory=ThresholdSettings, description="Пороги проверок; пересчёт без обхода — `spider analyze`."
+    )
 
 
 class ProfileFile(Settings):
