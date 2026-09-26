@@ -142,6 +142,17 @@ links = sa.Table(
     sa.Index("links_by_source", "crawl_id", "source"),
     sa.Index("links_by_target", "crawl_id", "target"),
 )
+# Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
+url_metrics = sa.Table(
+    "url_metrics",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column("url", sa.String, primary_key=True),
+    sa.Column("source", sa.String, primary_key=True),  # the enricher's entry point name
+    sa.Column("name", sa.String, primary_key=True),
+    sa.Column("value", sa.Float),
+    sa.Column("text", sa.String),
+)
 issues = sa.Table(
     "issues",
     metadata,

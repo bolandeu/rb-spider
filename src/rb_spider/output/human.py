@@ -264,6 +264,11 @@ def url_details(data: dict) -> None:
         for issue in data["issues"]:
             detail = f" — {issue['detail']}" if issue["detail"] else ""
             console.print(f"  {issue['priority'] or ''} {issue['name']} ({issue['code']}){detail}")
+    if data.get("metrics"):
+        console.print("[bold]Метрики[/bold]")
+        for m in data["metrics"]:
+            value = " ".join(str(v) for v in (m["value"], m["text"]) if v is not None)
+            console.print(f"  {m['source']}.{m['name']}: {value}")
     if data["resources"]:
         table = Table(box=None, pad_edge=False, title="Ресурсы", title_justify="left")
         for column in ("код", "тип", "КБ", "URL", "alt"):
@@ -284,3 +289,20 @@ def query_table(data: dict) -> None:
     console.print(table)
     if data["truncated"]:
         err_console.print(f"Показаны первые {len(data['rows'])} строк — все: --format csv -o <файл>.")
+
+
+def enrichers_table(data: dict) -> None:
+    if not data["enrichers"]:
+        console.print("Обогатители не установлены — это пакеты с entry point `rb_spider.enrichers`.")
+        return
+    for p in data["enrichers"]:
+        state = f"[red]не загружается: {p['error']}[/red]" if p["error"] else p["description"]
+        console.print(f"[bold]{p['name']}[/bold] ({p['target']}) — {state}")
+
+
+def enriched(data: dict) -> None:
+    if not data["stored"]:
+        console.print("Обогатители не установлены — запускать нечего (`spider enrichers`).")
+        return
+    for name, count in data["stored"].items():
+        console.print(f"{name}: сохранено метрик — {count} (обход #{data['crawl_id']})")

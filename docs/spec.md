@@ -171,7 +171,7 @@ store = true
 ## 5. Интеграции
 
 - **rb-sitemap-xml** (`../sitemap-xml`) — подключается как библиотека через `[tool.uv.sources]`, локальный путь, editable. Нужные доработки соседа: отдавать метаданные URL (`lastmod`, `changefreq`, `priority`, файл-источник), async-API, команда `sitemap-xml build` для генерации sitemap (генерация живёт там, spider отдаёт список индексируемых URL).
-- **Обогатители (enrichers)** — плагины через entry points, пишут в `url_metrics` по `crawl_id` + URL. В MVP — только интерфейс. Реализации (v3) — на основе соседних пакетов `google-search-console`, `yandex-webmaster`, PageSpeed Insights.
+- **Обогатители (enrichers)** — плагины через entry points группы `rb_spider.enrichers` (класс или объект с `description` и `enrich(crawl: CrawlInfo) -> Iterable[Metric]`, `core/enrich.py`), пишут в `url_metrics` (`crawl_id`, `url`, `source` = имя entry point, `name`, `value`, `text`) пачками, повторный запуск заменяет метрики плагина, сбой плагина оставляет прежние. URL метрики может быть не из обхода (основа для Orphan Pages). В MVP — только интерфейс. Реализации (v3) — на основе соседних пакетов `google-search-console`, `yandex-webmaster`, PageSpeed Insights.
 
 ---
 

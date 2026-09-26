@@ -777,7 +777,7 @@
 
 ## F. Интеграции
 
-- [ ] `MVP` **Интерфейс обогатителей (enrichers)** — плагины через entry points, пишут в `url_metrics` (реализаций в MVP нет)
+- [x] `MVP` **Интерфейс обогатителей (enrichers)** — плагины через entry points (`rb_spider.enrichers`), пишут в `url_metrics`; `spider enrichers`, `spider enrich`, метрики в `spider url` (реализаций в MVP нет)
 - [ ] `v3` **Google Search Console** — Search Analytics (клики, показы, CTR, позиция), URL Inspection API; на основе пакета `google-search-console`
 - [ ] `v3` **Яндекс.Вебмастер** — аналог GSC для Яндекса; на основе пакета `yandex-webmaster` (в SF нет)
 - [ ] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop

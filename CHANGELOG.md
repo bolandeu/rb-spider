@@ -41,6 +41,7 @@
 - `spider export [pages|links|issues] --format csv|json [-o файл]` — потоковая выгрузка (память не растёт) с фильтрами `--issue`, `--status 404|4xx` (у URL или цели ссылки), `--external`: все URL, все ссылки и анкоры, внешние ссылки, ссылки на URL с данным кодом, все находки проверок.
 - `spider query "SELECT …"` — свой SQL только на чтение: база открывается read-only, SQLite отклоняет всё, кроме SELECT; `--format csv|json` — все строки потоком.
 - JS-рендеринг: `spider crawl --render always` (`crawl.render`) — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright через Crawlee, extra `rb-spider[render]`), SEO-данные берутся из DOM после выполнения скриптов; коды, редиректы и ресурсы проверяются как обычно. `crawl.render_tabs` — вкладок одновременно, `crawl.render_wait_ms` — ожидание скриптов после загрузки, `pages.rendered` — данные из DOM или (сбой рендера) из сырого HTML. Без Playwright или браузера — ошибка `RENDER_UNAVAILABLE` с командой установки до начала обхода.
+- Обогатители: плагины через entry points `rb_spider.enrichers` добавляют метрики к URL обхода (таблица `url_metrics`); `spider enrichers` — установленные плагины (сломанные — с причиной), `spider enrich [crawl_id] [--plugin]` — запуск, метрики видны в `spider url`. Сбой плагина — код 5 с его именем, прежние метрики остаются.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 
 ### Changed

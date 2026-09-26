@@ -20,7 +20,7 @@ from typing import IO, Any
 
 import sqlalchemy as sa
 
-from . import issues, storage
+from . import enrich, issues, storage
 from .errors import InvalidArguments
 
 DATASETS = ("pages", "links", "issues")
@@ -230,4 +230,5 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
                 "detail": detail,
             }
         )
-    return {"crawl_id": crawl_id, "page": page, "issues": issue_rows, **counts, "resources": resource_rows}
+    return {"crawl_id": crawl_id, "page": page, "issues": issue_rows, **counts, "resources": resource_rows,
+            "metrics": enrich.metrics_of(engine, crawl_id, url)}  # fmt: skip

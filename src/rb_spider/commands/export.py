@@ -48,7 +48,7 @@ def url(
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Всё об одном URL: ответ, on-page данные, индексируемость, проблемы, ссылки, ресурсы.
+    """Всё об одном URL: ответ, on-page данные, индексируемость, проблемы, ссылки, ресурсы, метрики.
 
     Последний шаг drill-down: `spider issues` → `spider urls --issue <код>` →
     `spider url <url>`. Сами ссылки страницы — `spider links <url> --in|--out`,
@@ -60,9 +60,10 @@ def url(
 
     JSON: `{crawl_id, page: {url, status_code, indexable, indexability_status, title,
     …все колонки страницы}, issues: [{code, name, type, priority, detail}], inlinks,
-    outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}]}`;
-    `inlinks` / `outlinks` — число обычных ссылок на страницу и с неё. URL нет в
-    обходе — выход 2.
+    outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}],
+    metrics: [{source, name, value, text}]}`; `inlinks` / `outlinks` — число обычных
+    ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`). URL нет
+    в обходе — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
