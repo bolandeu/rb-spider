@@ -251,6 +251,13 @@ class CollectSettings(BaseModel):
         default_factory=FollowStore,
         description="Пагинация <link rel=next / prev> (и заголовок Link): follow — обходить соседние страницы.",
     )
+    mobile_alternate: FollowStore = Field(
+        default_factory=FollowStore,
+        description="Мобильная версия <link rel=alternate media=…>: follow — обходить её страницы.",
+    )
+    html_validation: bool = Field(
+        True, description="Проверять структуру HTML по исходному коду: <head> / <body>, порядок, элементы в <head>."
+    )
     images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
     structured_data: list[Literal["json-ld", "microdata", "rdfa"]] = Field(
         [],
@@ -408,6 +415,14 @@ class ThresholdSettings(BaseModel):
             "«Content: Soft 404 Pages»."
         ),
     )  # fmt: skip
+    document_max_mb: float = Field(
+        2,
+        gt=0,
+        description="HTML-страница больше стольких МБ — «Validation: HTML Document Over 2MB» (Googlebot читает 2 МБ).",
+    )
+    resource_max_mb: float = Field(
+        2, gt=0, description="JS / CSS больше стольких МБ — «Validation: Resource Over 2MB»."
+    )
     sitemap_max_urls: int = Field(
         50000, ge=1, description="Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs»."
     )

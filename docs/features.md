@@ -307,12 +307,12 @@
 
 Проверки через Lighthouse (PSI) — `v3`. Три пункта определяются по самому HTML без Lighthouse, поэтому вынесены в `v2`.
 
-- [ ] `v2` **Viewport Not Set** — нет `<meta name="viewport">` или в нём нет `width=` _(SF: Issue, High)_
+- [x] `v2` **Viewport Not Set** — нет `<meta name="viewport">` или в нём нет `width=` _(SF: Issue, High)_
 - [ ] `v3` **Content Not Sized Correctly** — контент шире или уже экрана телефона _(SF: Issue, High)_
 - [ ] `v3` **Illegible Font Size** — слишком мелкий шрифт для мобильных _(SF: Issue, High)_
-- [ ] `v2` **Contains Unsupported Plugins** — Flash, Silverlight, Java-апплеты (`<object>`, `<embed>`) _(SF: Issue, High)_
+- [x] `v2` **Contains Unsupported Plugins** — Flash, Silverlight, Java-апплеты (`<object>`, `<embed>`) _(SF: Issue, High)_
 - [ ] `v3` **Target Size** — слишком маленькие или тесные элементы для нажатия пальцем _(SF: Issue, Medium)_
-- [ ] `v2` **Mobile Alternate Link** — есть `rel="alternate" media=…` на отдельную мобильную версию _(SF: Warning, High)_
+- [x] `v2` **Mobile Alternate Link** — есть `rel="alternate" media=…` на отдельную мобильную версию _(SF: Warning, High)_
 
 ### Accessibility — доступность (axe-core)
 
@@ -440,15 +440,15 @@
 
 ### Validation — валидность HTML
 
-- [ ] `v2` **Missing \<head\> Tag** — в HTML нет `<head>` _(SF: Issue, High)_
-- [ ] `v2` **Multiple \<head\> Tags** — несколько `<head>` _(SF: Issue, High)_
-- [ ] `v2` **Missing \<body\> Tag** — нет `<body>` _(SF: Issue, High)_
-- [ ] `v2` **Multiple \<body\> Tags** — несколько `<body>` _(SF: Issue, High)_
-- [ ] `v2` **HTML Document Over 2MB** — HTML больше 2 МБ (Googlebot читает только первые 2 МБ) _(SF: Issue, High)_
-- [ ] `v2` **Resource Over 2MB** — JS/CSS-файл больше 2 МБ _(SF: Issue, High)_
-- [ ] `v2` **Invalid HTML Elements In \<head\>** — недопустимые элементы в `<head>`: Google считает head закончившимся и игнорирует остальное _(SF: Warning, High)_
-- [ ] `v2` **\<body\> Element Preceding \<html\>** — элементы body (`<div>`, `<p>`…) стоят до `<html>` _(SF: Warning, High)_
-- [ ] `v2` **\<head\> Not First In \<html\> Element** — `<head>` не первый элемент внутри `<html>` _(SF: Warning, High)_
+- [x] `v2` **Missing \<head\> Tag** — в HTML нет `<head>` _(SF: Issue, High)_
+- [x] `v2` **Multiple \<head\> Tags** — несколько `<head>` _(SF: Issue, High)_
+- [x] `v2` **Missing \<body\> Tag** — нет `<body>` _(SF: Issue, High)_
+- [x] `v2` **Multiple \<body\> Tags** — несколько `<body>` _(SF: Issue, High)_
+- [x] `v2` **HTML Document Over 2MB** — HTML больше 2 МБ (Googlebot читает только первые 2 МБ) _(SF: Issue, High)_
+- [x] `v2` **Resource Over 2MB** — JS/CSS-файл больше 2 МБ _(SF: Issue, High)_
+- [x] `v2` **Invalid HTML Elements In \<head\>** — недопустимые элементы в `<head>`: Google считает head закончившимся и игнорирует остальное _(SF: Warning, High)_
+- [x] `v2` **\<body\> Element Preceding \<html\>** — элементы body (`<div>`, `<p>`…) стоят до `<html>` _(SF: Warning, High)_
+- [x] `v2` **\<head\> Not First In \<html\> Element** — `<head>` не первый элемент внутри `<html>` _(SF: Warning, High)_
 - [ ] `backlog` **High Carbon Rating** — страница получает углеродный рейтинг F (Sustainable Web Design) _(SF: Opportunity, Low)_
 
 ---
@@ -543,7 +543,7 @@
 - [x] `MVP` **iframes** → `collect.iframes.follow` / `.store`
 - [x] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [x] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
-- [ ] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
+- [x] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
 - [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
 - [ ] `backlog` **AMP** → `collect.amp.follow` / `.store`
 - [ ] `skip` **SWF (Flash)**
@@ -593,7 +593,7 @@
 - [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
 - [x] `v2` **Respect HSTS Policy** → `crawl.respect_hsts` (307 «HSTS Policy» без запроса)
 - [ ] `v2` **Crawl Fragment Identifiers** — считать `#fragment` отдельными URL → `scope.keep_fragments`
-- [ ] `v2` **Perform HTML Validation** → `extract.html_validation`
+- [x] `v2` **Perform HTML Validation** → `collect.html_validation` (по умолчанию включено: сканирование исходника ~0,04 мс на страницу)
 - [ ] `v2` **Assume Pages are HTML** (нет Content-Type → HTML) → `http.assume_html`
 - [ ] `skip` **Respect Noindex / Canonical / Next-Prev** — в SF только скрывают URL в интерфейсе; у нас это фильтры в `spider urls`
 - [ ] `backlog` **Green Hosting Carbon Calculation**

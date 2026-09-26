@@ -83,6 +83,9 @@ concurrency = 10
 | `collect.hreflang.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.pagination.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.pagination.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.mobile_alternate.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.mobile_alternate.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.html_validation` | `bool` | `true` | Проверять структуру HTML по исходному коду: <head> / <body>, порядок, элементы в <head>. |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
 | `collect.structured_data` | `list[Literal['json-ld', 'microdata', 'rdfa']]` | `[]` | Какую микроразметку извлекать и проверять (Schema.org, расширенные результаты Google): json-ld, microdata, rdfa; пусто — не извлекать. Microdata и RDFa — extra `rb-spider[structured]`. |
 | `collect.near_duplicates` | `bool` | `false` | Считать подписи MinHash текста страниц — для проверки «Content: Near Duplicates» (extra `rb-spider[near]`; ~0,7 КБ на страницу). |
@@ -129,6 +132,8 @@ concurrency = 10
 | `thresholds.readability_very_difficult` | `float` | `30` | Индекс Флеша ниже — «Content: Readability Very Difficult». |
 | `thresholds.readability_min_words` | `int` | `100` | Читаемость оценивается у страниц хотя бы со стольких слов текста. |
 | `thresholds.soft_404_patterns` | `list[str]` | `["\\b404\\b", "not found", "page (does not|doesn't|no longer) exist", "не найден", "не существует", "нет такой страницы", "страница удалена"]` | Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — «Content: Soft 404 Pages». |
+| `thresholds.document_max_mb` | `float` | `2` | HTML-страница больше стольких МБ — «Validation: HTML Document Over 2MB» (Googlebot читает 2 МБ). |
+| `thresholds.resource_max_mb` | `float` | `2` | JS / CSS больше стольких МБ — «Validation: Resource Over 2MB». |
 | `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
 | `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |
 | `thresholds.ignore_paginated_duplicates` | `bool` | `true` | Не считать дублями title / description / H1 / H2 страниц пагинации 2+ (с rel=prev): у страниц одного списка они обычно одинаковы. |

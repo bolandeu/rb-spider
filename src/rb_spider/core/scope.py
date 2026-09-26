@@ -134,20 +134,22 @@ class PageReader:
         self.srcset = collect.images_srcset
         self.minhash = collect.near_duplicates
         self.structured_data = tuple(collect.structured_data)
+        self.validate = collect.html_validation
         self.follow_internal_nofollow = crawl.follow_internal_nofollow
         self.follow_external_nofollow = crawl.follow_external_nofollow
         self.max_links_per_page = crawl.max_links_per_page
         self.listed = crawl.mode == "list"  # only the listed URLs and their redirects: no links, no resources
         kinds = {"internal_links": collect.internal_links, "external_links": collect.external_links,
                  "canonical": collect.canonicals, "refresh": collect.meta_refresh, "image": collect.images,
-                 "hreflang": collect.hreflang, "pagination": collect.pagination, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
+                 "hreflang": collect.hreflang, "pagination": collect.pagination,
+                 "mobile_alternate": collect.mobile_alternate, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
         self.kinds = {name: _Kind(option.follow, option.store) for name, option in kinds.items()}
 
     def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
         """A checked URL (`check`) is not read: status, headers and redirect target only."""
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash,
-                          structured_data=self.structured_data)  # fmt: skip
+                          structured_data=self.structured_data, validate=self.validate)  # fmt: skip
         page.bytes = len(body)
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
@@ -171,6 +173,7 @@ class PageReader:
         page.hreflang = [(code, rewrite(target)) for code, target in page.hreflang]
         page.pagination = [(rel, rewrite(target)) for rel, target in page.pagination]
         page.forms = [rewrite(action) for action in page.forms]
+        page.mobile_alternates = [rewrite(target) for target in page.mobile_alternates]
         page.redirect_url = rewrite(page.redirect_url) if page.redirect_url else None
         page.refresh_url = rewrite(page.refresh_url) if page.refresh_url else None
         if page.onpage.get("canonical_url"):
@@ -228,11 +231,18 @@ class PageReader:
                              None, None))  # fmt: skip
             if pagination.follow and not self.listed and target != page.url:
                 follow.append(target)
+        mobile = self.kinds["mobile_alternate"]
+        for target in page.mobile_alternates:
+            if mobile.store:
+                rows.append((page.url, target, "mobile_alternate", internal_of(target), None, None, None, False, None,
+                             None, None, None))  # fmt: skip
+            if mobile.follow and not self.listed:
+                follow.append(target)
         for action in page.forms:  # kept with the links of its kind, never fetched
             internal = internal_of(action)
             if self.kinds["internal_links" if internal else "external_links"].store:
                 rows.append((page.url, action, "form", internal, None, None, None, False, None, None, None, None))
-        page.hreflang, page.pagination, page.forms = [], [], []
+        page.hreflang, page.pagination, page.forms, page.mobile_alternates = [], [], [], []
         return follow, rows
 
     def _resources_to_check(self, page: Page) -> tuple[list[str], list[tuple]]:

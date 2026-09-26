@@ -60,6 +60,7 @@ class Page:
     hreflang: list[tuple[str, str]] = field(default_factory=list)  # (code as written, absolute URL): HTML + Link
     pagination: list[tuple[str, str]] = field(default_factory=list)  # ("next" | "prev", absolute URL): HTML + Link
     forms: list[str] = field(default_factory=list)  # each <form>'s action, absolute (no action: the page itself)
+    mobile_alternates: list[str] = field(default_factory=list)  # <link rel="alternate" media="…"> targets
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -456,6 +457,59 @@ def _protocol_relative_resources(tree: LexborHTMLParser) -> int:
     return sum((value or "").strip().startswith("//") for value in values)
 
 
+# --- HTML validation and mobile (#34). An HTML5 parser silently adds a missing <head> / <body> and moves an
+# element that doesn't belong in <head> into <body> — the DOM can't tell. The source can: a few regex searches
+# with a literal start (fast even on a 2 MB page), not a tokenizer.
+_HEAD_TAG = re.compile(rb"<head[\s>/]", re.IGNORECASE)
+_BODY_TAG = re.compile(rb"<body[\s>/]", re.IGNORECASE)
+_HTML_TAG = re.compile(rb"<html[\s>]", re.IGNORECASE)
+_HEAD_END = re.compile(rb"</head\s*>|<body[\s>/]", re.IGNORECASE)
+_START_TAG = re.compile(rb"<([a-zA-Z][a-zA-Z0-9-]*)")
+_RAW_TEXT = re.compile(rb"<!--.*?-->|<(script|style|noscript|template)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_HEAD_ELEMENTS = {b"title", b"meta", b"link", b"script", b"style", b"base", b"noscript", b"template"}
+
+
+def validation(body: bytes) -> dict:
+    """What an HTML parser hides: how many <head> / <body> tags the source has, an element before <html>, an element
+    before <head>, the first element in <head> that doesn't belong there (Google ends the head at it)."""
+    heads, bodies = len(_HEAD_TAG.findall(body)), len(_BODY_TAG.findall(body))
+    html = _HTML_TAG.search(body)
+    before_html = head_not_first = False
+    invalid = None
+    if html:
+        prefix = _RAW_TEXT.sub(b"", body[: html.start()])
+        before_html = _START_TAG.search(prefix) is not None
+        first = _START_TAG.search(_RAW_TEXT.sub(b"", body[html.end() : html.end() + 4096]))
+        head_not_first = heads > 0 and first is not None and first.group(1).lower() != b"head"
+    head = _HEAD_TAG.search(body)
+    if head:
+        end = _HEAD_END.search(body, head.end())
+        section = _RAW_TEXT.sub(b"", body[head.end() : end.start() if end else len(body)])
+        invalid = next((tag.group(1).lower().decode() for tag in _START_TAG.finditer(section)
+                        if tag.group(1).lower() not in _HEAD_ELEMENTS), None)  # fmt: skip
+    return {"head_tags": heads, "body_tags": bodies, "body_before_html": before_html,
+            "head_not_first": head_not_first, "invalid_head_element": invalid}  # fmt: skip
+
+
+_PLUGIN = re.compile(r"flash|shockwave|\.swf\b|silverlight|java-applet|\.class\b|\.jar\b", re.IGNORECASE)
+
+
+def _mobile(url: str, tree: LexborHTMLParser) -> tuple[dict, list[str]]:
+    """The viewport meta, browser plugins (Flash, Silverlight, Java), rel="alternate" media links to a mobile site."""
+    viewport = next((m.attributes.get("content") or "" for m in tree.css("meta[name]")
+                     if (m.attributes.get("name") or "").lower() == "viewport"), None)  # fmt: skip
+    plugins = len(tree.css("applet")) + sum(
+        bool(_PLUGIN.search(" ".join(str(v) for v in node.attributes.values()))) for node in tree.css("object, embed")
+    )
+    alternates = []
+    for link in tree.css("link[media]"):
+        rels = (link.attributes.get("rel") or "").lower().split()
+        target = _absolute(url, link.attributes.get("href") or "")
+        if "alternate" in rels and "hreflang" not in link.attributes and target:
+            alternates.append(target)
+    return {"viewport": viewport, "plugins": plugins}, alternates
+
+
 _JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
 
 
@@ -483,6 +537,7 @@ def parse_page(
     srcset: bool = False,
     minhash: bool = False,
     structured_data: tuple[str, ...] = (),
+    validate: bool = True,
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -521,6 +576,10 @@ def parse_page(
     page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
     page.onpage["anchor_ids"] = anchor_ids(tree)
     page.forms = _forms(url, tree)
+    mobile, page.mobile_alternates = _mobile(url, tree)
+    page.onpage |= mobile
+    if validate:
+        page.onpage |= validation(body)
     page.onpage |= {"forms": len(page.forms), "unsafe_blank_links": _unsafe_blank_links(url, tree),
                     "protocol_relative": _protocol_relative_resources(tree)}  # fmt: skip
     page.onpage |= _content(tree, body, content_exclude, minhash)

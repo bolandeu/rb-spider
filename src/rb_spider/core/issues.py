@@ -1006,6 +1006,53 @@ def _sitemap_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _validation_mobile_rules() -> list[Rule]:
+    def v(code, name, kind, description, where, detail="NULL", requires=("collect.html_validation",)) -> Rule:
+        return Rule(code, "Validation", f"Validation: {name}", kind, "high", description,
+                    _sql(f"{HTML_OK} AND {where}", detail), requires)  # fmt: skip
+
+    def m(code, name, kind, description, find, requires=()) -> Rule:
+        return Rule(code, "Mobile", f"Mobile: {name}", kind, "high", description, find, requires)
+
+    size = "round(bytes / 1048576.0, 1) || ' МБ'"
+    return [
+        v("validation_missing_head", "Missing <head> Tag", "issue",
+          "В исходном HTML нет <head>: браузер его достроит, но разметка ненадёжна для поисковика.", "head_tags = 0"),
+        v("validation_multiple_head", "Multiple <head> Tags", "issue",
+          "Несколько <head>: второй поисковик может не прочитать.", "head_tags > 1", "CAST(head_tags AS TEXT)"),
+        v("validation_missing_body", "Missing <body> Tag", "issue", "В исходном HTML нет <body>.", "body_tags = 0"),
+        v("validation_multiple_body", "Multiple <body> Tags", "issue",
+          "Несколько <body>.", "body_tags > 1", "CAST(body_tags AS TEXT)"),
+        v("validation_document_over_max", "HTML Document Over 2MB", "issue",
+          "HTML больше thresholds.document_max_mb (2) МБ: Googlebot читает только первые 2 МБ.",
+          "bytes > :document_max_mb * 1048576", size, ()),
+        Rule("validation_resource_over_max", "Validation", "Validation: Resource Over 2MB", "issue", "high",
+             "JS / CSS больше thresholds.resource_max_mb (2) МБ: Googlebot читает только первые 2 МБ файла.",
+             _sql("status_code = 200 AND (content_type LIKE '%javascript%' OR content_type LIKE '%ecmascript%'"
+                  " OR content_type LIKE '%css%') AND bytes > :resource_max_mb * 1048576", size)),
+        v("validation_invalid_head_elements", "Invalid HTML Elements In <head>", "warning",
+          "В <head> элемент, которому там не место (div, img, iframe…): Google считает <head> законченным и "
+          "не видит title, meta и canonical после него.", "invalid_head_element IS NOT NULL", "invalid_head_element"),
+        v("validation_body_before_html", "<body> Element Preceding <html>", "warning",
+          "Элементы страницы стоят раньше <html>.", "body_before_html"),
+        v("validation_head_not_first", "<head> Not First In <html> Element", "warning",
+          "Внутри <html> первым идёт не <head>.", "head_not_first"),
+        # plugins IS NOT NULL: the page was read by a spider that looks for the viewport (older crawls: not checked)
+        m("mobile_viewport_not_set", "Viewport Not Set", "issue",
+          "Нет <meta name=\"viewport\"> с width=: на телефоне страница откроется в ширину десктопа.",
+          _sql(f"{HTML_OK} AND plugins IS NOT NULL AND coalesce(viewport, '') NOT LIKE '%width=%'", "viewport")),
+        m("mobile_unsupported_plugins", "Contains Unsupported Plugins", "issue",
+          "Flash, Silverlight или Java-апплет (<object>, <embed>, <applet>): телефоны их не показывают, поисковики "
+          "не индексируют.", _sql(f"{HTML_OK} AND plugins > 0", "plugins || ' шт.'")),
+        m("mobile_alternate_link", "Mobile Alternate Link", "warning",
+          "Отдельная мобильная версия (<link rel=\"alternate\" media=…>): Google рекомендует адаптивный дизайн на "
+          "одном URL; убедитесь, что версии связаны в обе стороны.",
+          _links_sql("SELECT s.url, min(t.url) FROM link_rows l JOIN urls s ON s.id = l.source_id"
+                     " JOIN urls t ON t.id = l.target_id WHERE l.crawl_id = :crawl_id AND l.kind = 'mobile_alternate'"
+                     " GROUP BY s.url ORDER BY s.url"), ("collect.mobile_alternate.store",)),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -1068,6 +1115,7 @@ RULES += _pagination_rules()
 RULES += _security_rules()
 RULES += _structured_rules()
 RULES += _sitemap_rules()
+RULES += _validation_mobile_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

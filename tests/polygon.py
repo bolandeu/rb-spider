@@ -22,6 +22,7 @@ TITLE = "Полигон spider: страница {} для проверок"  # 
 DESCRIPTION = "Описание страницы {} полигона spider: достаточно длинное, чтобы уложиться в норму сниппета."
 H1 = "Заголовок страницы {}"
 H2 = "Раздел страницы {}"
+VIEWPORT = '<meta name="viewport" content="width=device-width, initial-scale=1">'
 FILLER = "<p>" + "Это простой текст для полигона и он легко читается. " * 30 + "</p>"  # 270 easy words
 
 
@@ -39,7 +40,7 @@ def _html(
     if not links and not dead_end:
         links = ("/",)
     if head is None:
-        head = f'<title>{TITLE.format(slug)}</title><meta name="description" content="{DESCRIPTION.format(slug)}">'
+        head = f'<title>{TITLE.format(slug)}</title><meta name="description" content="{DESCRIPTION.format(slug)}">{VIEWPORT}'
     if body is None:
         body = f"<h1>{H1.format(slug)}</h1><h2>{H2.format(slug)}</h2>"
     return f"<html><head>{head}</head><body>{body}{'' if thin else FILLER}{_links(links)}</body></html>"
@@ -48,15 +49,15 @@ def _html(
 def _head(slug: str, *, title: str | None = None, description: str | None = None, extra: str = "") -> str:
     title = TITLE.format(slug) if title is None else title
     description = DESCRIPTION.format(slug) if description is None else description
-    return f'<title>{title}</title><meta name="description" content="{description}">{extra}'
+    return f'<title>{title}</title><meta name="description" content="{description}">{VIEWPORT}{extra}'
 
 
 def _no_title(slug: str) -> str:
-    return f'<meta name="description" content="{DESCRIPTION.format(slug)}">'
+    return f'<meta name="description" content="{DESCRIPTION.format(slug)}">{VIEWPORT}'
 
 
 def _no_description(slug: str) -> str:
-    return f"<title>{TITLE.format(slug)}</title>"
+    return f"<title>{TITLE.format(slug)}</title>{VIEWPORT}"
 
 
 ONPAGE_TRAPS: dict[str, str] = {
@@ -238,6 +239,7 @@ RESOURCES = {
     "/style.css": 500,
     "/app.js": 500,
     "/private/hidden.png": 2_000,  # disallowed by robots.txt: never fetched
+    "/big.js": 2_200_000,  # over thresholds.resource_max_mb (2)
 }
 _IMG = '<img src="{src}" alt="{alt}" width="10" height="10">'
 IMAGE_TRAPS: dict[str, str] = {
@@ -509,6 +511,44 @@ SITEMAP_EXPECTED = {
     "sitemaps_multiple": {"/sm/twice"},
 }
 
+
+def _page(
+    slug: str,
+    before_head: str = "",
+    head_extra: str = "",
+    after_head: str = "",
+    body_open: str = "<body>",
+    body_close: str = "</body>",
+    html_open: str = "<html>",
+) -> str:
+    """A clean page whose skeleton (the tags around head and body) a trap can bend."""
+    head = f"<head>{_head(slug)}{head_extra}</head>" if before_head != "NO-HEAD" else _head(slug)
+    return (
+        f"{html_open}{'' if before_head == 'NO-HEAD' else before_head}{head}{after_head}{body_open}"
+        f'<h1>{H1.format(slug)}</h1><h2>{H2.format(slug)}</h2>{FILLER}<a href="/">/</a>{body_close}</html>'
+    )
+
+
+# HTML validation (#34): the source's skeleton, which an HTML5 parser would silently repair.
+BIG_COMMENT = "<!--" + "x" * 2_200_000 + "-->"  # the document over 2 MB without 2 MB of text to read
+VALIDATION_TRAPS: dict[str, str] = {
+    "/v-no-head": _page("v-no-head", before_head="NO-HEAD").replace("<html>", '<html><link rel="canonical" href="{base}/v-no-head">', 1),
+    "/v-two-heads": _page("v-two-heads", after_head="<head></head>"),
+    "/v-no-body": _page("v-no-body", body_open="", body_close=""),
+    "/v-two-bodies": _page("v-two-bodies", body_close="</body><body></body>"),
+    "/v-big": _page("v-big", head_extra='<script src="/big.js"></script>', body_close=BIG_COMMENT + "</body>"),
+    "/v-invalid-head": _page("v-invalid-head", head_extra='<img src="/logo.png" alt="Логотип" width="10" height="10">'),
+    "/v-before-html": "<div>баннер</div>" + _page("v-before-html"),
+    "/v-head-not-first": _page("v-head-not-first", before_head='<meta charset="utf-8">'),
+    # Mobile
+    "/m-no-viewport": _html("m-no-viewport", head=_head("m-no-viewport").replace(VIEWPORT, "")),
+    "/m-plugin": _html("m-plugin", body=f"<h1>{H1.format('m-plugin')}</h1><h2>{H2.format('m-plugin')}</h2>"
+                       '<object type="application/x-shockwave-flash" data="/movie.swf"></object>'),
+    "/m-alternate": _html("m-alternate", head=_head("m-alternate", extra='<link rel="alternate" '
+                          'media="only screen and (max-width: 640px)" href="{base}/m/page">')),
+    "/m/page": _html("m-page"),  # the "mobile site", found through the alternate link only
+}  # fmt: skip
+
 NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -545,6 +585,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *HREFLANG_LINKED,
             "/hl/header",
             *PAGINATION_LINKED,
+            *(p for p in VALIDATION_TRAPS if p != "/m/page"),
             *SECURITY_TRAPS,
             "/sd/",
         ),
@@ -591,6 +632,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in PAGINATION_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in SECURITY_TRAPS.items()},
     **{path: (200, {}, html) for path, html in STRUCTURED_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in VALIDATION_TRAPS.items()},
     **{path: (200, {"Content-Type": "application/xml"}, xml) for path, xml in SITEMAP_FILES.items()},
     **{path: (200, {}, html) for path, html in SITEMAP_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
@@ -632,6 +674,7 @@ REACHABLE = {
     *PAGINATION_TRAPS,
     *SECURITY_TRAPS,
     *STRUCTURED_TRAPS,
+    *VALIDATION_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -665,7 +708,10 @@ EXPECTED_ISSUES = {
     # Page Titles
     "page_title_missing": {"/t-missing"},
     "page_title_multiple": {"/t-multiple"},
-    "page_title_outside_head": {"/t-outside"},
+    "page_title_outside_head": {
+        "/t-outside",
+        "/v-before-html",
+    },  # a <div> before <html>: the parser puts the head into <body>
     "page_title_duplicate": DUPLICATES_B,
     "page_title_over_max": {"/t-long"},
     "page_title_below_min": {"/t-short"},
@@ -674,7 +720,10 @@ EXPECTED_ISSUES = {
     "page_title_below_px": {"/t-short"},
     # Meta Description
     "meta_description_multiple": {"/d-multiple"},
-    "meta_description_outside_head": {"/d-outside"},
+    "meta_description_outside_head": {
+        "/d-outside",
+        "/v-before-html",
+    },  # a <div> before <html>: the parser puts the head into <body>
     "meta_description_missing": {"/d-missing"},
     "meta_description_duplicate": DUPLICATES_B,
     "meta_description_over_max": {"/d-long"},
@@ -699,7 +748,10 @@ EXPECTED_ISSUES = {
     "canonical_non_indexable": {"/c-nonindexable"},
     "canonical_invalid_attribute": {"/c-invalid"},
     "canonical_fragment": {"/c-fragment"},
-    "canonical_outside_head": {"/c-outside"},
+    "canonical_outside_head": {
+        "/c-outside",
+        "/v-before-html",
+    },  # a <div> before <html>: the parser puts the head into <body>
     "canonical_canonicalised": {
         "/c-canonicalised",
         "/c-nonindexable",
@@ -806,6 +858,20 @@ EXPECTED_ISSUES = {
     **{code: set() for code in STRUCTURED_EXPECTED},
     # Sitemaps: sitemaps.crawl is off in this crawl — see SITEMAP_EXPECTED
     **{code: set() for code in SITEMAP_EXPECTED},
+    # Validation
+    "validation_missing_head": {"/v-no-head"},
+    "validation_multiple_head": {"/v-two-heads"},
+    "validation_missing_body": {"/v-no-body"},
+    "validation_multiple_body": {"/v-two-bodies"},
+    "validation_document_over_max": {"/v-big"},
+    "validation_resource_over_max": {"/big.js"},
+    "validation_invalid_head_elements": {"/v-invalid-head"},
+    "validation_body_before_html": {"/v-before-html"},
+    "validation_head_not_first": {"/v-head-not-first"},
+    # Mobile
+    "mobile_viewport_not_set": {"/m-no-viewport"},
+    "mobile_unsupported_plugins": {"/m-plugin"},
+    "mobile_alternate_link": {"/m-alternate"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent

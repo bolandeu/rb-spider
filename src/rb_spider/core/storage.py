@@ -135,6 +135,16 @@ pages = sa.Table(
     sa.Column("forms", sa.Integer),
     sa.Column("unsafe_blank_links", sa.Integer),
     sa.Column("protocol_relative", sa.Integer),
+    # HTML validation from the source (collect.html_validation; NULL — not checked): <head> / <body> tags, an element
+    # before <html>, <head> not first in <html>, the first element in <head> that doesn't belong there
+    sa.Column("head_tags", sa.Integer),
+    sa.Column("body_tags", sa.Integer),
+    sa.Column("body_before_html", sa.Boolean),
+    sa.Column("head_not_first", sa.Boolean),
+    sa.Column("invalid_head_element", sa.String),
+    # mobile: <meta name="viewport"> content (NULL — none), Flash / Silverlight / Java plugins
+    sa.Column("viewport", sa.String),
+    sa.Column("plugins", sa.Integer),
     # content measures of the page's own text: Flesch Reading Ease, words per sentence, visible text as % of the
     # HTML, MinHash signature (collect.near_duplicates) for near duplicates
     sa.Column("flesch", sa.Float),
@@ -186,7 +196,7 @@ link_rows = sa.Table(
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
     sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
-    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | form | image | css | js | media | iframe (resources the page loads)
+    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | form | mobile_alternate | image | css | js | media | iframe (resources the page loads)
     sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
     sa.Column("anchor", sa.String),
@@ -206,6 +216,7 @@ link_rows = sa.Table(
     sa.Index("link_rows_hreflang_by_target", "crawl_id", "target_id", sqlite_where=sa.text("kind = 'hreflang'")),
     # rel next / prev: queries say `kind IN ('next', 'prev')` so SQLite can use it
     sa.Index("link_rows_pagination", "crawl_id", "source_id", sqlite_where=sa.text("kind IN ('next', 'prev')")),
+    sa.Index("link_rows_mobile", "crawl_id", "source_id", sqlite_where=sa.text("kind = 'mobile_alternate'")),
 )
 # `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
 # `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
