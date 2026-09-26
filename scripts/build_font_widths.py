@@ -25,10 +25,7 @@ def main() -> None:
     font = TTFont(sys.argv[1] if len(sys.argv) > 1 else DEFAULT_FONT)
     cmap, metrics = font.getBestCmap(), font["hmtx"].metrics
     widths = {
-        str(code): metrics[cmap[code]][0]
-        for low, high in RANGES
-        for code in range(low, high + 1)
-        if code in cmap
+        str(code): metrics[cmap[code]][0] for low, high in RANGES for code in range(low, high + 1) if code in cmap
     }
     data = {"font": "Arial", "units_per_em": font["head"].unitsPerEm, "widths": widths}
     TARGET.write_text(json.dumps(data, separators=(",", ":")) + "\n", encoding="utf-8")
