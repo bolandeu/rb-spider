@@ -94,7 +94,30 @@ pages = sa.Table(
     sa.Column("content_md5", sa.String),
     sa.Column("word_count", sa.Integer),
     sa.Column("lorem_ipsum", sa.Boolean),
+    # links: `external` — another site (checked, not crawled); `parsed` — the body was read (crawled, not
+    # only checked); outlink counts are <a href> follow links, before any per-page limit
+    sa.Column("external", sa.Boolean),
+    sa.Column("parsed", sa.Boolean),
+    sa.Column("internal_outlinks", sa.Integer),
+    sa.Column("external_outlinks", sa.Integer),
+    sa.Column("internal_nofollow_outlinks", sa.Integer),
+    sa.Column("uncrawlable_outlinks", sa.Integer),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
+)
+links = sa.Table(
+    "links",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("source", sa.String, nullable=False),
+    sa.Column("target", sa.String, nullable=False),
+    sa.Column("kind", sa.String, nullable=False),  # hyperlink | canonical | redirect | refresh
+    sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
+    sa.Column("anchor", sa.String),
+    sa.Column("alt", sa.String),  # alt of the image inside an image link
+    sa.Column("rel", sa.String),
+    sa.Column("nofollow", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Index("links_by_source", "crawl_id", "source"),
+    sa.Index("links_by_target", "crawl_id", "target"),
 )
 issues = sa.Table(
     "issues",
@@ -137,6 +160,8 @@ def _pragmas(dbapi_connection, _record) -> None:
     cursor.execute("PRAGMA journal_mode=WAL")  # readers (`spider status`) never block the writing crawl
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
+    # SQLite's lower() is ASCII-only; rules compare Cyrillic text (anchors) case-insensitively
+    dbapi_connection.create_function("casefold", 1, lambda s: s.casefold() if s else s, deterministic=True)
 
 
 def open_db(path: Path | None = None) -> sa.Engine:
@@ -204,6 +229,7 @@ class PageWriter:
     def __init__(self, engine: sa.Engine, crawl_id: int, batch_size: int = 500, *, store_html: bool = False) -> None:
         self.engine, self.crawl_id, self.batch_size = engine, crawl_id, batch_size
         self._rows: list[dict] = []
+        self._links: list[dict] = []
         self._html: list[dict] = []
         self.written = 0
         self.html_engine: sa.Engine | None = None
@@ -246,7 +272,16 @@ class PageWriter:
         if len(self._rows) >= self.batch_size:
             self.flush()
 
+    def add_links(self, rows: list[dict]) -> None:
+        """Link rows for this crawl: {source, target, kind, internal, anchor, alt, rel, nofollow}."""
+        self._links.extend({"crawl_id": self.crawl_id, "anchor": None, "alt": None, "rel": None,
+                            "nofollow": False} | row for row in rows)  # fmt: skip
+
     def flush(self) -> None:
+        if self._links:
+            with self.engine.begin() as conn:
+                conn.execute(sa.insert(links), self._links)
+            self._links = []
         if self._html and self.html_engine is not None:
             with self.html_engine.begin() as conn:
                 conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), self._html)
@@ -345,3 +380,31 @@ def resolve_crawl_id(engine: sa.Engine, crawl_id: int | None) -> int:
         if conn.execute(sa.select(crawls.c.id).where(crawls.c.id == crawl_id)).scalar() is None:
             raise InvalidArguments(f"No crawl #{crawl_id} — see '{CLI_NAME} crawls list'.")
         return crawl_id
+
+
+def links_of(
+    engine: sa.Engine, crawl_id: int, url: str, direction: str = "out", limit: int | None = None
+) -> tuple[int, list[dict]]:
+    """Links from (`out`) or to (`in`) a URL, with the response code of the URL at the other end."""
+    mine, other = (links.c.source, links.c.target) if direction == "out" else (links.c.target, links.c.source)
+    where = sa.and_(links.c.crawl_id == crawl_id, mine == url)
+    query = (
+        sa.select(
+            links.c.source,
+            links.c.target,
+            links.c.kind,
+            links.c.anchor,
+            links.c.alt,
+            links.c.rel,
+            links.c.nofollow,
+            links.c.internal,
+            pages.c.status_code,
+        )
+        .select_from(links.outerjoin(pages, sa.and_(pages.c.crawl_id == links.c.crawl_id, pages.c.url == other)))
+        .where(where)
+        .order_by(other)
+        .limit(limit)
+    )
+    with engine.connect() as conn:
+        total = conn.execute(sa.select(sa.func.count()).select_from(links).where(where)).scalar_one()
+        return total, [dict(row) for row in conn.execute(query).mappings()]

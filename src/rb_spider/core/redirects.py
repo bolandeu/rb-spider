@@ -41,9 +41,9 @@ class Redirect:
 def _pages(conn: sa.Connection, crawl_id: int) -> dict[str, tuple[int, str | None, str | None]]:
     p = storage.pages
     rows = conn.execute(
-        sa.select(p.c.url, p.c.status_code, p.c.redirect_url, p.c.refresh_url, p.c.refresh_kind).where(
-            p.c.crawl_id == crawl_id
-        )
+        sa.select(p.c.url, p.c.status_code, p.c.redirect_url, p.c.refresh_url, p.c.refresh_kind)
+        .where(p.c.crawl_id == crawl_id)
+        .where(sa.not_(sa.func.coalesce(p.c.external, False)))  # the site's own redirects
     )
     result = {}
     for url, status, redirect_url, refresh_url, refresh_kind in rows:

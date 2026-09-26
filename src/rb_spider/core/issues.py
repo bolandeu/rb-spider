@@ -10,13 +10,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import sqlalchemy as sa
+from pydantic import ValidationError
 
+from . import settings as settings_module
 from . import storage
 from .errors import InvalidArguments
-from .settings import ThresholdSettings
+from .settings import Settings, ThresholdSettings
 
 Finding = tuple[str, str | None]  # (url, detail)
 
@@ -30,12 +32,16 @@ class Rule:
     priority: Literal["high", "medium", "low"]
     description: str
     find: Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
+    requires: tuple[str, ...] = ()  # settings keys (collect.*) that must have been on during the crawl
 
 
 RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
-# On-page checks look at pages that are HTML and answered 200; duplicates only among indexable ones.
-HTML_OK = "status_code = 200 AND content_type LIKE '%html%'"
+# Rules look at the site's own URLs unless they say otherwise; on-page checks at the site's HTML pages
+# that answered 200 and were read (not only checked); duplicates only among indexable ones.
+INTERNAL = "NOT coalesce(external, 0)"
+EXTERNAL = "coalesce(external, 0)"
+HTML_OK = f"{INTERNAL} AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 INDEXABLE_HTML = f"{HTML_OK} AND indexable"
 
 # Why a URL can't be indexed — Screaming Frog's Indexability Status, first matching reason wins.
@@ -70,9 +76,12 @@ def _run_sql(query: sa.TextClause) -> RuleFinder:
     return find
 
 
-def _sql(where: str, detail: str = "NULL") -> RuleFinder:
-    """A rule that is a filter over the crawl's pages; `where` may use thresholds as :name."""
-    return _run_sql(sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND ({where}) ORDER BY url"))  # noqa: S608 — fixed rule text, values are bound
+def _sql(where: str, detail: str = "NULL", *, external: bool = False) -> RuleFinder:
+    """A rule that is a filter over the crawl's pages (the site's own, or `external` ones); thresholds bind as :name."""
+    among = EXTERNAL if external else INTERNAL
+    return _run_sql(
+        sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND {among} AND ({where}) ORDER BY url")  # noqa: S608 — fixed rule text, values are bound
+    )
 
 
 def _duplicate(column: str, among: str = INDEXABLE_HTML) -> RuleFinder:
@@ -171,6 +180,7 @@ def _redirect_graph(conn: sa.Connection, crawl_id: int) -> dict[str, str]:
     rows = conn.execute(
         sa.select(storage.pages.c.url, sa.func.coalesce(storage.pages.c.redirect_url, storage.pages.c.refresh_url))
         .where(storage.pages.c.crawl_id == crawl_id)
+        .where(sa.not_(sa.func.coalesce(storage.pages.c.external, False)))
         .where(sa.or_(storage.pages.c.redirect_url.is_not(None), storage.pages.c.refresh_url.is_not(None)))
     )
     return {url: target for url, target in rows}
@@ -376,9 +386,121 @@ def _content_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+STORE_INTERNAL = "collect.internal_links.store"
+STORE_EXTERNAL = "collect.external_links.store"
+FOLLOW_EXTERNAL = "collect.external_links.follow"
+STORE_CANONICALS = "collect.canonicals.store"
+HYPERLINK = "crawl_id = :crawl_id AND kind = 'hyperlink'"
+_LOCALHOST = " OR ".join(
+    f"target LIKE '{scheme}://{host}%'" for scheme in ("http", "https") for host in ("localhost", "127.", "[::1]")
+)
+
+
+def _links_sql(query: str) -> RuleFinder:
+    return _run_sql(sa.text(query))
+
+
+def _non_descriptive(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> list[Finding]:
+    anchors = [a.strip().casefold() for a in thresholds.non_descriptive_anchors]
+    if not anchors:
+        return []
+    query = sa.text(
+        f"SELECT source, count(*) || ' шт., например «' || min(anchor) || '»' FROM links WHERE {HYPERLINK}"  # noqa: S608 — fixed text
+        " AND internal AND casefold(trim(anchor)) IN :anchors GROUP BY source ORDER BY source"
+    ).bindparams(sa.bindparam("anchors", expanding=True))
+    return [(url, detail) for url, detail in conn.execute(query, {"crawl_id": crawl_id, "anchors": anchors})]
+
+
+def _link_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, find, requires=()) -> Rule:
+        return Rule(code, "Links", f"Links: {name}", kind, priority, description, find, requires)
+
+    def ext(code, name, description, where, requires=(FOLLOW_EXTERNAL,)) -> Rule:
+        return Rule(
+            code,
+            "Response Codes",
+            name,
+            "warning",
+            "low",
+            description,
+            _sql(where, "CAST(status_code AS TEXT) || coalesce(': ' || error, '')", external=True),
+            requires,
+        )
+
+    return [
+        r("links_outlinks_to_localhost", "Outlinks To Localhost", "issue", "high",
+          "Ссылки на localhost / 127.0.0.1: на сайте они никуда не ведут, это следы разработки.",
+          _links_sql(f"SELECT source, group_concat(DISTINCT target) FROM links WHERE {HYPERLINK} AND NOT internal"  # noqa: S608
+                     f" AND ({_LOCALHOST}) GROUP BY source ORDER BY source"), (STORE_EXTERNAL,)),
+        r("links_uncrawlable_outlinks", "Pages With Uncrawlable Internal Outlinks", "warning", "high",
+          "«Ссылки», по которым поисковик не перейдёт: javascript:, href не у <a>, переход в onclick.",
+          _sql(f"{HTML_OK} AND uncrawlable_outlinks > 0", "uncrawlable_outlinks || ' шт.'")),
+        r("links_no_internal_outlinks", "Pages Without Internal Outlinks", "warning", "high",
+          "На странице нет ни одной внутренней follow-ссылки: тупик для поисковика и пользователя.",
+          _sql(f"{HTML_OK} AND coalesce(internal_outlinks, 0) = 0")),
+        r("links_non_indexable_inlinks_only", "Non-Indexable Page Inlinks Only", "warning", "high",
+          "На индексируемую страницу ссылаются только неиндексируемые: поисковик может её не найти.",
+          _links_sql(
+              "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, 0)"
+              " AND t.indexable"
+              " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+              "   AND l.kind = 'hyperlink')"
+              " AND NOT EXISTS (SELECT 1 FROM links l JOIN pages s ON s.crawl_id = l.crawl_id AND s.url = l.source"
+              "   WHERE l.crawl_id = t.crawl_id AND l.target = t.url AND l.kind = 'hyperlink' AND s.indexable)"
+              " ORDER BY t.url"), (STORE_INTERNAL,)),
+        r("links_internal_nofollow_outlinks", "Internal Nofollow Outlinks", "warning", "low",
+          "Внутренние ссылки с rel=\"nofollow\": поисковик не передаёт по ним вес.",
+          _sql(f"{HTML_OK} AND internal_nofollow_outlinks > 0", "internal_nofollow_outlinks || ' шт.'")),
+        r("links_high_external_outlinks", "Pages With High External Outlinks", "warning", "low",
+          "Внешних follow-ссылок больше thresholds.external_outlinks.",
+          _sql(f"{HTML_OK} AND external_outlinks > :external_outlinks", "external_outlinks || ' шт.'")),
+        r("links_high_internal_outlinks", "Pages With High Internal Outlinks", "warning", "low",
+          "Внутренних follow-ссылок больше thresholds.internal_outlinks.",
+          _sql(f"{HTML_OK} AND internal_outlinks > :internal_outlinks", "internal_outlinks || ' шт.'")),
+        r("links_follow_and_nofollow_inlinks", "Follow & Nofollow Internal Inlinks To Page", "warning", "low",
+          "На страницу ведут и follow-, и nofollow-ссылки: сигналы противоречат друг другу.",
+          _links_sql(f"SELECT target, sum(nofollow) || ' nofollow из ' || count(*) FROM links WHERE {HYPERLINK}"  # noqa: S608
+                     " AND internal GROUP BY target HAVING sum(nofollow) > 0 AND sum(NOT nofollow) > 0 ORDER BY target"),
+          (STORE_INTERNAL,)),
+        r("links_nofollow_inlinks_only", "Internal Nofollow Inlinks Only", "warning", "low",
+          "На страницу ведут только nofollow-ссылки: поисковик может её не обойти.",
+          _links_sql(f"SELECT target, count(*) || ' шт.' FROM links WHERE {HYPERLINK} AND internal"  # noqa: S608
+                     " GROUP BY target HAVING sum(NOT nofollow) = 0 ORDER BY target"), (STORE_INTERNAL,)),
+        r("links_high_crawl_depth", "Pages With High Crawl Depth", "opportunity", "medium",
+          "Страница в thresholds.crawl_depth и более кликах от старта: поисковику и людям до неё далеко.",
+          _sql(f"{HTML_OK} AND depth >= :crawl_depth", "depth || ' кликов'")),
+        r("links_no_anchor_text", "Internal Outlinks With No Anchor Text", "opportunity", "low",
+          "Внутренние ссылки без текста (и картинки-ссылки без alt): поисковик не знает, о чём цель.",
+          _links_sql(f"SELECT source, count(*) || ' шт.' FROM links WHERE {HYPERLINK} AND internal"  # noqa: S608
+                     " AND trim(coalesce(anchor, '')) = '' AND trim(coalesce(alt, '')) = ''"
+                     " GROUP BY source ORDER BY source"), (STORE_INTERNAL,)),
+        r("links_non_descriptive_anchor", "Non-Descriptive Anchor Text In Internal Outlinks", "opportunity", "low",
+          "Анкоры вроде «подробнее», «здесь» (thresholds.non_descriptive_anchors) ничего не говорят о цели.",
+          _non_descriptive, (STORE_INTERNAL,)),
+        # --- external URLs (checked, not crawled)
+        ext("external_no_response", "External No Response", "Внешняя ссылка не ответила: таймаут, нет домена, отказ.",
+            "status_code = 0"),
+        ext("external_client_error", "External Client Error (4XX)", "Внешняя ссылка отдаёт 4xx — битая.",
+            "status_code BETWEEN 400 AND 499"),
+        ext("external_server_error", "External Server Error (5XX)", "Внешняя ссылка отдаёт 5xx.",
+            "status_code >= 500"),
+        # --- canonical discovery
+        Rule("canonical_unlinked", "Canonicals", "Canonicals: Unlinked", "warning", "medium",
+             "URL найден только через canonical: обычные ссылки на него не ведут.",
+             _links_sql(
+                 "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, 0)"
+                 " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+                 "   AND l.kind = 'canonical')"
+                 " AND NOT EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+                 "   AND l.kind = 'hyperlink') ORDER BY t.url"),
+             (STORE_INTERNAL, STORE_CANONICALS)),
+    ]  # fmt: skip
+
+
 RULES += _onpage_rules()
 RULES += _directive_canonical_rules()
 RULES += _content_rules()
+RULES += _link_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -389,15 +511,37 @@ def rule(code: str) -> Rule:
     return BY_CODE[code]
 
 
+def _collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
+    """What the crawl collected: its settings snapshot as flat keys (defaults for crawls without one)."""
+    _, snapshot = storage.get_crawl(engine, crawl_id)
+    try:
+        crawl_settings = Settings.model_validate(snapshot or {})
+    except ValidationError:  # a snapshot from an older spider: assume the defaults
+        crawl_settings = Settings()
+    return settings_module.flatten(crawl_settings.model_dump())
+
+
+def not_checked(engine: sa.Engine, crawl_id: int) -> list[Rule]:
+    """Rules this crawl can't answer: the data they need wasn't collected (`collect.*` off)."""
+    collected = _collected(engine, crawl_id)
+    return [r for r in RULES if not all(collected.get(key) for key in r.requires)]
+
+
 def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | None = None) -> int:
-    """(Re)compute every rule for a crawl, replacing earlier findings. Returns the number of findings."""
+    """(Re)compute every rule for a crawl, replacing earlier findings. Returns the number of findings.
+
+    Rules whose data wasn't collected are skipped — `not_checked` lists them, so a report never says
+    "no problems" about something that wasn't looked at.
+    """
     thresholds = thresholds or ThresholdSettings()
+    skipped = {r.code for r in not_checked(engine, crawl_id)}
     with engine.begin() as conn:
         compute_indexability(conn, crawl_id)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         rows = [
             {"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}
             for r in RULES
+            if r.code not in skipped
             for url, detail in r.find(conn, crawl_id, thresholds)
         ]
         if rows:

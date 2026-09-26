@@ -28,6 +28,12 @@ def engine():
         yield engine
 
 
+def _short(url: str, base_url: str) -> str:
+    """Polygon paths as in polygon.py: "/a" for our own URLs, "LOCAL/x" for the localhost alias."""
+    local = "http://localhost:" + base_url.rsplit(":", 1)[1]
+    return url.removeprefix(base_url) if url.startswith(base_url) else url.replace(local, "LOCAL")
+
+
 def _pages(engine, crawl_id: int) -> dict[str, dict]:
     with engine.connect() as conn:
         rows = conn.execute(sa.select(storage.pages).where(storage.pages.c.crawl_id == crawl_id)).mappings()
@@ -47,8 +53,11 @@ def test_crawl_reaches_every_polygon_page(base_url: str, engine) -> None:
 
     pages = _pages(engine, result.crawl_id)
     assert result.status == "finished"
-    assert set(pages) == {base_url + path for path in polygon.REACHABLE}
-    assert result.pages == len(polygon.REACHABLE)
+    internal = {url for url, page in pages.items() if not page["external"]}
+    external = {_short(url, base_url) for url, page in pages.items() if page["external"]}
+    assert internal == {base_url + path for path in polygon.REACHABLE}
+    assert external == polygon.EXTERNAL  # checked, not crawled
+    assert result.pages == len(polygon.REACHABLE) + len(polygon.EXTERNAL)
 
 
 def test_crawl_records_status_redirects_titles_and_depth(base_url: str, engine) -> None:
@@ -85,7 +94,7 @@ def polygon_crawl(base_url: str):
 def test_rule_finds_exactly_its_trap(code: str, base_url: str, polygon_crawl) -> None:
     engine, crawl_id = polygon_crawl
     _, rows = issues.urls_with(engine, crawl_id, code)
-    assert {row["url"].removeprefix(base_url) for row in rows} == polygon.EXPECTED_ISSUES[code]
+    assert {_short(row["url"], base_url) for row in rows} == polygon.EXPECTED_ISSUES[code]
 
 
 def test_redirect_details_show_the_path(base_url: str, polygon_crawl) -> None:
@@ -114,7 +123,7 @@ def test_cli_crawl_then_crawls_list(base_url: str) -> None:
     assert code == 0
     assert crawl["ok"] is True
     assert crawl["project"] == base_url.removeprefix("http://")  # outside a project: the site's host
-    assert crawl["pages"] == len(polygon.REACHABLE)
+    assert crawl["pages"] == len(polygon.REACHABLE) + len(polygon.EXTERNAL)
 
     code, listing = _invoke_json("crawls", "list")
     assert code == 0
@@ -149,7 +158,7 @@ def test_crawls_list_empty() -> None:
 def test_parse_page_links_are_absolute_http_without_fragments() -> None:
     body = b'<a href="/x#top">x</a><a href="mailto:a@b">m</a><a href="https://other.example/y">y</a>'
     page = parse_page("https://site.example/dir/", 200, {"Content-Type": "text/html"}, body)
-    assert page.links == ["https://site.example/x", "https://other.example/y"]
+    assert [link.url for link in page.links] == ["https://site.example/x", "https://other.example/y"]
 
 
 def test_parse_page_skips_non_html_and_bare_redirects() -> None:

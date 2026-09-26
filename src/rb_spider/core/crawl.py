@@ -87,6 +87,8 @@ class Scope:
         self.include = [re.compile(p) for p in settings.include]
         self.exclude = [re.compile(p) for p in settings.exclude]
         self.max_url_length = settings.max_url_length
+        self.check_outside_folder = settings.check_outside_start_folder
+        self.check_external = True  # narrowed by collect.external_links.follow at the link level
 
     def internal(self, url: str) -> bool:
         """Part of the site (the start host, or any subdomain with `all_subdomains`)."""
@@ -96,14 +98,26 @@ class Scope:
             return hostname == self.domain or hostname.endswith(f".{self.domain}")
         return parts.netloc == self.host
 
-    def crawlable(self, url: str) -> bool:
-        if not self.internal(url) or len(url) > self.max_url_length:
-            return False
-        if self.folder and not urlsplit(url).path.startswith(self.folder):
-            return False
+    def role(self, url: str) -> str | None:
+        """ "crawl" — fetch and read it; "check" — fetch for the status code only; None — leave it alone.
+
+        include/exclude and the length cap apply to every URL (as in Screaming Frog); other sites and,
+        with `check_outside_start_folder`, the site outside the start folder are only checked.
+        """
+        if len(url) > self.max_url_length:
+            return None
         if self.include and not any(p.search(url) for p in self.include):
-            return False
-        return not any(p.search(url) for p in self.exclude)
+            return None
+        if any(p.search(url) for p in self.exclude):
+            return None
+        if not self.internal(url):
+            return "check" if self.check_external else None
+        if self.folder and not urlsplit(url).path.startswith(self.folder):
+            return "check" if self.check_outside_folder else None
+        return "crawl"
+
+    def crawlable(self, url: str) -> bool:
+        return self.role(url) == "crawl"
 
 
 class RobotsGate:
@@ -156,9 +170,10 @@ def requests_per_minute(settings: CrawlSettings, crawl_delay: int | None) -> flo
 async def _run(
     start_url: str,
     writer: storage.PageWriter,
-    settings: CrawlSettings,
+    all_settings: Settings,
     on_progress: Callable[[int], None] | None,
 ) -> None:
+    settings, collect = all_settings.crawl, all_settings.collect
     user_agent = settings.resolved_user_agent
     headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
     scope = Scope(start_url, settings)
@@ -209,45 +224,89 @@ async def _run(
     async def admit(urls: list[str], depth: int, *, start: bool = False) -> list[Request]:
         """URLs that pass scope, limits and robots.txt, as requests; disallowed ones go to the report.
 
-        The start URL skips the scope filters (include/exclude, folder) — it's what the user asked for —
-        but not robots.txt.
+        The start URL is always crawled — it's what the user asked for — but robots.txt still applies.
+        URLs to check (other sites, outside the start folder) carry `user_data["check"]`: status only.
         """
         if settings.max_depth is not None and depth > settings.max_depth:
             return []
-        new = [u for u in dict.fromkeys(urls) if u not in depth_of and (start or scope.crawlable(u))]
+        roles = {u: "crawl" if start else scope.role(u) for u in dict.fromkeys(urls) if u not in depth_of}
+        new = [u for u, role in roles.items() if role]
         if settings.max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests in flight
             new = new[: max(0, settings.max_urls - len(depth_of))]
         admitted = []
         for url in new:
             depth_of[url] = depth
-            if settings.robots != "ignore" and not await robots.allowed(url):
+            check = roles[url] == "check"
+            if not check and settings.robots != "ignore" and not await robots.allowed(url):
                 if settings.robots == "respect":  # never fetched, but part of the report
                     writer.add(Page.blocked_by_robots(url), depth=depth)
                     continue
                 reported_blocked.add(url)
-            admitted.append(Request.from_url(url, headers=headers or None))
+            admitted.append(Request.from_url(url, headers=headers or None, user_data={"check": check}))
         return admitted
+
+    def links_to_follow(page: Page) -> tuple[list[str], list[dict]]:
+        """What to enqueue from a crawled page, and the link rows to keep (collect.* decides both)."""
+        follow: list[str] = []
+        rows: list[dict] = []
+        counts = {"internal_outlinks": 0, "external_outlinks": 0, "internal_nofollow_outlinks": 0}
+        for link in page.links:
+            internal = scope.internal(link.url)
+            kind = collect.internal_links if internal else collect.external_links
+            if not link.nofollow:
+                counts["internal_outlinks" if internal else "external_outlinks"] += 1
+            elif internal:
+                counts["internal_nofollow_outlinks"] += 1
+            if kind.store:
+                rows.append({"source": page.url, "target": link.url, "kind": "hyperlink", "internal": internal,
+                             "anchor": link.anchor, "alt": link.alt, "rel": link.rel, "nofollow": link.nofollow})  # fmt: skip
+            nofollow_ok = settings.follow_internal_nofollow if internal else settings.follow_external_nofollow
+            if kind.follow and (not link.nofollow or nofollow_ok):
+                follow.append(link.url)
+        page.onpage |= counts
+        if settings.max_links_per_page is not None:
+            follow = follow[: settings.max_links_per_page]
+
+        extra = [  # (target, kind, collect option): redirects are always followed and kept with the site's links
+            (page.redirect_url, "redirect", collect.internal_links),
+            (page.refresh_url, "refresh", collect.meta_refresh),
+            (page.onpage.get("canonical_url"), "canonical", collect.canonicals),
+        ]
+        for target, kind, option in extra:
+            if not target or target == page.url:
+                continue
+            if option.store or kind == "redirect":
+                rows.append({"source": page.url, "target": target, "kind": kind, "internal": scope.internal(target)})
+            if option.follow or kind == "redirect":
+                follow.append(target)
+        return follow, rows
 
     @crawler.router.default_handler
     async def handle(ctx: HttpCrawlingContext) -> None:
         response = ctx.http_response
         body = await response.read()
+        check = bool(ctx.request.user_data.get("check"))
         page = parse_page(
             ctx.request.url,
             response.status_code,
             dict(response.headers),
-            body,
+            b"" if check else body,  # a checked URL is not read: status, headers, redirect target only
             content_exclude=settings.content_exclude,
         )
+        page.bytes = len(body)
+        page.onpage |= {"external": not scope.internal(page.url), "parsed": not check}
         if page.url in reported_blocked:
             page.blocked = "robots_txt"
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
-        writer.add(page, depth=depth, body=body)
+        if check:
+            writer.add(page, depth=depth)
+            progress()
+            return
 
-        links = page.links if settings.max_links_per_page is None else page.links[: settings.max_links_per_page]
-        # canonical targets too: "canonical points to a non-indexable URL" needs the target's own response
-        targets = [*links, page.redirect_url, page.refresh_url, page.onpage.get("canonical_url")]
-        if requests := await admit([u for u in targets if u], depth + 1):
+        follow, rows = links_to_follow(page)
+        writer.add(page, depth=depth, body=body)
+        writer.add_links(rows)
+        if requests := await admit(follow, depth + 1):
             await ctx.add_requests(requests)
         progress()
 
@@ -255,7 +314,9 @@ async def _run(
     async def failed(ctx, error: Exception) -> None:
         # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
         url = ctx.request.url
-        writer.add(Page.no_response(url, f"{type(error).__name__}: {error}"[:500]), depth=depth_of.get(url, 0))
+        page = Page.no_response(url, f"{type(error).__name__}: {error}"[:500])
+        page.onpage = {"external": not scope.internal(url), "parsed": False}
+        writer.add(page, depth=depth_of.get(url, 0))
         progress()
 
     try:
@@ -286,7 +347,7 @@ def crawl_site(
     started = time.monotonic()
     status = "failed"
     try:
-        asyncio.run(_run(start_url, writer, settings.crawl, on_progress))
+        asyncio.run(_run(start_url, writer, settings, on_progress))
         status = "finished"
     except KeyboardInterrupt:
         status = "interrupted"

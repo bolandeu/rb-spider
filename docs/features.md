@@ -60,9 +60,9 @@
 - [x] `MVP` **Internal Redirection (Meta Refresh)** — редирект через `<meta http-equiv="refresh">` на стороне браузера _(SF: Warning, Low)_
 - [x] `MVP` **Internal Redirection (HTTP Refresh)** — редирект через HTTP-заголовок `Refresh` _(SF: Warning, Low)_
 - [ ] `v2` **Internal Redirection (JavaScript)** — редирект, выполняемый JavaScript (нужен рендеринг и сравнение URL до/после) _(SF: Warning, Low)_
-- [ ] `MVP` **External No Response** (#9) — внешняя ссылка не ответила _(SF: Warning, Low)_
-- [ ] `MVP` **External Client Error (4XX)** (#9) — внешняя ссылка отдаёт 4xx (битая) _(SF: Warning, Low)_
-- [ ] `MVP` **External Server Error (5XX)** (#9) — внешняя ссылка отдаёт 5xx _(SF: Warning, Low)_
+- [x] `MVP` **External No Response** — внешняя ссылка не ответила _(SF: Warning, Low)_
+- [x] `MVP` **External Client Error (4XX)** — внешняя ссылка отдаёт 4xx (битая) _(SF: Warning, Low)_
+- [x] `MVP` **External Server Error (5XX)** — внешняя ссылка отдаёт 5xx _(SF: Warning, Low)_
 
 ### Security — безопасность
 
@@ -166,7 +166,7 @@
 - [x] `MVP` **Outside \<head\>** — `<link rel="canonical">` вне `<head>` _(SF: Issue, High)_
 - [x] `MVP` **Canonicalised** — canonical указывает на другой URL (страница «склеена» с другой) _(SF: Warning, High)_
 - [x] `MVP` **Missing** — canonical нет ни в HTML, ни в HTTP-заголовке _(SF: Warning, Medium)_
-- [ ] `MVP` **Unlinked** (#9) — URL найден только через canonical, обычными ссылками на него не ведут _(SF: Warning, Medium)_
+- [x] `MVP` **Unlinked** — URL найден только через canonical, обычными ссылками на него не ведут _(SF: Warning, Medium)_
 - [x] `MVP` **Multiple** — несколько canonical (пусть и одинаковых) _(SF: Warning, Low)_
 - [x] `MVP` **Canonical Is Relative** — canonical задан относительным, а не абсолютным URL _(SF: Warning, Low)_
 
@@ -229,18 +229,18 @@
 
 ### Links — ссылки
 
-- [ ] `MVP` **Outlinks To Localhost** — ссылки на `localhost` / `127.0.0.1` _(SF: Issue, High)_
-- [ ] `MVP` **Pages With Uncrawlable Internal Outlinks** — внутренние «ссылки» не в `<a href>` (onclick, `<span href>`, `javascript:`) _(SF: Warning, High)_
-- [ ] `MVP` **Pages Without Internal Outlinks** — на странице нет ни одной внутренней ссылки (тупик) _(SF: Warning, High)_
-- [ ] `MVP` **Non-Indexable Page Inlinks Only** — на индексируемую страницу ссылаются только неиндексируемые _(SF: Warning, High)_
-- [ ] `MVP` **Internal Nofollow Outlinks** — внутренние ссылки с `rel="nofollow"` _(SF: Warning, Low)_
-- [ ] `MVP` **Pages With High External Outlinks** — внешних follow-ссылок больше порога _(SF: Warning, Low)_
-- [ ] `MVP` **Pages With High Internal Outlinks** — внутренних follow-ссылок больше порога (по умолчанию 1000) _(SF: Warning, Low)_
-- [ ] `MVP` **Follow & Nofollow Internal Inlinks To Page** — на страницу ведут и follow-, и nofollow-ссылки _(SF: Warning, Low)_
-- [ ] `MVP` **Internal Nofollow Inlinks Only** — на страницу ведут только nofollow-ссылки _(SF: Warning, Low)_
-- [ ] `MVP` **Pages With High Crawl Depth** — глубина от стартовой страницы ≥ 4 кликов (порог настраивается) _(SF: Opportunity, Medium)_
-- [ ] `MVP` **Internal Outlinks With No Anchor Text** — внутренние ссылки без анкора (или картинка-ссылка без alt) _(SF: Opportunity, Low)_
-- [ ] `MVP` **Non-Descriptive Anchor Text In Internal Outlinks** — неинформативный анкор («подробнее», «click here»; список настраивается) _(SF: Opportunity, Low)_
+- [x] `MVP` **Outlinks To Localhost** — ссылки на `localhost` / `127.0.0.1` _(SF: Issue, High)_
+- [x] `MVP` **Pages With Uncrawlable Internal Outlinks** — внутренние «ссылки» не в `<a href>` (onclick, `<span href>`, `javascript:`) _(SF: Warning, High)_
+- [x] `MVP` **Pages Without Internal Outlinks** — на странице нет ни одной внутренней ссылки (тупик) _(SF: Warning, High)_
+- [x] `MVP` **Non-Indexable Page Inlinks Only** — на индексируемую страницу ссылаются только неиндексируемые _(SF: Warning, High)_
+- [x] `MVP` **Internal Nofollow Outlinks** — внутренние ссылки с `rel="nofollow"` _(SF: Warning, Low)_
+- [x] `MVP` **Pages With High External Outlinks** — внешних follow-ссылок больше порога _(SF: Warning, Low)_
+- [x] `MVP` **Pages With High Internal Outlinks** — внутренних follow-ссылок больше порога (по умолчанию 1000) _(SF: Warning, Low)_
+- [x] `MVP` **Follow & Nofollow Internal Inlinks To Page** — на страницу ведут и follow-, и nofollow-ссылки _(SF: Warning, Low)_
+- [x] `MVP` **Internal Nofollow Inlinks Only** — на страницу ведут только nofollow-ссылки _(SF: Warning, Low)_
+- [x] `MVP` **Pages With High Crawl Depth** — глубина от стартовой страницы ≥ 4 кликов (порог настраивается) _(SF: Opportunity, Medium)_
+- [x] `MVP` **Internal Outlinks With No Anchor Text** — внутренние ссылки без анкора (или картинка-ссылка без alt) _(SF: Opportunity, Low)_
+- [x] `MVP` **Non-Descriptive Anchor Text In Internal Outlinks** — неинформативный анкор («подробнее», «click here»; список настраивается) _(SF: Opportunity, Low)_
 
 ### AMP
 
@@ -495,7 +495,7 @@
 ### Нижние вкладки SF (детали выбранного URL) → `spider url` / `spider links`
 
 - [ ] `MVP` **URL Details** — сводка по URL: код, тип, размер, глубина, число ссылок
-- [ ] `MVP` **Inlinks / Outlinks** — ссылки с колонками: анкор, alt, follow, target, rel, код ответа цели
+- [x] `MVP` **Inlinks / Outlinks** — ссылки с колонками: анкор, alt, follow, target, rel, код ответа цели
 - [ ] `v2` **Link Path, Link Position, Link Origin** — XPath ссылки, её зона (nav, header, footer, content…), откуда взята (raw / rendered HTML)
 - [ ] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
 - [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
@@ -536,10 +536,10 @@
 - [ ] `MVP` **CSS** (#12) → `collect.css.follow` / `.store`
 - [ ] `MVP` **JavaScript** (#12) → `collect.js.follow` / `.store`
 - [ ] `MVP` **Media (video/audio)** (#12) → `collect.media.follow` / `.store`
-- [ ] `MVP` **Internal Hyperlinks** (#9) → `collect.internal_links.follow` / `.store`
-- [ ] `MVP` **External Links** (#9) → `collect.external_links.follow` / `.store`
-- [ ] `MVP` **Canonicals** (#9) (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
-- [ ] `MVP` **Meta Refresh** (#9) → `collect.meta_refresh.follow` / `.store`
+- [x] `MVP` **Internal Hyperlinks** → `collect.internal_links.follow` / `.store`
+- [x] `MVP` **External Links** → `collect.external_links.follow` / `.store`
+- [x] `MVP` **Canonicals** (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
+- [x] `MVP` **Meta Refresh** → `collect.meta_refresh.follow` / `.store`
 - [ ] `MVP` **iframes** (#12) → `collect.iframes.follow` / `.store`
 - [ ] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [ ] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
@@ -547,10 +547,10 @@
 - [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
 - [ ] `backlog` **AMP** → `collect.amp.follow` / `.store`
 - [ ] `skip` **SWF (Flash)**
-- [ ] `MVP` **Check Links Outside of Start Folder** (#9) — проверять, но не обходить ссылки за пределами стартовой папки → `scope.check_outside_start_folder`
+- [x] `MVP` **Check Links Outside of Start Folder** — проверять, но не обходить ссылки за пределами стартовой папки → `scope.check_outside_start_folder`
 - [x] `MVP` **Crawl Outside of Start Folder** → `scope.crawl_outside_start_folder`
 - [x] `MVP` **Crawl All Subdomains** — считать поддомены внутренними → `scope.all_subdomains`
-- [ ] `MVP` **Follow Internal / External "nofollow"** (#9) → `follow_nofollow.internal` / `follow_nofollow.external`
+- [x] `MVP` **Follow Internal / External "nofollow"** → `follow_nofollow.internal` / `follow_nofollow.external`
 - [ ] `v2` **Crawl Invalid Links** — пробовать синтаксически битые href → `scope.crawl_invalid_links`
 - [ ] `v2` **Crawl Linked XML Sitemaps** — найти sitemap через robots.txt или по списку → `sitemaps.discover`, `sitemaps.urls`
 
@@ -606,8 +606,8 @@
 - [x] `MVP` **Макс. длина H1 / H2** (70) → `thresholds.h1_chars`, `thresholds.h2_chars`
 - [ ] `MVP` **Макс. длина alt** (#12) (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
 - [x] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
-- [ ] `MVP` **High Crawl Depth, High Internal / External Outlinks** (#9) → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
-- [ ] `MVP` **Список неинформативных анкоров** (#9) → `thresholds.non_descriptive_anchors`
+- [x] `MVP` **High Crawl Depth, High Internal / External Outlinks** → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
+- [x] `MVP` **Список неинформативных анкоров** → `thresholds.non_descriptive_anchors`
 - [ ] `v2` **Макс. длина URL** (115) → `thresholds.url_chars`
 
 ### Контент (Config > Content)
@@ -702,7 +702,7 @@
 ### Экспорт
 
 - [ ] `MVP` **Экспорт вкладки / фильтра** → `spider urls --issue <code> --json`, `spider export --format csv|json`
-- [ ] `MVP` **Экспорт деталей URL** (inlinks, outlinks, картинки) → `spider links <url> --in|--out --json`
+- [x] `MVP` **Экспорт деталей URL** (inlinks, outlinks, картинки) → `spider links <url> --in|--out --json`
 - [ ] `MVP` **Форматы CSV и JSON**
 - [ ] `v2` **Формат Excel (.xlsx)**
 - [ ] `v2` **Multi-Export** — много вкладок и отчётов за один вызов, пресеты

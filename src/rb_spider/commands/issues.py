@@ -32,13 +32,23 @@ def issues(
       spider issues 12
       spider --json issues
 
-    JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls}]}`.
+    Проверки, чьи данные при обходе не собирались (выключен `collect.*`), не
+    считаются «пройденными», а перечислены отдельно — «не проверялось».
+
+    JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls}],
+    not_checked: [{code, name, requires}]}`; `requires` — ключи `collect.*`, которые
+    для проверки должны быть включены.
     Нет такого обхода или обходов нет вообще — код выхода 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         found = issues_service.summary(engine, crawl_id)
-    data = {"crawl_id": crawl_id, "issues": [vars(s) for s in found]}
+        skipped = issues_service.not_checked(engine, crawl_id)
+    data = {
+        "crawl_id": crawl_id,
+        "issues": [vars(s) for s in found],
+        "not_checked": [{"code": r.code, "name": r.name, "requires": list(r.requires)} for r in skipped],
+    }
     output.emit_success(ctx, data, render_human=output.human.issues_table)
 
 

@@ -29,6 +29,9 @@
 - robots.txt читается от имени User-Agent обхода (или `robots_user_agent`), режимы `respect` / `ignore` / `report`, соблюдается Crawl-delay.
 - `spider doctor` проверяет настройки и только те секреты, которые они требуют (пароль прокси).
 
+- Ссылки: граф ссылок (анкор, alt картинки-ссылки, rel, nofollow, тип — ссылка, canonical, редирект, refresh), `spider links <url> --in|--out`. Внешние ссылки и URL за пределами стартовой папки проверяются (код ответа), но не обходятся. Раздел `collect.*` (follow / store для внутренних и внешних ссылок, canonical, refresh), `crawl.follow_internal_nofollow`, `crawl.follow_external_nofollow`, `crawl.check_outside_start_folder`.
+- 16 проверок: 12 группы Links (ссылки на localhost, «нерабочие» ссылки, тупики, входящие только с неиндексируемых / только nofollow / и те и другие, много исходящих, глубина, без анкора, неинформативный анкор), внешние нет ответа / 4xx / 5xx, Canonicals: Unlinked. Пороги `thresholds.crawl_depth`, `internal_outlinks`, `external_outlinks`, `non_descriptive_anchors`.
+- Проверки, чьи данные не собирались (`collect.*` выключен), не считаются пройденными: `spider issues` перечисляет их в `not_checked`.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 
 ### Changed

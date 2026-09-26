@@ -46,6 +46,9 @@ def crawls_table(crawls: list[dict]) -> None:
 
 
 def issues_table(data: dict) -> None:
+    if data["not_checked"]:
+        names = ", ".join(r["name"] for r in data["not_checked"])
+        err_console.print(f"Не проверялось (данные не собирались при обходе): {names}")
     if not data["issues"]:
         console.print(f"Обход #{data['crawl_id']}: проблем не найдено.")
         return
@@ -121,3 +124,19 @@ def redirects_list(data: dict) -> None:
         steps = " → ".join(f"{hop['url']} [{hop['status_code'] or '—'} {hop['type']}]" for hop in r["hops"])
         end = "петля" if r["loop"] else f"{r['final_url']} [{r['final_status'] or 'не скачан'}]"
         console.print(f"{steps} → {end}", markup=False)
+
+
+def links_table(data: dict) -> None:
+    shown, total = len(data["links"]), data["total"]
+    arrow = "←" if data["direction"] == "in" else "→"
+    head = f"[bold]{data['url']}[/bold] {arrow} обход #{data['crawl_id']}: {total} ссылок"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    table = Table(box=None, pad_edge=False)
+    for column in ("код", "URL", "анкор", "тип"):
+        table.add_column(column)
+    for link in data["links"]:
+        other = link["source"] if data["direction"] == "in" else link["target"]
+        kind = link["kind"] + (" nofollow" if link["nofollow"] else "")
+        anchor = link["anchor"] or (f"[img alt: {link['alt']}]" if link["alt"] else "")
+        table.add_row(str(link["status_code"] if link["status_code"] is not None else "—"), other, anchor, kind)
+    console.print(table)

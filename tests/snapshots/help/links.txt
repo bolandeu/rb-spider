@@ -1,0 +1,34 @@
+                                                                                                    
+ Usage: spider links [OPTIONS] {url}                                                                
+                                                                                                    
+ Ссылки страницы: исходящие (`--out`) или входящие (`--in`), с анкором и кодом ответа.              
+                                                                                                    
+ Кроме обычных <a href> в списке canonical, редиректы и refresh (`kind`).                           
+ Хранятся, если `collect.internal_links.store` / `collect.external_links.store`                     
+ включены (по умолчанию да). Пример вопроса: «кто ссылается на эту 404» —                           
+ `spider links <404-url> --in`.                                                                     
+                                                                                                    
+ Примеры:                                                                                           
+   spider links https://example.com/                                                                
+   spider links https://example.com/old-page --in                                                   
+   spider --json links https://example.com/ --out --limit 500                                       
+                                                                                                    
+ JSON: `{crawl_id, url, direction, total, links: [{source, target, kind, anchor, alt,               
+ rel, nofollow, internal, status_code}]}`; `status_code` — код URL на другом конце                  
+ ссылки (null — не скачивался). `--in` и `--out` вместе — выход 2.                                  
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    url      <str>  URL страницы из обхода, например https://example.com/catalog/. [required]   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --crawl        <int>               Номер обхода; по умолчанию — последний.                       │
+│ --in                               Входящие ссылки: какие страницы ведут на URL.                 │
+│ --out                              Исходящие ссылки: куда ведёт URL (по умолчанию).              │
+│ --limit        <int range> [x>=1]  Сколько ссылок показать (всего — в поле total).               │
+│                                    [default: 100]                                                │
+│ --json                             Вывод в JSON для агентов и скриптов (одна строка-конверт      │
+│                                    `{ok, ...}`).                                                 │
+│ --quiet                            Печатать только основной результат, без пояснений.            │
+│ --help                             Show this message and exit.                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

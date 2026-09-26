@@ -26,8 +26,15 @@ def _links(links: tuple[str, ...]) -> str:
     return "".join(f'<a href="{href}">{href}</a>' for href in links)
 
 
-def _html(slug: str, *links: str, head: str | None = None, body: str | None = None, thin: bool = False) -> str:
-    """A clean page; `head` / `body` replace the default elements to build a trap, `thin` drops the text."""
+def _html(
+    slug: str, *links: str, head: str | None = None, body: str | None = None, thin: bool = False, dead_end: bool = False
+) -> str:
+    """A clean page; `head` / `body` replace the default elements to build a trap, `thin` drops the text.
+
+    A page without `links` links back home — a page with no internal links is a trap of its own (`dead_end`).
+    """
+    if not links and not dead_end:
+        links = ("/",)
     if head is None:
         head = f'<title>{TITLE.format(slug)}</title><meta name="description" content="{DESCRIPTION.format(slug)}">'
     if body is None:
@@ -133,6 +140,48 @@ CONTENT_TRAPS: dict[str, str] = {
     "/dup-1": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
     "/dup-2": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
 }  # fmt: skip
+# `{local}` becomes http://localhost:port — the polygon under another host name, i.e. an external site.
+LINK_TRAPS: dict[str, str] = {
+    "/l-external": _html("l-external", "{local}/missing", "{local}/error", "https://unreachable.invalid/", "/"),
+    "/l-uncrawlable": _html(
+        "l-uncrawlable",
+        "/",
+        body=f"<h1>{H1.format('l-uncrawlable')}</h1><h2>{H2.format('l-uncrawlable')}</h2>"
+        '<a href="javascript:void(0)">меню</a><span href="/a">псевдоссылка</span>',
+    ),
+    "/l-dead-end": _html("l-dead-end", dead_end=True),
+    "/l-noindex-hub": _html(
+        "l-noindex-hub", "/l-only-from-noindex", head=_head("l-noindex-hub", extra=_robots("noindex"))
+    ),
+    "/l-only-from-noindex": _html("l-only-from-noindex"),
+    "/l-nofollow": _html(
+        "l-nofollow",
+        "/",
+        body=f"<h1>{H1.format('l-nofollow')}</h1><h2>{H2.format('l-nofollow')}</h2>"
+        '<a href="/l-nofollow-only" rel="nofollow">только nofollow</a><a href="/l-mixed" rel="nofollow">смешанная</a>',
+    ),
+    "/l-mixed": _html("l-mixed"),  # also linked (follow) from home
+    "/l-many-external": _html("l-many-external", *(f"https://ext-{i}.invalid/" for i in range(11)), "/"),
+    "/l-many-internal": _html("l-many-internal", *(["/a"] * 1001)),
+    "/deep1": _html("deep1", "/deep2"),
+    "/deep2": _html("deep2", "/deep3"),
+    "/deep3": _html("deep3", "/deep4"),
+    "/deep4": _html("deep4"),
+    "/l-no-anchor": _html(
+        "l-no-anchor",
+        "/",
+        body=f"<h1>{H1.format('l-no-anchor')}</h1><h2>{H2.format('l-no-anchor')}</h2>"
+        '<a href="/a"></a><a href="/c"><img src="/pic.png"></a>',
+    ),
+    "/l-vague": _html(
+        "l-vague", "/", body=f'<h1>{H1.format("l-vague")}</h1><h2>{H2.format("l-vague")}</h2><a href="/a">Подробнее</a>'
+    ),
+    "/c-to-unlinked": _html("c-to-unlinked", head=_head("c-to-unlinked", extra=_canonical("{base}/c-unlinked"))),
+    "/c-unlinked": _html("c-unlinked"),  # reached only through the canonical above
+}
+LINKED_FROM_HOME = [
+    p for p in LINK_TRAPS if p not in {"/l-only-from-noindex", "/deep2", "/deep3", "/deep4", "/c-unlinked"}
+]
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -162,6 +211,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *CONTENT_TRAPS,
             "/g-blocked",
             "/shop/",
+            *LINKED_FROM_HOME,
+            "/l-mixed",
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -196,6 +247,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in ONPAGE_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in DIRECTIVE_CANONICAL_TRAPS.items()},
     **{path: (200, {}, html) for path, html in CONTENT_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).
@@ -223,6 +275,16 @@ REACHABLE = {
     "/g-blocked",
     "/shop/",
     "/shop/item",
+    *LINK_TRAPS,
+}
+
+# Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
+EXTERNAL = {
+    "https://external.example/",
+    "https://unreachable.invalid/",
+    *(f"https://ext-{i}.invalid/" for i in range(11)),
+    "LOCAL/missing",
+    "LOCAL/error",
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -273,14 +335,20 @@ EXPECTED_ISSUES = {
     "canonical_invalid_attribute": {"/c-invalid"},
     "canonical_fragment": {"/c-fragment"},
     "canonical_outside_head": {"/c-outside"},
-    "canonical_canonicalised": {"/c-canonicalised", "/c-nonindexable", "/c-header-conflict", "/dup-2"},
+    "canonical_canonicalised": {
+        "/c-canonicalised",
+        "/c-nonindexable",
+        "/c-header-conflict",
+        "/dup-2",
+        "/c-to-unlinked",
+    },
     "canonical_missing": {"/c-missing"},
     "canonical_multiple": {"/c-conflict", "/c-multiple", "/c-header-conflict"},
     "canonical_relative": {"/c-relative"},
     # Directives
     "directives_outside_head": {"/r-outside"},
     "directives_noimageindex": {"/r-noimageindex"},
-    "directives_noindex": {"/r-noindex", "/r-noindex-header"},
+    "directives_noindex": {"/r-noindex", "/r-noindex-header", "/l-noindex-hub"},
     "directives_nofollow": {"/r-nofollow"},
     "directives_none": {"/r-none"},
     "directives_unavailable_after": {"/r-unavailable"},
@@ -292,6 +360,24 @@ EXPECTED_ISSUES = {
     "content_exact_duplicates": {"/dup-1", "/dup-2"},
     "content_lorem_ipsum": {"/lorem"},
     "content_low_content": {"/thin"},
+    # Links
+    "links_outlinks_to_localhost": {"/l-external"},
+    "links_uncrawlable_outlinks": {"/l-uncrawlable"},
+    "links_no_internal_outlinks": {"/l-dead-end"},
+    "links_non_indexable_inlinks_only": {"/l-only-from-noindex"},
+    "links_internal_nofollow_outlinks": {"/l-nofollow"},
+    "links_high_external_outlinks": {"/l-many-external"},
+    "links_high_internal_outlinks": {"/l-many-internal"},
+    "links_follow_and_nofollow_inlinks": {"/l-mixed"},
+    "links_nofollow_inlinks_only": {"/l-nofollow-only"},
+    "links_high_crawl_depth": {"/deep4"},
+    "links_no_anchor_text": {"/l-no-anchor"},
+    "links_non_descriptive_anchor": {"/l-vague"},
+    "canonical_unlinked": {"/c-unlinked"},
+    # external URLs
+    "external_no_response": {u for u in EXTERNAL if not u.startswith("LOCAL")},
+    "external_client_error": {"LOCAL/missing"},
+    "external_server_error": {"LOCAL/error"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
@@ -310,10 +396,11 @@ async def _handle(request: web.Request) -> web.StreamResponse:
         return web.Response()
     status, headers, body = ROUTES.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
     base = f"http://{request.host}"
+    local = f"http://localhost:{request.host.rsplit(':', 1)[1]}"
     if status == 200 and "<head>" in body and 'rel="canonical"' not in body and request.path not in NO_CANONICAL:
         body = body.replace("<head>", f"<head>{_canonical(base + request.path_qs)}", 1)  # clean pages: self
     headers = {"Content-Type": "text/html; charset=utf-8", **{k: v.replace("{base}", base) for k, v in headers.items()}}
-    return web.Response(status=status, headers=headers, text=body.replace("{base}", base))
+    return web.Response(status=status, headers=headers, text=body.replace("{base}", base).replace("{local}", local))
 
 
 @contextmanager

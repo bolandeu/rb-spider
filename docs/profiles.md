@@ -46,6 +46,9 @@ concurrency = 10
 | `crawl.exclude` | `list[str]` | `[]` | Не обходить URL, где находится любое из этих регулярных выражений (важнее include). |
 | `crawl.all_subdomains` | `bool` | `false` | Считать поддомены (blog.site.ru и т.п.) частью сайта и обходить их. |
 | `crawl.stay_in_start_folder` | `bool` | `false` | Обходить только внутри папки стартового URL (старт /blog/ — только /blog/…). |
+| `crawl.check_outside_start_folder` | `bool` | `true` | С stay_in_start_folder: ссылки за пределами папки проверять (код ответа), но не обходить. |
+| `crawl.follow_internal_nofollow` | `bool` | `false` | Обходить внутренние ссылки с rel=nofollow. |
+| `crawl.follow_external_nofollow` | `bool` | `false` | Проверять внешние ссылки с rel=nofollow. |
 | `crawl.content_exclude` | `list[str]` | `["nav", "footer"]` | CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»). |
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
@@ -56,6 +59,14 @@ concurrency = 10
 | `crawl.robots_user_agent` | `str \| None` | — | От чьего имени читать robots.txt; не задано — от User-Agent запросов. |
 | `crawl.proxy_urls` | `list[str]` | `[]` | Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. |
 | `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
+| `collect.internal_links.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.internal_links.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.external_links.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.external_links.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.canonicals.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.canonicals.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.meta_refresh.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.meta_refresh.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 | `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
 | `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |
@@ -64,6 +75,10 @@ concurrency = 10
 | `thresholds.h1_max_chars` | `int` | `70` | H1 длиннее — «H1: Over … Characters». |
 | `thresholds.h2_max_chars` | `int` | `70` | H2 длиннее — «H2: Over … Characters». |
 | `thresholds.low_content_words` | `int` | `200` | Меньше слов в видимом тексте — «Content: Low Content Pages». |
+| `thresholds.crawl_depth` | `int` | `4` | Страницы на такой глубине и глубже — «Links: High Crawl Depth». |
+| `thresholds.internal_outlinks` | `int` | `1000` | Больше внутренних follow-ссылок — «Links: High Internal Outlinks». |
+| `thresholds.external_outlinks` | `int` | `10` | Больше внешних follow-ссылок — «Links: High External Outlinks». |
+| `thresholds.non_descriptive_anchors` | `list[str]` | `["click here", "here", "read more", "more", "learn more", "link", "подробнее", "читать далее", "далее", "здесь", "тут", "ссылка", "перейти", "узнать больше"]` | Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text». |
 <!-- keys:end -->
 
 ## Рецепты

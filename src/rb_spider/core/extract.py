@@ -20,6 +20,15 @@ _REFRESH_URL = re.compile(r"""^\s*\d*(?:\.\d+)?\s*[;,]\s*url\s*=\s*['"]?([^'"]+)
 
 
 @dataclass
+class Link:
+    url: str  # absolute http(s), fragment stripped
+    anchor: str = ""  # link text, whitespace collapsed
+    alt: str | None = None  # alt of an image inside the link (image links)
+    rel: str | None = None  # raw rel attribute, lower-case
+    nofollow: bool = False
+
+
+@dataclass
 class Page:
     url: str
     status_code: int
@@ -27,7 +36,7 @@ class Page:
     bytes: int
     redirect_url: str | None = None
     title: str | None = None
-    links: list[str] = field(default_factory=list)  # absolute http(s) URLs, fragments stripped, in page order
+    links: list[Link] = field(default_factory=list)  # <a href> to http(s) URLs, in page order
     refresh_url: str | None = None  # client-side redirect target (meta / HTTP Refresh)
     refresh_kind: str | None = None  # "meta" | "http"
     error: str | None = None  # no response: why (status_code is 0)
@@ -187,6 +196,43 @@ def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str]) -> dic
     }
 
 
+def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
+    links = []
+    for anchor in tree.css("a[href]"):
+        target = _absolute(url, anchor.attributes.get("href") or "")
+        if target is None:
+            continue
+        rel = (anchor.attributes.get("rel") or "").lower() or None
+        image = anchor.css_first("img")
+        links.append(
+            Link(
+                url=target,
+                anchor=_text(anchor),
+                alt=(image.attributes.get("alt") or "").strip() if image else None,
+                rel=rel,
+                nofollow="nofollow" in (rel or "").split(),
+            )
+        )
+    return links
+
+
+_JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
+
+
+def _uncrawlable_links(tree: LexborHTMLParser) -> int:
+    """Link-like elements a crawler can't follow: `javascript:` hrefs, href on non-links, onclick navigation."""
+    count = 0
+    for node in tree.css("[href]"):
+        href = (node.attributes.get("href") or "").strip().lower()
+        if node.tag == "a":
+            count += href.startswith("javascript:")
+        elif node.tag not in ("link", "base", "area"):
+            count += 1
+    for node in tree.css("[onclick]"):
+        count += bool(_JS_NAVIGATION.search(node.attributes.get("onclick") or ""))
+    return count
+
+
 def parse_page(
     url: str,
     status_code: int,
@@ -221,9 +267,7 @@ def parse_page(
                 if refresh := _refresh_target(url, meta.attributes.get("content")):
                     page.refresh_url, page.refresh_kind = refresh, "meta"
                 break
-    for anchor in tree.css("a[href]"):
-        link = _absolute(url, anchor.attributes.get("href") or "")
-        if link:
-            page.links.append(link)
+    page.links = _links(url, tree)
+    page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
     page.onpage |= _content(tree, body, content_exclude)
     return page

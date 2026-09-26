@@ -83,6 +83,11 @@ class CrawlSettings(BaseModel):
     stay_in_start_folder: bool = Field(
         False, description="Обходить только внутри папки стартового URL (старт /blog/ — только /blog/…)."
     )
+    check_outside_start_folder: bool = Field(
+        True, description="С stay_in_start_folder: ссылки за пределами папки проверять (код ответа), но не обходить."
+    )
+    follow_internal_nofollow: bool = Field(False, description="Обходить внутренние ссылки с rel=nofollow.")
+    follow_external_nofollow: bool = Field(False, description="Проверять внешние ссылки с rel=nofollow.")
     content_exclude: list[str] = Field(
         ["nav", "footer"],
         description="CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»).",
@@ -147,6 +152,32 @@ class CrawlSettings(BaseModel):
         return USER_AGENT_PRESETS.get(self.user_agent or "", self.user_agent)
 
 
+class FollowStore(BaseModel):
+    """One kind of link: whether to follow it (crawl / check the target) and whether to keep the link rows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    follow: bool = Field(True, description="Переходить по таким ссылкам (обходить или проверять цель).")
+    store: bool = Field(True, description="Хранить сами ссылки в базе (для `spider links` и проверок ссылок).")
+
+
+class CollectSettings(BaseModel):
+    """What to follow and what to keep — Screaming Frog's Spider > Crawl checkboxes (Crawl / Store)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    internal_links: FollowStore = Field(default_factory=FollowStore, description="Внутренние ссылки <a href>.")
+    external_links: FollowStore = Field(
+        default_factory=FollowStore, description="Внешние ссылки: follow — проверить код ответа (без обхода)."
+    )
+    canonicals: FollowStore = Field(
+        default_factory=FollowStore, description="Canonical: follow — обходить цели canonical."
+    )
+    meta_refresh: FollowStore = Field(
+        default_factory=FollowStore, description="Meta / HTTP Refresh: follow — обходить цели refresh."
+    )
+
+
 class ThresholdSettings(BaseModel):
     """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
 
@@ -168,6 +199,18 @@ class ThresholdSettings(BaseModel):
     low_content_words: int = Field(
         200, ge=1, description="Меньше слов в видимом тексте — «Content: Low Content Pages»."
     )
+    crawl_depth: int = Field(4, ge=1, description="Страницы на такой глубине и глубже — «Links: High Crawl Depth».")
+    internal_outlinks: int = Field(
+        1000, ge=1, description="Больше внутренних follow-ссылок — «Links: High Internal Outlinks»."
+    )
+    external_outlinks: int = Field(
+        10, ge=1, description="Больше внешних follow-ссылок — «Links: High External Outlinks»."
+    )
+    non_descriptive_anchors: list[str] = Field(
+        ["click here", "here", "read more", "more", "learn more", "link",
+         "подробнее", "читать далее", "далее", "здесь", "тут", "ссылка", "перейти", "узнать больше"],
+        description="Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text».",
+    )  # fmt: skip
 
 
 class Settings(BaseModel):
@@ -176,6 +219,9 @@ class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     crawl: CrawlSettings = Field(default_factory=CrawlSettings, description="Как обходить сайт.")
+    collect: CollectSettings = Field(
+        default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
+    )
     thresholds: ThresholdSettings = Field(
         default_factory=ThresholdSettings, description="Пороги проверок; пересчёт без обхода — `spider analyze`."
     )
@@ -217,11 +263,21 @@ def unflatten(flat: dict[str, Any]) -> dict:
     return nested
 
 
+def _leaf_fields(model: type[BaseModel], prefix: str = "") -> list[tuple[str, Any]]:
+    """(dotted key, field) for every leaf setting; nested models (`collect.internal_links`) are walked into."""
+    rows = []
+    for key, field in model.model_fields.items():
+        annotation = field.annotation
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            rows += _leaf_fields(annotation, f"{prefix}{key}.")
+        else:
+            rows.append((f"{prefix}{key}", field))
+    return rows
+
+
 def settings_keys() -> list[str]:
-    """Every settable key, `section.key`."""
-    return [
-        f"{section}.{key}" for section in SECTIONS for key in Settings.model_fields[section].annotation.model_fields
-    ]  # type: ignore[union-attr]
+    """Every settable key, dotted: `crawl.max_urls`, `collect.internal_links.follow`."""
+    return [dotted for dotted, _ in _leaf_fields(Settings)]
 
 
 # --- layer sources ----------------------------------------------------------------------
@@ -379,12 +435,17 @@ def resolve(
 
 
 def _field_rows() -> list[tuple[str, Any]]:
-    rows = []
-    for section in SECTIONS:
-        model = Settings.model_fields[section].annotation
-        for key, field in model.model_fields.items():  # type: ignore[union-attr]
-            rows.append((f"{section}.{key}", field))
-    return rows
+    return _leaf_fields(Settings)
+
+
+def _table_description(table: str) -> str | None:
+    """The description of a nested table (`collect.internal_links`) — its field in the parent model."""
+    model: Any = Settings
+    field = None
+    for part in table.split("."):
+        field = model.model_fields[part]
+        model = field.annotation
+    return field.description if field else None
 
 
 def _toml_literal(value: Any) -> str:
@@ -412,10 +473,10 @@ def profile_template(name: str, extends: str | None) -> str:
     ]
     current = None
     for dotted, field in _field_rows():
-        section, key = dotted.split(".", 1)
-        if section != current:
-            lines += ["", f"[{section}]"]
-            current = section
+        table, key = dotted.rsplit(".", 1)
+        if table != current:
+            lines += ["", f"# {_table_description(table)}", f"[{table}]"]
+            current = table
         value = field.default if field.default is not None else (field.examples or [None])[0]
         lines.append(f"# {field.description}")
         lines.append(f"# {key} = {_toml_literal(value)}" if value is not None else f"# {key} =")

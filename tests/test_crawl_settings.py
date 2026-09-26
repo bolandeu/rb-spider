@@ -54,7 +54,12 @@ def test_max_links_per_page(base_url: str) -> None:
 
 
 def test_stay_in_start_folder(base_url: str) -> None:
-    assert set(_crawl(base_url, "/shop/", stay_in_start_folder=True)) == {"/shop/", "/shop/item"}
+    pages = _crawl(base_url, "/shop/", stay_in_start_folder=True)
+    assert {path for path, p in pages.items() if p["parsed"]} == {"/shop/", "/shop/item"}
+    assert pages["/a"]["parsed"] is False  # outside the folder: checked (status), not crawled
+    assert pages["/a"]["status_code"] == 200
+    folder_only = _crawl(base_url, "/shop/", stay_in_start_folder=True, check_outside_start_folder=False)
+    assert set(folder_only) == {"/shop/", "/shop/item"}
     assert "/a" in _crawl(base_url, "/shop/")  # by default the whole site
 
 
