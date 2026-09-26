@@ -181,3 +181,62 @@ def detached(data: dict) -> None:
     console.print(f"Обход #{data['crawl_id']} запущен в фоне (pid {data['pid']}).")
     console.print(f"  прогресс: spider status {data['crawl_id']}")
     console.print(f"  лог: {data['log']}")
+
+
+def _mb(size: int) -> str:
+    return f"{size / 2**20:.1f} МБ"
+
+
+def deletion(data: dict) -> None:
+    what = ", ".join(f"#{c['id']} {c['project']}" for c in data["crawls"]) or "нечего удалять"
+    if data["dry_run"]:
+        console.print(f"Будут удалены обходы ({len(data['crawls'])}, {data['pages']} стр.): {what}")
+        return
+    console.print(f"Удалены обходы ({len(data['crawls'])}, {data['pages']} стр.): {what}")
+    if data["crawls"]:
+        console.print("  место на диске вернёт `spider db vacuum`")
+
+
+def projects_table(data: dict) -> None:
+    if not data["projects"]:
+        console.print("Проектов пока нет — `spider crawl <url>`.")
+        return
+    table = Table(box=None, pad_edge=False)
+    for column in ("проект", "обходов", "страниц", "последний обход"):
+        table.add_column(column, justify="right" if column in ("обходов", "страниц") else "left")
+    for p in data["projects"]:
+        last = p["last_crawl_at"][:16].replace("T", " ") if p["last_crawl_at"] else "—"
+        table.add_row(p["name"], str(p["crawls"]), str(p["pages"]), last)
+    console.print(table)
+
+
+def project_deletion(data: dict) -> None:
+    verb = "Будет удалён" if data["dry_run"] else "Удалён"
+    console.print(f"{verb} проект {data['project']}: обходов {data['crawls']}, страниц {data['pages']}.")
+
+
+def db_info(data: dict) -> None:
+    schema = data["schema_revision"] or "пусто"
+    if data["pending_migrations"]:
+        schema += f" (ждут миграции: {', '.join(data['pending_migrations'])} — `spider db migrate`)"
+    key_values(
+        "База обходов",
+        {"файл": data["path"], "размер": _mb(data["size_bytes"]),
+         "свободно внутри": f"{_mb(data['free_bytes'])} (вернёт `spider db vacuum`)",
+         "HTML": f"{data['html_path']} ({_mb(data['html_size_bytes'])})" if data["html_path"] else "—",
+         "схема": schema, "SQLite": data["sqlite_version"],
+         "проектов / обходов": f"{data['projects']} / {data['crawls']}",
+         "страниц / ссылок / находок": f"{data['pages']} / {data['links']} / {data['issues']}"},
+    )  # fmt: skip
+
+
+def migrations(data: dict) -> None:
+    if not data["migrations"]:
+        console.print(f"Схема актуальна ({data['schema_head']}).")
+        return
+    verb = "Будут применены" if data["dry_run"] else "Применены"
+    console.print(f"{verb} миграции: {', '.join(data['migrations'])}")
+
+
+def vacuumed(data: dict) -> None:
+    console.print(f"Сжато: {_mb(data['before_bytes'])} → {_mb(data['after_bytes'])}")

@@ -38,7 +38,11 @@ JsonOption = typer.Option(
 QuietOption = typer.Option(False, "--quiet", help="Печатать только основной результат, без пояснений.")
 DryRunOption = typer.Option(False, "--dry-run", help="Показать, что будет сделано, ничего не меняя.")
 ConfirmOption = typer.Option(
-    False, "--confirm", help="Подтвердить необратимое действие (обязательно вместе с --non-interactive)."
+    False,
+    "--yes",
+    "-y",
+    "--confirm",
+    help="Не спрашивать подтверждения необратимого действия (для агентов; обязательно с --non-interactive).",
 )
 VerboseOption = typer.Option(False, "--verbose", help="Подробная диагностика в stderr.")
 NonInteractiveOption = typer.Option(
@@ -134,7 +138,7 @@ def require_confirmation(ctx: typer.Context, description: str, confirm: bool) ->
 
     Call this immediately before the action itself (never before a
     --dry-run preview — dry-run should short-circuit earlier and skip this
-    entirely). `--confirm` skips the prompt for scripts/agents that already
+    entirely). `--yes` (`--confirm`) skips the prompt for scripts/agents that already
     got human sign-off; `--non-interactive` without `--confirm` fails
     loudly instead of hanging on a prompt an agent can't answer. Declining
     the prompt raises `Aborted`, so it's reported like any other CliError
@@ -143,7 +147,7 @@ def require_confirmation(ctx: typer.Context, description: str, confirm: bool) ->
     if confirm:
         return
     if ctx.obj.get("non_interactive"):
-        raise InvalidArguments(f"{description} requires --confirm when --non-interactive is set.")
+        raise InvalidArguments(f"{description} requires --yes when --non-interactive is set.")
     if not typer.confirm(f"{description}. Continue?"):
         raise Aborted(description)
 

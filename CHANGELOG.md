@@ -36,6 +36,7 @@
 - 7 проверок: картинки без alt / с пустым alt / с длинным alt / тяжелее `thresholds.image_kb` / без width и height (по URL картинки); Internal и External Blocked Resource.
 - Большие обходы: очередь в памяти + таблица `frontier` в базе (отметка «обработан» пишется одной транзакцией со страницей), запись раз в 500 страниц или 2 с. `spider crawls resume` продолжает обход после Ctrl-C, падения или `kill -9` без потерь и повторных скачиваний; `spider crawl --detach` — обход в фоне (лог рядом с базой); `spider status` — прогресс (сохранено, в очереди, жив ли процесс), проект не нужен.
 - Режим списка: `spider crawl --list urls.txt` (или `--list -` из stdin, ключ `crawl.mode = list`) — аудит заданных URL без перехода по ссылкам, редиректы (3xx, meta и HTTP Refresh) проходятся до конца; «свой сайт» для проверок — хосты из списка. Результат — обычный обход: все команды анализа, `--detach` и `crawls resume` работают.
+- Управление данными: `spider crawls delete <id>…`, `spider crawls prune --keep-last N | --older-than 90d` (по проектам, `--project-name`), `spider projects list | delete`, `spider db info | migrate | vacuum`. Удаление спрашивает подтверждение, `--yes` (`-y`, `--confirm`) — без вопроса, `--dry-run` — показать, что удалится; идущий обход не удаляется.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 
 ### Changed

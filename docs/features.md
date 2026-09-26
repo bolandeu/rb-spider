@@ -666,7 +666,7 @@
 ### Системные настройки SF
 
 - [ ] `skip` **Storage Mode: Database / Memory** — по прототипу #3 не нужен: результаты всегда на диске, скорость задаёт очередь (spec, раздел 2)
-- [ ] `MVP` **Crawl Retention** — автоудаление старых обходов → `spider crawls prune` (см. раздел G)
+- [x] `MVP` **Crawl Retention** — автоудаление старых обходов → `spider crawls prune` (см. раздел G)
 - [ ] `skip` **Memory Allocation** (JVM heap) — не нужен в Python
 - [ ] `skip` **User Interface, Language, Notifications, Auto Updates** — только для GUI
 - [ ] `backlog` **MCP Server** — краулер как MCP-сервер для ИИ-агентов
@@ -798,9 +798,9 @@
 - [ ] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
 - [ ] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
 - [ ] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода
-- [ ] `MVP` **`spider crawls prune --keep-last N | --older-than 90d`** — чистка старых обходов
-- [ ] `MVP` **`spider crawls delete <id>…`, `spider projects delete`** — с подтверждением, `--yes`, `--dry-run`
-- [ ] `MVP` **`spider db info | migrate | vacuum`** — состояние БД, миграции Alembic, сжатие файла
+- [x] `MVP` **`spider crawls prune --keep-last N | --older-than 90d`** — чистка старых обходов
+- [x] `MVP` **`spider crawls delete <id>…`, `spider projects delete`** — с подтверждением, `--yes`, `--dry-run`
+- [x] `MVP` **`spider db info | migrate | vacuum`** — состояние БД, миграции Alembic, сжатие файла
 - [x] `MVP` **`--detach`** — обход фоновым процессом, статус в БД
 - [x] `MVP` **Своя очередь обхода** — в памяти + фильтр виденных URL, снимок в SQLite в одной транзакции с результатами; возобновление без потерь
 - [x] `MVP` **`--store-html`** — хранить HTML (zstd) в отдельном SQLite-файле; по умолчанию только md5

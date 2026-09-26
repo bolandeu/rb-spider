@@ -4,9 +4,9 @@ import typer
 
 from .. import output
 from ..core import crawl as crawl_service
-from ..core import storage
+from ..core import maintenance, storage
 
-app = output.group("Обходы в базе: список, просмотр, продолжение прерванного (дальше — удаление, чистка).")
+app = output.group("Обходы в базе: список, просмотр, продолжение прерванного, удаление и чистка старых.")
 
 
 @app.command("list")
@@ -104,3 +104,83 @@ def resume(
         crawl_service.ensure_resumable(engine, crawl_id)
         result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
+
+
+def _deletion(ctx: typer.Context, engine, rows: list[storage.CrawlRow], confirm: bool) -> dict:
+    """Delete (or, under --dry-run, only list) crawls; the JSON both commands print."""
+    data = {"crawls": [{"id": r.id, "project": r.project, "start_url": r.start_url, "pages": r.pages} for r in rows],
+            "pages": sum(r.pages for r in rows), "dry_run": output.is_dry_run(ctx)}  # fmt: skip
+    if rows and not data["dry_run"]:
+        output.require_confirmation(ctx, f"Delete {len(rows)} crawl(s) with {data['pages']} pages", confirm)
+        maintenance.delete_crawls(engine, rows)
+    return data
+
+
+@app.command("delete")
+@output.guard
+def delete(
+    ctx: typer.Context,
+    crawl_ids: list[int] = typer.Argument(..., help="Номера обходов (`spider crawls list`)."),
+    dry_run: bool = output.DryRunOption,
+    confirm: bool = output.ConfirmOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+    non_interactive: bool = output.NonInteractiveOption,
+) -> None:
+    """Удалить обходы со всеми их данными: страницами, ссылками, находками, HTML.
+
+    Необратимо: спрашивает подтверждение; `--yes` — без вопроса (агентам),
+    `--dry-run` — только показать, что удалится. Идущий обход не удаляется.
+    Место внутри файла базы сразу переиспользуется следующими обходами, а на
+    диск его возвращает `spider db vacuum`. Чистка по возрасту и количеству —
+    `spider crawls prune`, проект целиком — `spider projects delete`.
+
+    Примеры:
+      spider crawls delete 3 4 --dry-run
+      spider crawls delete 3
+      spider --json crawls delete 3 --yes
+
+    JSON: `{crawls: [{id, project, start_url, pages}], pages, dry_run}`. Нет
+    такого обхода или он ещё идёт — выход 2; отказ в подтверждении — выход 1.
+    """
+    with storage.database() as engine:
+        data = _deletion(ctx, engine, maintenance.select_crawls(engine, crawl_ids), confirm)
+    output.emit_success(ctx, data, render_human=output.human.deletion)
+
+
+@app.command("prune")
+@output.guard
+def prune(
+    ctx: typer.Context,
+    keep_last: int | None = typer.Option(
+        None, "--keep-last", min=0, help="Оставить столько последних обходов каждого проекта, остальные удалить."
+    ),
+    older_than: str | None = typer.Option(None, "--older-than", help="Удалить обходы старше этого: 90d, 12h, 2w, 1y."),
+    project: str | None = typer.Option(
+        None, "--project-name", help="Только обходы этого проекта; по умолчанию — всех."
+    ),
+    dry_run: bool = output.DryRunOption,
+    confirm: bool = output.ConfirmOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+    non_interactive: bool = output.NonInteractiveOption,
+) -> None:
+    """Удалить старые обходы: сверх N последних в каждом проекте и/или старше срока.
+
+    Чтобы база не росла бесконечно (обход 100k URL — около 800 МБ). С обоими
+    условиями удаляется обход, который и старше срока, и не входит в N последних
+    своего проекта. Подтверждение, `--yes` и `--dry-run` — как у `crawls delete`.
+
+    Примеры:
+      spider crawls prune --keep-last 3 --dry-run
+      spider crawls prune --older-than 90d
+      spider --json crawls prune --keep-last 5 --older-than 30d --project-name shop --yes
+
+    JSON — как у `crawls delete`: `{crawls: [{id, project, start_url, pages}], pages,
+    dry_run}`. Не задано ни одно условие или неверный срок — выход 2.
+    """
+    age = maintenance.parse_age(older_than) if older_than is not None else None
+    with storage.database() as engine:
+        rows = maintenance.select_prune(engine, keep_last=keep_last, older_than=age, project=project)
+        data = _deletion(ctx, engine, rows, confirm)
+    output.emit_success(ctx, data, render_human=output.human.deletion)

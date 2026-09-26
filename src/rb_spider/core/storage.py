@@ -185,24 +185,33 @@ def _pragmas(dbapi_connection, _record) -> None:
     dbapi_connection.create_function("casefold", 1, lambda s: s.casefold() if s else s, deterministic=True)
 
 
-def open_db(path: Path | None = None) -> sa.Engine:
-    """Open (creating if needed) the crawl database and bring its schema up to date."""
+def alembic_config() -> Config:
+    config = Config()
+    config.set_main_option("script_location", "rb_spider:migrations")
+    return config
+
+
+def open_db(path: Path | None = None, *, migrate: bool = True) -> sa.Engine:
+    """Open (creating if needed) the crawl database and bring its schema up to date.
+
+    `migrate=False` leaves the schema as it is — for `spider db info|migrate`, which report it.
+    """
     path = path or db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     engine = sa.create_engine(f"sqlite:///{path}")
     event.listen(engine, "connect", _pragmas)
-    config = Config()
-    config.set_main_option("script_location", "rb_spider:migrations")
-    with engine.begin() as connection:
-        config.attributes["connection"] = connection
-        command.upgrade(config, "head")
+    if migrate:
+        config = alembic_config()
+        with engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
     return engine
 
 
 @contextmanager
-def database(path: Path | None = None) -> Iterator[sa.Engine]:
+def database(path: Path | None = None, *, migrate: bool = True) -> Iterator[sa.Engine]:
     """`open_db` for one command: the engine's connections are closed on exit."""
-    engine = open_db(path)
+    engine = open_db(path, migrate=migrate)
     try:
         yield engine
     finally:
