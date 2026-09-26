@@ -75,13 +75,13 @@ def _sql(where: str, detail: str = "NULL") -> RuleFinder:
     return _run_sql(sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND ({where}) ORDER BY url"))  # noqa: S608 — fixed rule text, values are bound
 
 
-def _duplicate(column: str) -> RuleFinder:
+def _duplicate(column: str, among: str = INDEXABLE_HTML) -> RuleFinder:
     """Pages whose `column` value is shared with another page (one pass: a window count per value)."""
     return _run_sql(
         sa.text(
-            f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column name
+            f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column and filter
             f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM pages"
-            f"  WHERE crawl_id = :crawl_id AND {INDEXABLE_HTML} AND trim(coalesce({column}, '')) <> ''"
+            f"  WHERE crawl_id = :crawl_id AND {among} AND trim(coalesce({column}, '')) <> ''"
             ") WHERE n > 1 ORDER BY value, url"
         )
     )
@@ -360,8 +360,25 @@ def _directive_canonical_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _content_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, find) -> Rule:
+        return Rule(code, "Content", f"Content: {name}", kind, priority, description, find)
+
+    return [
+        r("content_exact_duplicates", "Exact Duplicates", "issue", "high",
+          "Страница побайтно совпадает с другой (одинаковый md5 HTML): дубль под разными URL.",
+          _duplicate("content_md5", among=HTML_OK)),
+        r("content_lorem_ipsum", "Lorem Ipsum Placeholder", "warning", "high",
+          "На странице остался текст-заглушка «Lorem ipsum».", _sql(f"{HTML_OK} AND lorem_ipsum")),
+        r("content_low_content", "Low Content Pages", "opportunity", "medium",
+          "Мало текста: меньше thresholds.low_content_words слов в видимом тексте.",
+          _sql(f"{HTML_OK} AND word_count < :low_content_words", "word_count || ' слов'")),
+    ]  # fmt: skip
+
+
 RULES += _onpage_rules()
 RULES += _directive_canonical_rules()
+RULES += _content_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

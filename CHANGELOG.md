@@ -23,4 +23,6 @@
 - Сбой соединения больше не печатает трассировку Crawlee: такие URL и так попадают в отчёт (`internal_no_response`).
 - 19 проверок директив и canonical: noindex / nofollow / none / nosnippet / noimageindex / unavailable_after / notranslate / устаревшие noodp и noydir (meta robots и X-Robots-Tag), meta robots вне `<head>`; canonical — нет, несколько, конфликт, вне `<head>`, лишние атрибуты, фрагмент, относительный, склейка с другим URL, ведёт на неиндексируемый URL (canonical из HTML и заголовка Link).
 - Индексируемость каждого URL и причина (как Indexability Status в Screaming Frog); проверки дублей учитывают только индексируемые страницы. Цели canonical тоже обходятся.
+- Проверки контента: точные дубли (md5 HTML), «Lorem ipsum», мало текста (`thresholds.low_content_words`, 200 слов видимого текста).
+- `--store-html` (`crawl.store_html`): HTML страниц сжимается zstd и хранится в `spider-html.sqlite` рядом с базой; по умолчанию — только md5.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.

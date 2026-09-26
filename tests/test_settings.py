@@ -221,5 +221,6 @@ def test_crawl_uses_settings_and_keeps_snapshot(base_url: str) -> None:
         "max_urls": 2,
         "concurrency": 50,
         "respect_robots": True,
+        "store_html": False,
         "user_agent": "SpiderTestBot/1.0",
     }

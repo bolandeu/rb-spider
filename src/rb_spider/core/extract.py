@@ -6,6 +6,7 @@ never a Crawlee context.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -165,6 +166,20 @@ def _onpage(tree: LexborHTMLParser) -> dict:
     }
 
 
+_LOREM = re.compile(r"lorem\s+ipsum", re.IGNORECASE)
+
+
+def _content(tree: LexborHTMLParser, body: bytes) -> dict:
+    """Exact-duplicate hash and visible text size. Mutates `tree` (drops scripts): call it last."""
+    tree.strip_tags(["script", "style", "noscript", "template"])
+    text = tree.body.text(separator=" ") if tree.body else ""
+    return {
+        "content_md5": hashlib.md5(body).hexdigest(),  # noqa: S324 — a fingerprint, not security
+        "word_count": len(text.split()),
+        "lorem_ipsum": bool(_LOREM.search(text)),
+    }
+
+
 def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -196,4 +211,5 @@ def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes)
         link = _absolute(url, anchor.attributes.get("href") or "")
         if link:
             page.links.append(link)
+    page.onpage |= _content(tree, body)
     return page

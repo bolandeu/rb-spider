@@ -211,3 +211,26 @@ def test_indexability_status_per_page(base_url: str, polygon_crawl) -> None:
     for path, status in expected.items():
         page = pages[base_url + path]
         assert (page["indexable"], page["indexability_status"]) == (status is None, status), path
+
+
+# --- stored HTML -------------------------------------------------------------------
+
+
+def test_html_is_not_stored_by_default(base_url: str, engine) -> None:
+    crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(max_urls=2)))
+    assert not storage.html_db_path().exists()
+
+
+def test_store_html_keeps_compressed_bodies_beside_the_db(base_url: str, engine) -> None:
+    result = crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(max_urls=3, store_html=True)))
+    assert storage.html_db_path().parent == storage.db_path().parent
+    html = storage.get_html(result.crawl_id, f"{base_url}/a")
+    assert html is not None
+    assert polygon.TITLE.format("a").encode() in html
+    assert storage.get_html(result.crawl_id, f"{base_url}/nope") is None
+
+
+def test_cli_store_html_flag(base_url: str) -> None:
+    code, crawl = _invoke_json("crawl", f"{base_url}/", "--max-urls", "1", "--store-html")
+    assert code == 0
+    assert storage.get_html(crawl["crawl_id"], f"{base_url}/") is not None

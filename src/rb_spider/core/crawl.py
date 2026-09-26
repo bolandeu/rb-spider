@@ -116,9 +116,10 @@ async def _run(
     @crawler.router.default_handler
     async def handle(ctx: HttpCrawlingContext) -> None:
         response = ctx.http_response
-        page = parse_page(ctx.request.url, response.status_code, dict(response.headers), await response.read())
+        body = await response.read()
+        page = parse_page(ctx.request.url, response.status_code, dict(response.headers), body)
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
-        writer.add(page, depth=depth)
+        writer.add(page, depth=depth, body=body)
 
         # canonical targets too: "canonical points to a non-indexable URL" needs the target's own response
         targets = [*page.links, page.redirect_url, page.refresh_url, page.onpage.get("canonical_url")]
@@ -163,7 +164,7 @@ def crawl_site(
     settings = settings or Settings()
     start_url = _validate_start_url(start_url)
     crawl_id = storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
-    writer = storage.PageWriter(engine, crawl_id)
+    writer = storage.PageWriter(engine, crawl_id, store_html=settings.crawl.store_html)
     started = time.monotonic()
     status = "failed"
     try:
@@ -174,6 +175,8 @@ def crawl_site(
         raise
     finally:
         writer.flush()
+        if writer.html_engine is not None:
+            writer.html_engine.dispose()
         pages = storage.finish_crawl(engine, crawl_id, status)
         issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
     return CrawlResult(crawl_id, project, start_url, status, pages, round(time.monotonic() - started, 1))

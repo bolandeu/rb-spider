@@ -17,6 +17,7 @@ from pathlib import Path
 
 import platformdirs
 import sqlalchemy as sa
+import zstandard
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import event
@@ -89,6 +90,11 @@ pages = sa.Table(
     # computed after the crawl (issues.analyze): can a search engine index this URL, and if not, why
     sa.Column("indexable", sa.Boolean),
     sa.Column("indexability_status", sa.String),
+    # content: md5 of the HTML (exact duplicates), words of visible text, a "lorem ipsum" leftover
+    sa.Column("content_md5", sa.String),
+    sa.Column("word_count", sa.Integer),
+    sa.Column("lorem_ipsum", sa.Boolean),
+    sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 issues = sa.Table(
     "issues",
@@ -107,6 +113,22 @@ def db_path() -> Path:
     if explicit:
         return Path(explicit)
     return Path(platformdirs.user_data_dir(CLI_NAME, appauthor=False)) / f"{CLI_NAME}.sqlite"
+
+
+def html_db_path() -> Path:
+    """Stored HTML (`crawl.store_html`) lives beside the crawl database, not in it: the main DB stays small."""
+    main = db_path()
+    return main.with_name(f"{main.stem}-html{main.suffix}")
+
+
+html_metadata = sa.MetaData()
+html_pages = sa.Table(
+    "html",
+    html_metadata,
+    sa.Column("crawl_id", sa.Integer, primary_key=True),
+    sa.Column("url", sa.String, primary_key=True),
+    sa.Column("body", sa.LargeBinary, nullable=False),  # zstd-compressed response body
+)
 
 
 def _pragmas(dbapi_connection, _record) -> None:
@@ -174,19 +196,32 @@ _PAGE_COLUMNS = [column.name for column in pages.columns]
 
 
 class PageWriter:
-    """Buffers pages and writes them in batches: memory stays flat however big the site is."""
+    """Buffers pages and writes them in batches: memory stays flat however big the site is.
 
-    def __init__(self, engine: sa.Engine, crawl_id: int, batch_size: int = 500) -> None:
+    With `store_html`, response bodies go zstd-compressed to the separate HTML database.
+    """
+
+    def __init__(self, engine: sa.Engine, crawl_id: int, batch_size: int = 500, *, store_html: bool = False) -> None:
         self.engine, self.crawl_id, self.batch_size = engine, crawl_id, batch_size
         self._rows: list[dict] = []
+        self._html: list[dict] = []
         self.written = 0
+        self.html_engine: sa.Engine | None = None
+        if store_html:
+            path = html_db_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.html_engine = sa.create_engine(f"sqlite:///{path}")
+            html_metadata.create_all(self.html_engine)
+            self._compressor = zstandard.ZstdCompressor(level=3)
 
     @property
     def count(self) -> int:
         """Pages handed to the writer so far, flushed or not."""
         return self.written + len(self._rows)
 
-    def add(self, page: Page, depth: int) -> None:
+    def add(self, page: Page, depth: int, body: bytes | None = None) -> None:
+        if self.html_engine is not None and body:
+            self._html.append({"crawl_id": self.crawl_id, "url": page.url, "body": self._compressor.compress(body)})
         # Every row carries every column: a batch insert needs one shape, and a redirect or an
         # error page has no on-page fields at all.
         self._rows.append(
@@ -212,6 +247,10 @@ class PageWriter:
             self.flush()
 
     def flush(self) -> None:
+        if self._html and self.html_engine is not None:
+            with self.html_engine.begin() as conn:
+                conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), self._html)
+            self._html = []
         if not self._rows:
             return
         with self.engine.begin() as conn:
@@ -278,6 +317,21 @@ def list_crawls(engine: sa.Engine, limit: int | None = None) -> list[CrawlRow]:
         row.started_at = row.started_at.replace(tzinfo=UTC)
         row.finished_at = row.finished_at.replace(tzinfo=UTC) if row.finished_at else None
     return rows
+
+
+def get_html(crawl_id: int, url: str) -> bytes | None:
+    """A stored response body (crawl made with `crawl.store_html`), or None."""
+    path = html_db_path()
+    if not path.is_file():
+        return None
+    engine = sa.create_engine(f"sqlite:///{path}")
+    try:
+        with engine.connect() as conn:
+            where = sa.and_(html_pages.c.crawl_id == crawl_id, html_pages.c.url == url)
+            blob = conn.execute(sa.select(html_pages.c.body).where(where)).scalar()
+    finally:
+        engine.dispose()
+    return zstandard.ZstdDecompressor().decompress(blob) if blob is not None else None
 
 
 def resolve_crawl_id(engine: sa.Engine, crawl_id: int | None) -> int:

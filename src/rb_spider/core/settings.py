@@ -41,6 +41,9 @@ class CrawlSettings(BaseModel):
     respect_robots: bool = Field(
         True, description="Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт."
     )
+    store_html: bool = Field(
+        False, description="Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5."
+    )
     user_agent: str | None = Field(
         None,
         description="Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox).",
@@ -66,6 +69,9 @@ class ThresholdSettings(BaseModel):
     )
     h1_max_chars: int = Field(70, ge=1, description="H1 длиннее — «H1: Over … Characters».")
     h2_max_chars: int = Field(70, ge=1, description="H2 длиннее — «H2: Over … Characters».")
+    low_content_words: int = Field(
+        200, ge=1, description="Меньше слов в видимом тексте — «Content: Low Content Pages»."
+    )
 
 
 class Settings(BaseModel):

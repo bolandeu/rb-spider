@@ -37,7 +37,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 | Что | Где | В git? |
 |---|---|---|
 | База обходов (все проекты) | `platformdirs.user_data_dir("spider")/spider.sqlite` — на macOS `~/Library/Application Support/spider/`; переопределяется `SPIDER_DB_PATH` | нет |
-| Сжатый HTML (`--store-html`) | рядом с базой, отдельный файл | нет |
+| Сжатый HTML (`--store-html`) | рядом с базой: `spider-html.sqlite`, zstd (библиотека `zstandard`; встроенный `compression.zstd` есть только с Python 3.14) — на стенде сжатие ~5× | нет |
 | Конфиг проекта и профили | `.spider/` в каталоге проекта (`config.toml`, `profiles/*.toml`) | да |
 | Секреты (прокси, DSN) | системное хранилище ключей или `SPIDER_<PROVIDER>_<FIELD>` | никогда |
 

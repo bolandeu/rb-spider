@@ -23,6 +23,9 @@ def crawl(
     concurrency: int | None = typer.Option(
         None, "--concurrency", min=1, help="Сколько запросов одновременно (ключ crawl.concurrency, по умолчанию 20)."
     ),
+    store_html: bool | None = typer.Option(
+        None, "--store-html", help="Сохранить HTML страниц сжатым рядом с базой (ключ crawl.store_html)."
+    ),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
     verbose: bool = output.VerboseOption,
@@ -46,6 +49,7 @@ def crawl(
       spider crawl https://example.com/
       spider crawl https://example.com/ --profile googlebot --max-urls 1000
       spider crawl https://example.com/ --set crawl.respect_robots=false
+      spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
       spider --json crawl https://example.com/
 
     Человеку — прогресс в stderr каждые 5 с и итог. JSON:
@@ -53,7 +57,11 @@ def crawl(
     finished | failed | interrupted. Неверный URL или настройка — код выхода 2.
     """
     resolved = options.resolve(
-        ctx, profile, config_file, assignments, {"crawl.max_urls": max_urls, "crawl.concurrency": concurrency}
+        ctx,
+        profile,
+        config_file,
+        assignments,
+        {"crawl.max_urls": max_urls, "crawl.concurrency": concurrency, "crawl.store_html": store_html},
     )
     root = services.find_project_root(Path(ctx.obj.get("project") or Path.cwd()))
     project = services.load_config(root).name if root else crawl_service.project_for(url)

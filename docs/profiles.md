@@ -41,6 +41,7 @@ concurrency = 10
 | `crawl.max_urls` | `int \| None` | — | Остановиться после стольких URL; не задано — обойти весь сайт. |
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.respect_robots` | `bool` | `true` | Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт. |
+| `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
 | `crawl.user_agent` | `str \| None` | — | Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox). |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 | `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
@@ -49,6 +50,7 @@ concurrency = 10
 | `thresholds.description_min_chars` | `int` | `70` | Meta description короче — «Meta Description: Below … Characters». |
 | `thresholds.h1_max_chars` | `int` | `70` | H1 длиннее — «H1: Over … Characters». |
 | `thresholds.h2_max_chars` | `int` | `70` | H2 длиннее — «H2: Over … Characters». |
+| `thresholds.low_content_words` | `int` | `200` | Меньше слов в видимом тексте — «Content: Low Content Pages». |
 <!-- keys:end -->
 
 ## Рецепты

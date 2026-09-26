@@ -135,15 +135,15 @@
 
 ### Content — контент
 
-- [ ] `MVP` **Exact Duplicates** — страницы полностью идентичны (совпадает md5-хэш) _(SF: Issue, High)_
+- [x] `MVP` **Exact Duplicates** — страницы полностью идентичны (совпадает md5-хэш) _(SF: Issue, High)_
 - [ ] `backlog` **Spelling Errors** — орфографические ошибки в тексте _(SF: Issue, Medium)_
 - [ ] `backlog` **Grammar Errors** — грамматические ошибки в тексте _(SF: Issue, Medium)_
 - [ ] `v2` **Soft 404 Pages** — страница отдаёт 200, но по содержимому — «страница не найдена» (эвристика) _(SF: Warning, High)_
-- [ ] `MVP` **Lorem Ipsum Placeholder** — на странице остался текст-заглушка «Lorem ipsum» _(SF: Warning, High)_
+- [x] `MVP` **Lorem Ipsum Placeholder** — на странице остался текст-заглушка «Lorem ipsum» _(SF: Warning, High)_
 - [ ] `v2` **Near Duplicates** — почти-дубли по тексту, сходство ≥ порога (90 %), MinHash _(SF: Warning, Medium)_
 - [ ] `backlog` **Semantically Similar** — страницы близки по смыслу (косинусная близость эмбеддингов) _(SF: Warning, Medium)_
 - [ ] `backlog` **Low Relevance Content** — страница выбивается из общей тематики сайта (эмбеддинги) _(SF: Warning, Low)_
-- [ ] `MVP` **Low Content Pages** — мало текста: меньше 200 слов (порог настраивается) _(SF: Opportunity, Medium)_
+- [x] `MVP` **Low Content Pages** — мало текста: меньше 200 слов (порог настраивается) _(SF: Opportunity, Medium)_
 - [ ] `v2` **Readability Difficult** — текст трудно читать по формуле Flesch _(SF: Opportunity, Low)_
 - [ ] `v2` **Readability Very Difficult** — текст очень трудно читать по формуле Flesch _(SF: Opportunity, Low)_
 
@@ -803,7 +803,7 @@
 - [ ] `MVP` **`spider db info | migrate | vacuum`** — состояние БД, миграции Alembic, сжатие файла
 - [ ] `MVP` **`--detach`** — обход фоновым процессом, статус в БД
 - [ ] `MVP` **Своя очередь обхода** — в памяти + фильтр виденных URL, снимок в SQLite в одной транзакции с результатами; возобновление без потерь
-- [ ] `MVP` **`--store-html`** — хранить HTML (zstd) в отдельном SQLite-файле; по умолчанию только md5
+- [x] `MVP` **`--store-html`** — хранить HTML (zstd) в отдельном SQLite-файле; по умолчанию только md5
 - [ ] `MVP` **Статус «не проверялось»** — проверка без нужных данных (сбор выключен) не выдаёт ложное «ок»
 - [ ] `MVP` **Переключаемый HTTP-клиент** → `http.client = "impit" | "curl"`
 - [ ] `v2` **Удалённые БД Postgres / MySQL** — DSN в keychain

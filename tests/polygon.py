@@ -19,19 +19,20 @@ TITLE = "Полигон spider: страница {} для проверок"  # 
 DESCRIPTION = "Описание страницы {} полигона spider: достаточно длинное, чтобы уложиться в норму сниппета."
 H1 = "Заголовок страницы {}"
 H2 = "Раздел страницы {}"
+FILLER = "<p>" + "Обычный текст страницы полигона, достаточный по объёму. " * 30 + "</p>"  # 240 words
 
 
 def _links(links: tuple[str, ...]) -> str:
     return "".join(f'<a href="{href}">{href}</a>' for href in links)
 
 
-def _html(slug: str, *links: str, head: str | None = None, body: str | None = None) -> str:
-    """A clean page; `head` / `body` replace the default elements to build a trap."""
+def _html(slug: str, *links: str, head: str | None = None, body: str | None = None, thin: bool = False) -> str:
+    """A clean page; `head` / `body` replace the default elements to build a trap, `thin` drops the text."""
     if head is None:
         head = f'<title>{TITLE.format(slug)}</title><meta name="description" content="{DESCRIPTION.format(slug)}">'
     if body is None:
         body = f"<h1>{H1.format(slug)}</h1><h2>{H2.format(slug)}</h2>"
-    return f"<html><head>{head}</head><body>{body}{_links(links)}</body></html>"
+    return f"<html><head>{head}</head><body>{body}{'' if thin else FILLER}{_links(links)}</body></html>"
 
 
 def _head(slug: str, *, title: str | None = None, description: str | None = None, extra: str = "") -> str:
@@ -125,6 +126,13 @@ DIRECTIVE_CANONICAL_TRAPS: dict[str, tuple[dict[str, str], str]] = {
     "/r-noydir": ({}, _html("r-noydir", head=_head("r-noydir", extra=_robots("noydir")))),
     "/r-notranslate": ({}, _html("r-notranslate", head=_head("r-notranslate", extra=_robots("notranslate")))),
 }  # fmt: skip
+CONTENT_TRAPS: dict[str, str] = {
+    "/thin": _html("thin", thin=True),
+    "/lorem": _html("lorem", body=f"<h1>{H1.format('lorem')}</h1><h2>{H2.format('lorem')}</h2><p>Lorem ipsum dolor sit amet.</p>"),
+    # byte-identical pages; the copy points its canonical at the original, as sites usually do
+    "/dup-1": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
+    "/dup-2": _html("dup", head=_head("dup", extra=_canonical("{base}/dup-1"))),
+}  # fmt: skip
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -151,6 +159,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/to-missing",
             *ONPAGE_TRAPS,
             *DIRECTIVE_CANONICAL_TRAPS,
+            *CONTENT_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -176,6 +185,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     # "/reset" closes the connection without answering (see _handle)
     **{path: (200, {}, html) for path, html in ONPAGE_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in DIRECTIVE_CANONICAL_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in CONTENT_TRAPS.items()},
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).
@@ -199,6 +209,7 @@ REACHABLE = {
     "/to-missing",
     *ONPAGE_TRAPS,
     *DIRECTIVE_CANONICAL_TRAPS,
+    *CONTENT_TRAPS,
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -249,7 +260,7 @@ EXPECTED_ISSUES = {
     "canonical_invalid_attribute": {"/c-invalid"},
     "canonical_fragment": {"/c-fragment"},
     "canonical_outside_head": {"/c-outside"},
-    "canonical_canonicalised": {"/c-canonicalised", "/c-nonindexable", "/c-header-conflict"},  # header target first
+    "canonical_canonicalised": {"/c-canonicalised", "/c-nonindexable", "/c-header-conflict", "/dup-2"},
     "canonical_missing": {"/c-missing"},
     "canonical_multiple": {"/c-conflict", "/c-multiple", "/c-header-conflict"},
     "canonical_relative": {"/c-relative"},
@@ -264,6 +275,10 @@ EXPECTED_ISSUES = {
     "directives_noodp": {"/r-noodp"},
     "directives_noydir": {"/r-noydir"},
     "directives_notranslate": {"/r-notranslate"},
+    # Content
+    "content_exact_duplicates": {"/dup-1", "/dup-2"},
+    "content_lorem_ipsum": {"/lorem"},
+    "content_low_content": {"/thin"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
