@@ -124,7 +124,7 @@ def test_bad_metrics_are_rejected(crawl, monkeypatch) -> None:
     class Bad:
         description = ""
 
-        def enrich(self, _crawl):
+        def enrich(self, crawl):
             yield enrich.Metric("https://s.ex/", "speed", value=float("nan"))
 
     plugin = enrich.Plugin("bad", "x:Bad", "", None, Bad())
