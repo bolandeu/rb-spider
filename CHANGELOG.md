@@ -52,6 +52,7 @@
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 - 11 проверок группы URL: несколько слешей подряд, пробел, битый якорь (`#id`, которого нет на целевой странице), символы вне ASCII, заглавные буквы, повтор сегмента пути, внутренний поиск (`thresholds.internal_search`), GET-параметры, метки аналитики (`utm_*`, `_ga`, `_gl`), подчёркивания, длина больше `thresholds.url_max_chars` (115). Признаки адреса считаются в `analyze` одним проходом пачками (`pages.url_issues`); якоря страницы хранятся 2-байтовыми отпечатками (`pages.anchor_ids`), фрагмент ссылки — в `links.fragment`.
 - Переписывание найденных URL, раздел `[rewrite]`: `remove_params` (удалить параметры), `regex` (замены по порядку), `lowercase`, `percent_encoding` (`keep` / `upper` / `lower`). Действует на ссылки, ресурсы, редиректы, refresh и canonical; стартовый URL и URL списка не меняются.
+- Hreflang: аннотации из `<link rel="alternate" hreflang>` и заголовка Link (`collect.hreflang.follow` / `.store`), 12 проверок — цель не 200, нет обратной ссылки, обратная ссылка с чужим кодом, на неканонический URL, на noindex, неверные коды ISO 639-1 / ISO 3166-1, повтор кода, не указан свой canonical, вне `<head>`, URL только из hreflang, нет ссылки на себя, нет x-default. `spider hreflang [--only …]` — отчёт по аннотациям (как Reports → Hreflang), `spider overview` — страницы с hreflang и без.
 
 ### Changed
 

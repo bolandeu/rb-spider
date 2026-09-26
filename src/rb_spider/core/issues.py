@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 import sqlalchemy as sa
 from pydantic import ValidationError
 
+from . import hreflang as hreflang_module
 from . import settings as settings_module
 from . import storage
 from .errors import InvalidArguments
@@ -666,6 +667,117 @@ def _url_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+# --- Hreflang: annotations are link rows of kind "hreflang" (partial indexes by source and by target).
+STORE_HREFLANG = "collect.hreflang.store"
+FOLLOW_HREFLANG = "collect.hreflang.follow"
+
+
+def _hreflang_by_page(filter_name: str, detail: str, report_target: bool = False) -> RuleFinder:
+    """Annotations passing one of the report's filters, one finding per page (the annotating page, or the target)."""
+    page = "t.url" if report_target else "s.url"
+    return _links_sql(
+        f"SELECT {page}, group_concat({detail}, '; ') FROM link_rows l"  # noqa: S608 — fixed rule text
+        " JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
+        " LEFT JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        f" WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND ({hreflang_module.FILTERS[filter_name]})"
+        f" GROUP BY {page} ORDER BY {page}"
+    )
+
+
+def _hreflang_codes(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> Iterable[Finding]:
+    """Pages using codes that aren't ISO 639-1 [+ ISO 3166-1 alpha-2]: the distinct codes are few, checked once."""
+    codes = conn.execute(
+        sa.text("SELECT DISTINCT hreflang FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"),
+        {"crawl_id": crawl_id},
+    ).scalars()
+    invalid = sorted(code for code in codes if not hreflang_module.valid_code(code))
+    if not invalid:
+        return
+    query = sa.text(
+        "SELECT s.url, group_concat(DISTINCT l.hreflang) FROM link_rows l JOIN urls s ON s.id = l.source_id"
+        " WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND l.hreflang IN :codes GROUP BY s.url ORDER BY s.url"
+    ).bindparams(sa.bindparam("codes", expanding=True))
+    yield from conn.execute(query, {"crawl_id": crawl_id, "codes": invalid}).tuples()
+
+
+_ANNOTATING = "SELECT DISTINCT source_id FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"
+
+
+def _hreflang_pages(where: str, detail: str = "NULL") -> RuleFinder:
+    """Pages with hreflang annotations (`h.source_id`, `s.url`, `p` — its page row) matching `where`."""
+    return _links_sql(
+        f"SELECT s.url, {detail} FROM ({_ANNOTATING}) h JOIN urls s ON s.id = h.source_id"  # noqa: S608 — fixed text
+        " JOIN pages p ON p.crawl_id = :crawl_id AND p.url = s.url"
+        f" WHERE {where} ORDER BY s.url"
+    )
+
+
+def _annotates(target: str, extra: str = "") -> str:
+    """The page (h.source_id) has an annotation pointing at `target` (a urls.id expression)."""
+    return (
+        "EXISTS (SELECT 1 FROM link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"  # noqa: S608
+        f" AND a.source_id = h.source_id AND a.target_id = {target}{extra})"
+    )
+
+
+_CANONICAL_ID = "(SELECT c.id FROM urls c WHERE c.crawl_id = :crawl_id AND c.url = p.canonical_url)"
+
+
+def _hreflang_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, find, requires=(STORE_HREFLANG,)) -> Rule:
+        return Rule(code, "Hreflang", f"Hreflang: {name}", kind, priority, description, find, requires)
+
+    return [
+        r("hreflang_non_200", "Non-200 Hreflang URLs", "issue", "high",
+          "Альтернативный URL из hreflang отвечает не 200: редирект, ошибка, запрет robots.txt, нет ответа.",
+          _hreflang_by_page("non_200", "t.url || ' — ' || coalesce(p.blocked, CAST(p.status_code AS TEXT))"),
+          (STORE_HREFLANG, FOLLOW_HREFLANG)),
+        r("hreflang_missing_return", "Missing Return Links", "issue", "high",
+          "Альтернативная страница не ссылается hreflang-ом обратно: поисковик может проигнорировать пару.",
+          _hreflang_by_page("missing_return", "t.url"), (STORE_HREFLANG, FOLLOW_HREFLANG)),
+        r("hreflang_inconsistent", "Inconsistent Language & Region Return Links", "issue", "high",
+          "Обратная ссылка указывает для страницы другой язык/регион, чем страница указывает сама себе.",
+          _hreflang_by_page("inconsistent", "s.url || ': ' || l.hreflang", report_target=True)),
+        r("hreflang_non_canonical_return", "Non-Canonical Return Links", "issue", "high",
+          "Hreflang ведёт на неканонический URL (у цели canonical на другой адрес).",
+          _hreflang_by_page("non_canonical", "t.url || ' → ' || p.canonical_url"), (STORE_HREFLANG, FOLLOW_HREFLANG)),
+        r("hreflang_noindex_return", "Noindex Return Links", "issue", "high",
+          "Hreflang ведёт на страницу с noindex: в выдаче её не будет, пара языков разорвана.",
+          _hreflang_by_page("noindex_return", "t.url"), (STORE_HREFLANG, FOLLOW_HREFLANG)),
+        r("hreflang_incorrect_codes", "Incorrect Language & Region Codes", "issue", "high",
+          "Код не по ISO 639-1 (язык) и ISO 3166-1 alpha-2 (регион): например, en-UK вместо en-GB.",
+          _hreflang_codes),
+        r("hreflang_multiple_entries", "Multiple Entries", "issue", "high",
+          "Один и тот же язык/регион указан для разных URL.",
+          _links_sql("SELECT s.url, group_concat(g.code, ', ') FROM (SELECT source_id, lower(hreflang) AS code"
+                     " FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang' GROUP BY source_id,"
+                     " lower(hreflang) HAVING count(DISTINCT target_id) > 1) g JOIN urls s ON s.id = g.source_id"
+                     " GROUP BY s.url ORDER BY s.url")),
+        r("hreflang_not_using_canonical", "Not Using Canonical", "issue", "high",
+          "У страницы canonical на другой URL, а её hreflang-разметка не указывает этот canonical.",
+          _hreflang_pages(f"p.canonical_url IS NOT NULL AND p.canonical_url <> p.url"
+                          f" AND NOT {_annotates(_CANONICAL_ID)}", "p.canonical_url")),
+        r("hreflang_outside_head", "Outside <head>", "issue", "high",
+          "<link rel=\"alternate\" hreflang> вне <head>: поисковик его проигнорирует.",
+          _sql("hreflang_outside_head > 0", "CAST(hreflang_outside_head AS TEXT)"), ()),
+        r("hreflang_unlinked", "Unlinked Hreflang URLs", "issue", "medium",
+          "URL найден только через hreflang: обычные ссылки на него не ведут.",
+          _links_sql("SELECT u.url, NULL FROM (SELECT DISTINCT target_id FROM link_rows WHERE crawl_id = :crawl_id"
+                     " AND kind = 'hreflang') h JOIN urls u ON u.id = h.target_id"
+                     " JOIN pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, 0)"
+                     " WHERE NOT EXISTS (SELECT 1 FROM link_rows l WHERE l.crawl_id = :crawl_id"
+                     " AND l.target_id = h.target_id AND l.kind = 'hyperlink') ORDER BY u.url"),
+          (STORE_HREFLANG, STORE_INTERNAL)),
+        r("hreflang_missing_self_reference", "Missing Self Reference", "warning", "low",
+          "В hreflang-разметке страницы нет её самой (ни её URL, ни её canonical).",
+          _hreflang_pages(f"NOT {_annotates('h.source_id')} AND NOT {_annotates(_CANONICAL_ID)}")),
+        r("hreflang_missing_x_default", "Missing X-Default", "warning", "low",
+          "Нет x-default — версии для остальных языков (необязательно, но рекомендуется).",
+          _hreflang_pages("NOT EXISTS (SELECT 1 FROM link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"
+                          " AND a.source_id = h.source_id AND lower(a.hreflang) = 'x-default')")),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -723,6 +835,7 @@ RULES += _content_rules()
 RULES += _link_rules()
 RULES += _image_rules()
 RULES += _url_rules()
+RULES += _hreflang_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

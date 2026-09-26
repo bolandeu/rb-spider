@@ -230,6 +230,10 @@ class CollectSettings(BaseModel):
     images: FollowStore = Field(
         default_factory=FollowStore, description="Картинки <img>: follow — проверить код ответа и вес."
     )
+    hreflang: FollowStore = Field(
+        default_factory=FollowStore,
+        description="Hreflang (<link rel=alternate hreflang>, заголовок Link): follow — обходить альтернативные URL.",
+    )
     images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
     css: FollowStore = Field(default_factory=FollowStore, description="Стили <link rel=stylesheet>.")
     js: FollowStore = Field(default_factory=FollowStore, description="Скрипты <script src>.")

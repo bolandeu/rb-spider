@@ -172,22 +172,23 @@ def test_db_migrate_brings_an_old_schema_up(tmp_path) -> None:
 
 def test_url_id_migration_keeps_every_link(base_url: str, tmp_path) -> None:
     """0014 moves links to urls + link_rows; down and up again, the `links` view gives back the same rows
-    (bar `fragment`, which 0015 added: going below it drops the column)."""
+    (in the columns 0014 had: later migrations' columns are dropped on the way down)."""
     from alembic import command
 
     engine = storage.open_db(tmp_path / "links.sqlite")
     try:
         crawl_id = _crawl(engine, base_url, "site")
-        query = sa.select(storage.links).where(storage.links.c.crawl_id == crawl_id)
+        columns = [c for c in storage.links.c if c.name not in ("fragment", "hreflang")]
+        query = sa.select(*columns).where(storage.links.c.crawl_id == crawl_id)
         with engine.connect() as conn:
-            before = sorted(tuple(row)[:-1] for row in conn.execute(query))
+            before = sorted(tuple(row) for row in conn.execute(query))
         config = storage.alembic_config()
         for step in (lambda: command.downgrade(config, "0013"), lambda: command.upgrade(config, "head")):
             with engine.begin() as conn:
                 config.attributes["connection"] = conn
                 step()
         with engine.connect() as conn:
-            after = sorted(tuple(row)[:-1] for row in conn.execute(query))
+            after = sorted(tuple(row) for row in conn.execute(query))
         assert before and after == before
     finally:
         engine.dispose()

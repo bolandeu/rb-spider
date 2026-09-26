@@ -55,6 +55,7 @@ class Page:
     refresh_kind: str | None = None  # "meta" | "http"
     error: str | None = None  # no response: why (status_code is 0)
     blocked: str | None = None  # not fetched on purpose: "robots_txt" (status_code is 0)
+    hreflang: list[tuple[str, str]] = field(default_factory=list)  # (code as written, absolute URL): HTML + Link
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -108,13 +109,39 @@ def _directive_tokens(value: str) -> list[str]:
     return tokens
 
 
+def _header_links(headers: dict[str, str], rel: str) -> list[tuple[str, str]]:
+    """`Link: <url>; rel="alternate"; hreflang="en"` entries with this rel: (target, params)."""
+    wanted = re.compile(rf'rel\s*=\s*"?{rel}"?', re.IGNORECASE)
+    return [(target.strip(), params) for target, params in _LINK_HEADER.findall(headers.get("link", ""))
+            if wanted.search(params)]  # fmt: skip
+
+
 def _header_canonicals(headers: dict[str, str]) -> list[str]:
     """Targets of `Link: <url>; rel="canonical"` (the header can list several links)."""
-    return [
-        target.strip()
-        for target, params in _LINK_HEADER.findall(headers.get("link", ""))
-        if re.search(r'rel\s*=\s*"?canonical"?', params, re.IGNORECASE)
-    ]
+    return [target for target, _ in _header_links(headers, "canonical")]
+
+
+_HREFLANG_PARAM = re.compile(r'hreflang\s*=\s*"?([^";,\s]+)"?', re.IGNORECASE)
+
+
+def _hreflang(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) -> tuple[list[tuple[str, str]], int]:
+    """Hreflang annotations — <link rel="alternate" hreflang> and the Link header — and how many sit outside <head>."""
+    found: list[tuple[str, str]] = []
+    for target, params in _header_links(headers, "alternate"):
+        if (code := _HREFLANG_PARAM.search(params)) and (absolute := _absolute(url, target)):
+            found.append((code.group(1).strip(), absolute))
+    outside = 0
+    if tree is not None:
+        head_ids = {n.mem_id for n in tree.head.css("link")} if tree.head else set()
+        for link in tree.css("link[hreflang]"):
+            if "alternate" not in (link.attributes.get("rel") or "").lower().split():
+                continue
+            absolute = _absolute(url, link.attributes.get("href") or "")
+            code = (link.attributes.get("hreflang") or "").strip()
+            if absolute and code:
+                found.append((code, absolute))
+                outside += link.mem_id not in head_ids
+    return found, outside
 
 
 def _directives_and_canonical(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) -> dict:
@@ -337,6 +364,7 @@ def parse_page(
     is_html = bool(body) and "html" in (content_type or "text/html") and not 300 <= status_code < 400
     tree = LexborHTMLParser(body) if is_html else None
     page.onpage = _directives_and_canonical(url, headers, tree)
+    page.hreflang, page.onpage["hreflang_outside_head"] = _hreflang(url, headers, tree)
 
     if 300 <= status_code < 400:
         location = headers.get("location")

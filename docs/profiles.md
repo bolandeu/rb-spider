@@ -77,6 +77,8 @@ concurrency = 10
 | `collect.meta_refresh.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.images.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.images.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.hreflang.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.hreflang.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
 | `collect.css.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.css.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |

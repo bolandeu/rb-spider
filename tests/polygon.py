@@ -246,6 +246,46 @@ URL_TRAPS: dict[str, str] = {
     "/u/anchors": _html("u-anchors", body=f'<h1>{H1.format("u-anchors")}</h1><h2 id="exists">{H2.format("u-anchors")}</h2>'),
 }  # fmt: skip
 
+
+def _alternates(*pairs: tuple[str, str]) -> str:
+    """<link rel="alternate" hreflang> elements: (code, polygon path)."""
+    return "".join(f'<link rel="alternate" hreflang="{code}" href="{{base}}{path}">' for code, path in pairs)
+
+
+def _hl(slug: str, *pairs: tuple[str, str], extra: str = "") -> str:
+    return _html(slug, head=_head(slug, extra=_alternates(*pairs) + extra))
+
+
+# Hreflang (#27): /hl/en and /hl/ru are a clean pair; every other page is one check's trap.
+HREFLANG_TRAPS: dict[str, str] = {
+    "/hl/en": _hl("hl-en", ("en", "/hl/en"), ("ru", "/hl/ru"), ("x-default", "/hl/en")),
+    "/hl/ru": _hl("hl-ru", ("ru", "/hl/ru"), ("en", "/hl/en"), ("x-default", "/hl/en")),
+    "/hl/non200": _hl("hl-non200", ("en", "/hl/non200"), ("x-default", "/hl/non200"), ("ru", "/missing")),
+    "/hl/noreturn": _hl("hl-noreturn", ("en", "/hl/noreturn"), ("x-default", "/hl/noreturn"), ("ru", "/hl/ru")),
+    # fr links back to en with "de", a code en doesn't give itself
+    "/hl/incons-en": _hl("hl-incons-en", ("en", "/hl/incons-en"), ("x-default", "/hl/incons-en"),
+                         ("fr", "/hl/incons-fr")),
+    "/hl/incons-fr": _hl("hl-incons-fr", ("fr", "/hl/incons-fr"), ("x-default", "/hl/incons-en"),
+                         ("de", "/hl/incons-en")),
+    "/hl/nc-en": _hl("hl-nc-en", ("en", "/hl/nc-en"), ("x-default", "/hl/nc-en"), ("ru", "/c-canonicalised")),
+    "/hl/ni-en": _hl("hl-ni-en", ("en", "/hl/ni-en"), ("x-default", "/hl/ni-en"), ("ru", "/r-noindex")),
+    "/hl/badcode": _hl("hl-badcode", ("en-UK", "/hl/badcode"), ("x-default", "/hl/badcode")),
+    "/hl/multi": _hl("hl-multi", ("en", "/hl/multi"), ("x-default", "/hl/multi"), ("de", "/a"), ("DE", "/b")),
+    # canonicalised to /hl/en, but its hreflang names itself
+    "/hl/nuc": _hl("hl-nuc", ("en", "/hl/nuc"), ("x-default", "/hl/nuc"), extra=_canonical("{base}/hl/en")),
+    "/hl/outside": _html("hl-outside", body=_alternates(("en", "/hl/outside"), ("x-default", "/hl/outside"))
+                         + "<h1>hl-outside</h1><h2>hl-outside</h2>"),
+    "/hl/unl-en": _hl("hl-unl-en", ("en", "/hl/unl-en"), ("x-default", "/hl/unl-en"), ("fr", "/hl/unl-fr")),
+    "/hl/unl-fr": _hl("hl-unl-fr", ("fr", "/hl/unl-fr"), ("en", "/hl/unl-en"), ("x-default", "/hl/unl-en")),
+    "/hl/noself": _hl("hl-noself", ("ru", "/hl/ru")),
+    "/hl/nox": _hl("hl-nox", ("en", "/hl/nox")),
+}  # fmt: skip
+HREFLANG_LINKED = [p for p in HREFLANG_TRAPS if p != "/hl/unl-fr"]  # /hl/unl-fr: reached through hreflang only
+# the same annotations in the Link header instead of the HTML (clean)
+HREFLANG_HEADER = (
+    '<{base}/hl/header>; rel="alternate"; hreflang="en", <{base}/hl/header>; rel="alternate"; hreflang="x-default"'
+)
+
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -279,6 +319,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/l-mixed",
             *IMAGE_TRAPS,
             *URL_TRAPS,
+            *HREFLANG_LINKED,
+            "/hl/header",
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -317,6 +359,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
     **{path.partition("?")[0]: (200, {}, html) for path, html in URL_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in HREFLANG_TRAPS.items()},
+    "/hl/header": (200, {"Link": HREFLANG_HEADER}, _html("hl-header")),
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -351,6 +395,8 @@ REACHABLE = {
     *RESOURCES,
     "/img/broken.png",
     *URL_TRAPS,
+    *HREFLANG_TRAPS,
+    "/hl/header",
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -417,6 +463,7 @@ EXPECTED_ISSUES = {
         "/c-header-conflict",
         "/dup-2",
         "/c-to-unlinked",
+        "/hl/nuc",
     },
     "canonical_missing": {"/c-missing"},
     "canonical_multiple": {"/c-conflict", "/c-multiple", "/c-header-conflict"},
@@ -474,6 +521,19 @@ EXPECTED_ISSUES = {
     "url_ga_tracking": {"/u/landing?utm_source=news"},
     "url_underscores": {"/u/under_score"},
     "url_over_max": {LONG_PATH},
+    # Hreflang
+    "hreflang_non_200": {"/hl/non200"},
+    "hreflang_missing_return": {"/hl/noreturn", "/hl/nc-en", "/hl/ni-en", "/hl/multi", "/hl/noself"},
+    "hreflang_inconsistent": {"/hl/incons-en"},
+    "hreflang_non_canonical_return": {"/hl/nc-en"},
+    "hreflang_noindex_return": {"/hl/ni-en"},
+    "hreflang_incorrect_codes": {"/hl/badcode"},
+    "hreflang_multiple_entries": {"/hl/multi"},
+    "hreflang_not_using_canonical": {"/hl/nuc"},
+    "hreflang_outside_head": {"/hl/outside"},
+    "hreflang_unlinked": {"/hl/unl-fr"},
+    "hreflang_missing_self_reference": {"/hl/noself"},
+    "hreflang_missing_x_default": {"/hl/noself", "/hl/nox"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent

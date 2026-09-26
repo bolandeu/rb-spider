@@ -122,6 +122,7 @@ pages = sa.Table(
     sa.Column("anchor_ids", sa.String),
     # computed after the crawl (issues.analyze): the URL checks the address fails, ",uppercase,parameters,"
     sa.Column("url_issues", sa.String),
+    sa.Column("hreflang_outside_head", sa.Integer),  # <link rel=alternate hreflang> elements outside <head>
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
@@ -148,14 +149,14 @@ urls = sa.Table(
     sa.Column("url", sa.String, nullable=False),
     sa.UniqueConstraint("url", "crawl_id", name="urls_by_url"),
 )
-LINK_DATA = ("kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment")
+LINK_DATA = ("kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang")
 link_rows = sa.Table(
     "link_rows",
     metadata,
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
     sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
-    # hyperlink | canonical | redirect | refresh | image | css | js | media | iframe (resources the page loads)
+    # hyperlink | canonical | redirect | refresh | hreflang | image | css | js | media | iframe (resources the page loads)
     sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
     sa.Column("anchor", sa.String),
@@ -165,10 +166,14 @@ link_rows = sa.Table(
     sa.Column("alt_attr", sa.Boolean),  # images: the alt attribute is present (even if empty)
     sa.Column("sized", sa.Boolean),  # images: width and height are set in the HTML
     sa.Column("fragment", sa.String),  # hyperlinks to a #bookmark: the id it should land on (Broken Bookmark)
+    sa.Column("hreflang", sa.String),  # hreflang annotations: the language / region code, as written
     sa.Index("link_rows_by_source", "crawl_id", "source_id"),
     sa.Index("link_rows_by_target", "crawl_id", "target_id"),
     # links to a #bookmark are few: Broken Bookmark reads them without scanning every link of the crawl
     sa.Index("link_rows_with_fragment", "crawl_id", sqlite_where=sa.text("fragment IS NOT NULL")),
+    # hreflang annotations: the Hreflang rules and report walk them both ways without scanning every link
+    sa.Index("link_rows_hreflang_by_source", "crawl_id", "source_id", sqlite_where=sa.text("kind = 'hreflang'")),
+    sa.Index("link_rows_hreflang_by_target", "crawl_id", "target_id", sqlite_where=sa.text("kind = 'hreflang'")),
 )
 # `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
 # `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
@@ -187,6 +192,7 @@ links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never w
     sa.Column("alt_attr", sa.Boolean),
     sa.Column("sized", sa.Boolean),
     sa.Column("fragment", sa.String),
+    sa.Column("hreflang", sa.String),
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(

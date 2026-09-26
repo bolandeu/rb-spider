@@ -15,9 +15,10 @@
                                                                                                     
  JSON: `{crawl_id, totals: {stored, internal, external, blocked_by_robots,                          
  no_response, indexable, queued_ever, still_queued}, content_types,                                 
- external_content_types, status, indexability, canonicals, directives, depth}`;                     
+ external_content_types, status, indexability, canonicals, directives, depth, hreflang}`;           
  разделы — `{значение: число URL}`: status — 2xx…5xx, blocked, no_response;                         
- canonicals — missing / self_referencing / canonicalised; directives и depth — среди                
+ canonicals — missing / self_referencing / canonicalised; directives, depth и hreflang              
+ (contains / missing, пусто — hreflang на сайте нет; списки — `spider hreflang`) — среди            
  HTML-страниц сайта с кодом 200. Нет обхода — выход 2.                                              
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮

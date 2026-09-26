@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 # Columns of a `links` row as `PageReader` builds it (the crawl id is added by the writer).
 LINK_FIELDS = (
     "source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment",
+    "hreflang",
 )  # fmt: skip
 _PERCENT = re.compile(r"%[0-9a-fA-F]{2}")
 
@@ -137,7 +138,7 @@ class PageReader:
         self.listed = crawl.mode == "list"  # only the listed URLs and their redirects: no links, no resources
         kinds = {"internal_links": collect.internal_links, "external_links": collect.external_links,
                  "canonical": collect.canonicals, "refresh": collect.meta_refresh, "image": collect.images,
-                 "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
+                 "hreflang": collect.hreflang, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
         self.kinds = {name: _Kind(option.follow, option.store) for name, option in kinds.items()}
 
     def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
@@ -162,6 +163,7 @@ class PageReader:
         rewrite = self.rewrite
         for item in (*page.links, *page.resources):
             item.url = rewrite(item.url)
+        page.hreflang = [(code, rewrite(target)) for code, target in page.hreflang]
         page.redirect_url = rewrite(page.redirect_url) if page.redirect_url else None
         page.refresh_url = rewrite(page.refresh_url) if page.refresh_url else None
         if page.onpage.get("canonical_url"):
@@ -182,7 +184,7 @@ class PageReader:
                 counts["internal_nofollow_outlinks"] += 1
             if kind.store:
                 rows.append((page.url, link.url, "hyperlink", internal, link.anchor, link.alt, link.rel,
-                             link.nofollow, None, None, link.fragment))  # fmt: skip
+                             link.nofollow, None, None, link.fragment, None))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
             if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)
@@ -199,10 +201,20 @@ class PageReader:
             if not target or target == page.url:
                 continue
             if option.store or kind == "redirect":
-                rows.append((page.url, target, kind, internal_of(target), None, None, None, False, None, None, None))
+                rows.append(
+                    (page.url, target, kind, internal_of(target), None, None, None, False, None, None, None, None)
+                )
             always = ("redirect", "refresh") if self.listed else ("redirect",)
             if kind in always or (option.follow and not self.listed):
                 follow.append(target)
+        hreflang = self.kinds["hreflang"]
+        for code, target in page.hreflang:  # self-references too: Missing Self Reference needs them
+            if hreflang.store:
+                rows.append((page.url, target, "hreflang", internal_of(target), None, None, None, False, None, None,
+                             None, code))  # fmt: skip
+            if hreflang.follow and not self.listed and target != page.url:
+                follow.append(target)
+        page.hreflang = []
         return follow, rows
 
     def _resources_to_check(self, page: Page) -> tuple[list[str], list[tuple]]:
@@ -213,7 +225,7 @@ class PageReader:
             option = self.kinds[resource.kind]
             if option.store:
                 rows.append((page.url, resource.url, resource.kind, self.scope.internal(resource.url), None,
-                             resource.alt, None, False, resource.alt_attr, resource.sized, None))  # fmt: skip
+                             resource.alt, None, False, resource.alt_attr, resource.sized, None, None))  # fmt: skip
             if option.follow and not self.listed:
                 check.append(resource.url)
         return check, rows

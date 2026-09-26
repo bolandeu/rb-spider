@@ -195,18 +195,18 @@
 
 ### Hreflang
 
-- [ ] `v2` **Non-200 Hreflang URLs** — URL из hreflang отвечает не 200 (редирект, 4xx, закрыт robots…) _(SF: Issue, High)_
-- [ ] `v2` **Missing Return Links** — альтернативная страница не ссылается hreflang-ом обратно _(SF: Issue, High)_
-- [ ] `v2` **Inconsistent Language & Region Confirmation Links** — обратная ссылка указывает другой язык/регион, чем сама страница _(SF: Issue, High)_
-- [ ] `v2` **Non-Canonical Return Links** — обратные hreflang-ссылки ведут на неканонические URL _(SF: Issue, High)_
-- [ ] `v2` **Noindex Returns Links** — обратные ссылки ведут на страницы с noindex _(SF: Issue, High)_
-- [ ] `v2` **Incorrect Language & Region Codes** — неверный код языка (ISO 639-1) или региона (ISO 3166-1 Alpha 2) _(SF: Issue, High)_
-- [ ] `v2` **Multiple Entries** — один и тот же язык/регион указан несколько раз _(SF: Issue, High)_
-- [ ] `v2` **Not Using Canonical** — в собственной hreflang-разметке страница указана не своим canonical URL _(SF: Issue, High)_
-- [ ] `v2` **Outside \<head\>** — hreflang-элемент вне `<head>` _(SF: Issue, High)_
-- [ ] `v2` **Unlinked Hreflang URLs** — URL найден только через hreflang, обычных ссылок нет _(SF: Issue, Medium)_
-- [ ] `v2` **Missing Self Reference** — нет hreflang-ссылки страницы на саму себя _(SF: Warning, Low)_
-- [ ] `v2` **Missing X-Default** — нет `x-default` (необязательно) _(SF: Warning, Low)_
+- [x] `v2` **Non-200 Hreflang URLs** — URL из hreflang отвечает не 200 (редирект, 4xx, закрыт robots…) _(SF: Issue, High)_
+- [x] `v2` **Missing Return Links** — альтернативная страница не ссылается hreflang-ом обратно _(SF: Issue, High)_
+- [x] `v2` **Inconsistent Language & Region Confirmation Links** — обратная ссылка указывает другой язык/регион, чем сама страница _(SF: Issue, High)_
+- [x] `v2` **Non-Canonical Return Links** — обратные hreflang-ссылки ведут на неканонические URL _(SF: Issue, High)_
+- [x] `v2` **Noindex Returns Links** — обратные ссылки ведут на страницы с noindex _(SF: Issue, High)_
+- [x] `v2` **Incorrect Language & Region Codes** — неверный код языка (ISO 639-1) или региона (ISO 3166-1 Alpha 2) _(SF: Issue, High)_
+- [x] `v2` **Multiple Entries** — один и тот же язык/регион указан несколько раз _(SF: Issue, High)_
+- [x] `v2` **Not Using Canonical** — в собственной hreflang-разметке страница указана не своим canonical URL _(SF: Issue, High)_
+- [x] `v2` **Outside \<head\>** — hreflang-элемент вне `<head>` _(SF: Issue, High)_
+- [x] `v2` **Unlinked Hreflang URLs** — URL найден только через hreflang, обычных ссылок нет _(SF: Issue, Medium)_
+- [x] `v2` **Missing Self Reference** — нет hreflang-ссылки страницы на саму себя _(SF: Warning, Low)_
+- [x] `v2` **Missing X-Default** — нет `x-default` (необязательно) _(SF: Warning, Low)_
 
 ### JavaScript — сравнение raw и rendered HTML
 
@@ -467,7 +467,7 @@
 - [ ] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev
 - [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
 - [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
-- [ ] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML, HTTP-заголовка и sitemap
+- [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML и HTTP-заголовка (`spider overview`, `spider hreflang --only missing`); из sitemap — с #32
 - [ ] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки
 - [ ] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap
 - [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
@@ -542,7 +542,7 @@
 - [x] `MVP` **Meta Refresh** → `collect.meta_refresh.follow` / `.store`
 - [x] `MVP` **iframes** → `collect.iframes.follow` / `.store`
 - [ ] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
-- [ ] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
+- [x] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
 - [ ] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
 - [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
 - [ ] `backlog` **AMP** → `collect.amp.follow` / `.store`
@@ -735,7 +735,7 @@
 - [ ] `v2` **Redirects: Redirect & Canonical Chains** — цепочки с учётом canonical
 - [ ] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals**
 - [ ] `v2` **Pagination: Non-200, Unlinked**
-- [ ] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links**
+- [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
 - [ ] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами
 - [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях
 - [ ] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже)

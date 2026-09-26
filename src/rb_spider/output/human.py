@@ -128,6 +128,21 @@ def redirects_list(data: dict) -> None:
         console.print(f"{steps} → {end}", markup=False)
 
 
+def hreflang_list(data: dict) -> None:
+    shown, total = len(data["annotations"]), data["total"]
+    head = f"[bold]Hreflang ({data['only']})[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    table = Table(box=None, pad_edge=False)
+    for column in ("страница", "код", "цель", "ответ цели", "обратно"):
+        table.add_column(column)
+    back = {True: "да", False: "нет", None: "—"}
+    for row in data["annotations"]:
+        status = row["target_blocked"] or row["target_status"]
+        table.add_row(row["source"], row["hreflang"] or "—", row["target"] or "—",
+                      "—" if status is None else str(status), back[row["return_link"]])  # fmt: skip
+    console.print(table)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -331,7 +346,7 @@ def fetched(data: dict) -> None:
 _OVERVIEW_LABELS = {
     "totals": "Итого", "content_types": "Типы (сайт)", "external_content_types": "Типы (чужие сайты)",
     "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
-    "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)",
+    "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)", "hreflang": "Hreflang (HTML 200)",
 }  # fmt: skip
 
 

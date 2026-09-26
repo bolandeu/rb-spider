@@ -14,6 +14,7 @@ from .commands import (
     enrich,
     export,
     fetch,
+    hreflang,
     init,
     issues,
     links,
@@ -52,6 +53,7 @@ app.command(name="issues")(issues.issues)
 app.command(name="urls")(issues.urls)
 app.command(name="analyze")(issues.analyze)
 app.command(name="redirects")(redirects.redirects)
+app.command(name="hreflang")(hreflang.hreflang)
 app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="overview")(export.overview)
