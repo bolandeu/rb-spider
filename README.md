@@ -38,12 +38,13 @@ uv tool upgrade rb-spider                                      # обновит�
 spider                                                         # список команд
 ```
 
-JS-рендеринг (`spider crawl --render always`) — дополнительно, с Playwright и браузером:
+JS-рендеринг (`spider crawl --render always`) — дополнительно, с Playwright:
 
 ```bash
 uv tool install "rb-spider[render] @ git+https://github.com/bolandeu/spider.git"
-playwright install chromium        # или только headless-оболочка: playwright install --only-shell chromium
 ```
+
+Браузер отдельно ставить не нужно, если уже есть любой Chromium в кэше Playwright (`ms-playwright`) или Google Chrome — spider найдёт его сам; другой — `--set crawl.render_browser=<путь>`. Если нет ничего: `playwright install --only-shell chromium`.
 
 Отказ с ошибкой авторизации при установке — один раз `gh auth login` (или `gh auth setup-git`), либо ссылка вида `git+ssh://git@github.com/bolandeu/spider.git`.
 

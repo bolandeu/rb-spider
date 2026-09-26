@@ -116,8 +116,9 @@ class RenderUnavailable(CliError):
             f"JS rendering needs Playwright and a browser: {reason}",
             action=(
                 f'Install it: uv tool install --reinstall "{DIST_NAME}[render] @ git+https://github.com/bolandeu/spider.git" '
-                "(in a checkout: uv sync --extra render), then: playwright install chromium. "
-                "Or crawl without rendering: --render never."
+                "(in a checkout: uv sync --extra render). A browser: any Chromium in Playwright's cache or Google "
+                "Chrome is found by itself; another one — --set crawl.render_browser=<path>; or: playwright install "
+                "chromium. Or crawl without rendering: --render never."
             ),
             exit_code=1,
         )

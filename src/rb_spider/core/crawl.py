@@ -207,7 +207,7 @@ async def _run(
     concurrency = settings.concurrency
     renderer = (
         Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms, timeout_s=settings.timeout_s,
-                 user_agent=user_agent, headers=settings.headers)
+                 user_agent=user_agent, headers=settings.headers, browser=settings.render_browser)
         if settings.render == "always" else None
     )  # fmt: skip
     # a handler may first wait for a free browser tab: every tab busy with pages ahead of it

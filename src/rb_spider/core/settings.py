@@ -121,6 +121,14 @@ class CrawlSettings(BaseModel):
         le=60000,
         description="Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always.",
     )
+    render_browser: str | None = Field(
+        None,
+        description=(
+            "Путь к браузеру (Chromium / Chrome) для render = always; не задано — сборка Playwright, иначе самая "
+            "свежая из кэша Playwright (ms-playwright), иначе установленный Google Chrome."
+        ),
+        examples=["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+    )
     parse_workers: int | None = Field(
         None,
         ge=0,

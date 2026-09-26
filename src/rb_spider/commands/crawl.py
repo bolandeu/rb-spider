@@ -98,9 +98,10 @@ def crawl(
     JS-сайт (контент, ссылки или title появляются только после скриптов) —
     `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и
     открываются в браузере, SEO-данные берутся из готового DOM, а коды ответа,
-    редиректы и ресурсы проверяются как обычно. Нужен `rb-spider[render]` и
-    `playwright install chromium`; вкладок — crawl.render_tabs, ожидание скриптов —
-    crawl.render_wait_ms. Медленнее обычного обхода в разы.
+    редиректы и ресурсы проверяются как обычно. Нужен `rb-spider[render]`; браузер
+    находится сам — сборка Playwright, любой Chromium из кэша Playwright или Google
+    Chrome (свой путь — crawl.render_browser). Вкладок — crawl.render_tabs, ожидание
+    скриптов — crawl.render_wait_ms. Медленнее обычного обхода в разы.
 
     Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.

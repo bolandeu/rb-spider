@@ -90,5 +90,26 @@ def test_a_browser_that_cannot_start_fails_the_crawl_up_front(base_url: str, eng
         raise RuntimeError("Executable doesn't exist at /nowhere/chrome")
 
     monkeypatch.setattr(BrowserPool, "new_page", broken)
-    with pytest.raises(RenderUnavailable, match="could not start"):  # not a crawl of "dead" pages
+    with pytest.raises(RenderUnavailable, match="no browser could start"):  # not a crawl of "dead" pages
         _crawl(engine, base_url, "always")
+
+
+def test_cached_browsers_newest_first_headless_shell_first(tmp_path) -> None:
+    for build, exe in [("chromium-1200", "chrome-linux/chrome"), ("chromium_headless_shell-1228", "shell/chrome-headless-shell"),
+                       ("chromium-1228", "chrome-linux/chrome"), ("ffmpeg-1011", "ffmpeg"), ("chromium-1300", "empty/readme")]:  # fmt: skip
+        path = tmp_path / build / exe
+        path.parent.mkdir(parents=True)
+        path.write_text("")
+    found = [str(p.relative_to(tmp_path)) for p in render.cached_browsers(tmp_path)]
+    assert found == [
+        "chromium_headless_shell-1228/shell/chrome-headless-shell",
+        "chromium-1228/chrome-linux/chrome",
+        "chromium-1200/chrome-linux/chrome",
+    ]  # a build without an executable is skipped
+
+
+@needs_playwright
+def test_explicit_browser_path_that_does_not_exist(base_url: str, engine) -> None:
+    settings = Settings(crawl=CrawlSettings(render="always", render_browser="/nowhere/chrome"))
+    with pytest.raises(RenderUnavailable, match="/nowhere/chrome"):
+        crawl_site(engine, f"{base_url}/js-only", "polygon", settings)
