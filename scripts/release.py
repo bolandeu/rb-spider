@@ -39,6 +39,11 @@ def main() -> None:
         fail("working tree is not clean — commit or stash first")
     if run("git", "rev-parse", "--abbrev-ref", "HEAD", capture=True) != "main":
         fail("releases are cut from main")
+    # GitHub Actions don't run for this repo: a release is checked here, on macOS and on Linux (Docker)
+    try:
+        run(str(Path(__file__).resolve().parent / "check.sh"), "--linux")
+    except subprocess.CalledProcessError:
+        fail("checks failed (scripts/check.sh --linux) — nothing was released")
 
     run("uv", "version", "--bump", part)  # rewrites pyproject.toml and uv.lock
     version = run("uv", "version", "--short", capture=True)
