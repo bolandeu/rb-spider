@@ -68,16 +68,19 @@ def compute_indexability(conn: sa.Connection, crawl_id: int) -> None:
     conn.execute(_INDEXABLE, {"crawl_id": crawl_id})
 
 
-# Link counts per page from the site's own <a href> links: one grouped pass over `links` each, not a
-# query per page (UPDATE … FROM, SQLite 3.33+).
+# Link counts per page from the site's own <a href> links: one grouped pass over link_rows each (by URL id,
+# in index order), then the URL text for the few thousand groups — not a query per page, and no sort of
+# millions of URL strings. UPDATE … FROM needs SQLite 3.33+.
 _LINK_COUNTS = [
     "UPDATE pages SET inlinks = 0, unique_inlinks = 0, unique_outlinks = 0 WHERE crawl_id = :crawl_id",
-    "UPDATE pages SET inlinks = s.n, unique_inlinks = s.u FROM (SELECT target, count(*) AS n,"
-    " count(DISTINCT source) AS u FROM links WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal"
-    " GROUP BY target) AS s WHERE pages.crawl_id = :crawl_id AND pages.url = s.target",
-    "UPDATE pages SET unique_outlinks = s.u FROM (SELECT source, count(DISTINCT target) AS u FROM links"
-    " WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal GROUP BY source) AS s"
-    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.source",
+    "UPDATE pages SET inlinks = s.n, unique_inlinks = s.u FROM (SELECT u.url, g.n, g.u FROM (SELECT target_id,"
+    " count(*) AS n, count(DISTINCT source_id) AS u FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink'"
+    " AND internal GROUP BY target_id) AS g JOIN urls u ON u.id = g.target_id) AS s"
+    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.url",
+    "UPDATE pages SET unique_outlinks = s.u FROM (SELECT u.url, g.u FROM (SELECT source_id,"
+    " count(DISTINCT target_id) AS u FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal"
+    " GROUP BY source_id) AS g JOIN urls u ON u.id = g.source_id) AS s"
+    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.url",
 ]
 
 
@@ -434,6 +437,15 @@ _LOCALHOST = " OR ".join(
 )
 
 
+def _by_target(detail: str, where: str, having: str = "1") -> str:
+    """Link rows grouped by target: aggregated over URL ids (index order, no string sort), reported by URL."""
+    return (
+        f"SELECT u.url, g.detail FROM (SELECT target_id, {detail} AS detail FROM link_rows"  # noqa: S608 — fixed rule text
+        f" WHERE crawl_id = :crawl_id AND {where} GROUP BY target_id HAVING {having}) AS g"
+        " JOIN urls u ON u.id = g.target_id ORDER BY u.url"
+    )
+
+
 def _links_sql(query: str) -> RuleFinder:
     return _run_sql(sa.text(query))
 
@@ -497,13 +509,13 @@ def _link_rules() -> list[Rule]:
           _sql(f"{HTML_OK} AND internal_outlinks > :internal_outlinks", "internal_outlinks || ' шт.'")),
         r("links_follow_and_nofollow_inlinks", "Follow & Nofollow Internal Inlinks To Page", "warning", "low",
           "На страницу ведут и follow-, и nofollow-ссылки: сигналы противоречат друг другу.",
-          _links_sql(f"SELECT target, sum(nofollow) || ' nofollow из ' || count(*) FROM links WHERE {HYPERLINK}"  # noqa: S608
-                     " AND internal GROUP BY target HAVING sum(nofollow) > 0 AND sum(NOT nofollow) > 0 ORDER BY target"),
+          _links_sql(_by_target("sum(nofollow) || ' nofollow из ' || count(*)", "kind = 'hyperlink' AND internal",
+                                "sum(nofollow) > 0 AND sum(NOT nofollow) > 0")),
           (STORE_INTERNAL,)),
         r("links_nofollow_inlinks_only", "Internal Nofollow Inlinks Only", "warning", "low",
           "На страницу ведут только nofollow-ссылки: поисковик может её не обойти.",
-          _links_sql(f"SELECT target, count(*) || ' шт.' FROM links WHERE {HYPERLINK} AND internal"  # noqa: S608
-                     " GROUP BY target HAVING sum(NOT nofollow) = 0 ORDER BY target"), (STORE_INTERNAL,)),
+          _links_sql(_by_target("count(*) || ' шт.'", "kind = 'hyperlink' AND internal", "sum(NOT nofollow) = 0")),
+          (STORE_INTERNAL,)),
         r("links_high_crawl_depth", "Pages With High Crawl Depth", "opportunity", "medium",
           "Страница в thresholds.crawl_depth и более кликах от старта: поисковику и людям до неё далеко.",
           _sql(f"{HTML_OK} AND depth >= :crawl_depth", "depth || ' кликов'")),
@@ -539,11 +551,13 @@ RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
 def _image_rules() -> list[Rule]:
-    def img(code, name, kind, priority, description, where, detail="NULL", requires=("collect.images.store",)) -> Rule:
+    def img(code, name, kind, priority, description, where, detail="''", requires=("collect.images.store",)) -> Rule:
         """A rule over the page's <img> link rows; reported by image URL, detail — where it's used."""
-        query = (
-            f"SELECT target, count(DISTINCT source) || ' стр., например ' || min(source) || {detail} FROM links"  # noqa: S608
-            f" WHERE crawl_id = :crawl_id AND kind = 'image' AND ({where}) GROUP BY target ORDER BY target"
+        query = (  # grouped over URL ids; the example page's URL is looked up once per image
+            f"SELECT u.url, g.n || ' стр., например ' || e.url || g.extra FROM (SELECT target_id,"  # noqa: S608 — fixed rule text
+            f" count(DISTINCT source_id) AS n, min(source_id) AS example, {detail} AS extra FROM link_rows"
+            f" WHERE crawl_id = :crawl_id AND kind = 'image' AND ({where}) GROUP BY target_id) AS g"
+            " JOIN urls u ON u.id = g.target_id JOIN urls e ON e.id = g.example ORDER BY u.url"
         )
         return Rule(code, "Images", f"Images: {name}", kind, priority, description, _links_sql(query), requires)
 
@@ -624,6 +638,10 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
     thresholds = thresholds or ThresholdSettings()
     skipped = {r.code for r in not_checked(engine, crawl_id)}
     with engine.begin() as conn:
+        # Planner statistics: without them SQLite may scan all of a crawl's links for every page instead of
+        # finding the URL's id first (minutes instead of seconds). Sampled, so quick however big the database.
+        conn.exec_driver_sql("PRAGMA analysis_limit = 1000")
+        conn.exec_driver_sql("ANALYZE")
         compute_indexability(conn, crawl_id)
         compute_link_counts(conn, crawl_id)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))

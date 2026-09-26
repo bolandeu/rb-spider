@@ -23,7 +23,7 @@ from .storage import crawls, projects
 
 # Child tables of a crawl, deleted explicitly by crawl_id: faster than SQLite's per-row cascade on
 # millions of link rows (the cascade stays as a safety net).
-_CRAWL_TABLES = (storage.links, storage.issues, storage.frontier, storage.url_metrics, storage.pages)
+_CRAWL_TABLES = (storage.link_rows, storage.urls, storage.issues, storage.frontier, storage.url_metrics, storage.pages)
 _DURATION = re.compile(r"^\s*(\d+)\s*([hdwy])\s*$")
 _UNITS = {"h": timedelta(hours=1), "d": timedelta(days=1), "w": timedelta(weeks=1), "y": timedelta(days=365)}
 
@@ -185,8 +185,10 @@ def db_info(engine: sa.Engine) -> DbInfo:
     with engine.connect() as conn:
         tables = set(sa.inspect(conn).get_table_names())
         for name in counts:
-            if name in tables:
-                counts[name] = conn.exec_driver_sql(f"SELECT count(*) FROM {name}").scalar_one()  # noqa: S608 — fixed names
+            # links live in link_rows since schema 0014; a database not migrated yet still has the table
+            source = next((t for t in {"links": ("link_rows", "links")}.get(name, (name,)) if t in tables), None)
+            if source is not None:
+                counts[name] = conn.exec_driver_sql(f"SELECT count(*) FROM {source}").scalar_one()  # noqa: S608 — fixed names
         free = conn.exec_driver_sql("PRAGMA freelist_count").scalar_one()
         page_size = conn.exec_driver_sql("PRAGMA page_size").scalar_one()
     html = storage.html_db_path()

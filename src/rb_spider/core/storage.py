@@ -133,12 +133,24 @@ frontier = sa.Table(
     sa.Column("done", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.Index("frontier_pending", "crawl_id", "done"),
 )
-links = sa.Table(
-    "links",
+# Every URL a crawl stored a link from or to, once: links refer to URLs by id. With ~33 links a page, two
+# URL strings per link row (and two indexes over them) were most of the database and of the time spent
+# writing it. Unique per crawl, url first: a lookup by URL needs no crawl_id to find its row.
+urls = sa.Table(
+    "urls",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.UniqueConstraint("url", "crawl_id", name="urls_by_url"),
+)
+LINK_DATA = ("kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized")
+link_rows = sa.Table(
+    "link_rows",
     metadata,
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("source", sa.String, nullable=False),
-    sa.Column("target", sa.String, nullable=False),
+    sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
+    sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
     # hyperlink | canonical | redirect | refresh | image | css | js | media | iframe (resources the page loads)
     sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
@@ -148,8 +160,25 @@ links = sa.Table(
     sa.Column("nofollow", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.Column("alt_attr", sa.Boolean),  # images: the alt attribute is present (even if empty)
     sa.Column("sized", sa.Boolean),  # images: width and height are set in the HTML
-    sa.Index("links_by_source", "crawl_id", "source"),
-    sa.Index("links_by_target", "crawl_id", "target"),
+    sa.Index("link_rows_by_source", "crawl_id", "source_id"),
+    sa.Index("link_rows_by_target", "crawl_id", "target_id"),
+)
+# `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
+# `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
+links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never written to)
+    "links",
+    sa.MetaData(),
+    sa.Column("crawl_id", sa.Integer),
+    sa.Column("source", sa.String),
+    sa.Column("target", sa.String),
+    sa.Column("kind", sa.String),
+    sa.Column("internal", sa.Boolean),
+    sa.Column("anchor", sa.String),
+    sa.Column("alt", sa.String),
+    sa.Column("rel", sa.String),
+    sa.Column("nofollow", sa.Boolean),
+    sa.Column("alt_attr", sa.Boolean),
+    sa.Column("sized", sa.Boolean),
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(
@@ -283,7 +312,20 @@ def _insert_json(table: sa.Table, columns: list[str], verb: str = "INSERT") -> s
 
 _JSON_CHUNK = 5000  # rows per statement: a bounded JSON argument keeps SQLite's memory flat
 _INSERT_PAGES = _insert_json(pages, _PAGE_COLUMNS, "INSERT OR REPLACE")  # a URL reached twice keeps its latest response
-_INSERT_LINKS = _insert_json(links, _LINK_COLUMNS)
+# A batch of links: its URLs get ids (new ones inserted), then the rows go in with the ids — all inside
+# SQLite, so the writer keeps no URL -> id map in memory. Both statements read the same JSON chunk.
+_LINK_JSON = ", ".join(f"json_extract(value, '$[{i}]') AS {name}" for i, name in enumerate(_LINK_COLUMNS))
+_INSERT_LINK_URLS = (
+    f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
+    "INSERT OR IGNORE INTO urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
+)
+_INSERT_LINK_ROWS = (
+    f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
+    f"INSERT INTO link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
+    f"SELECT r.crawl_id, s.id, t.id, {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r "
+    "JOIN urls s ON s.url = r.source AND s.crawl_id = r.crawl_id "
+    "JOIN urls t ON t.url = r.target AND t.crawl_id = r.crawl_id"
+)
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
 _MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
 
@@ -406,13 +448,15 @@ class PageWriter:
             with self.html_engine.begin() as conn:
                 conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), batch.html)
         with self.engine.begin() as conn:
-            for sql, rows in (
-                (_INSERT_QUEUED, batch.queued),
-                (_INSERT_PAGES, batch.pages),
-                (_INSERT_LINKS, batch.links),
+            for statements, rows in (
+                ((_INSERT_QUEUED,), batch.queued),
+                ((_INSERT_PAGES,), batch.pages),
+                ((_INSERT_LINK_URLS, _INSERT_LINK_ROWS), batch.links),
             ):
                 for chunk in range(0, len(rows), _JSON_CHUNK):  # SQLite parses a JSON argument whole
-                    conn.exec_driver_sql(sql, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
+                    data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
+                    for sql in statements:
+                        conn.exec_driver_sql(sql, (data,))
             if batch.done:
                 conn.exec_driver_sql(_MARK_DONE, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
 

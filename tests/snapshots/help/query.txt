@@ -5,10 +5,12 @@
                                                                                                     
  Для вопросов, на которые нет готовой команды. База открывается только для                          
  чтения, а SQLite сам отклоняет всё, кроме SELECT: запись, ATTACH, PRAGMA.                          
- Таблицы: pages, links, issues, crawls, projects, frontier; у строк обхода —                        
- `crawl_id` (`spider crawls list`). Колонки — `spider export` с тем же набором                      
- или `SELECT * FROM pages LIMIT 1`. Функция casefold(x) — регистр без учёта                         
- кириллицы.                                                                                         
+ Таблицы: pages, links, issues, url_metrics, crawls, projects, frontier; у строк                    
+ обхода — `crawl_id` (`spider crawls list`). `links` — представление с URL                          
+ текстом (source, target); хранятся ссылки в link_rows по id из urls — для                          
+ тяжёлых запросов быстрее группировать link_rows по source_id / target_id и                         
+ соединять с urls в конце. Колонки — `spider export` с тем же набором или                           
+ `SELECT * FROM pages LIMIT 1`. Функция casefold(x) — регистр без учёта кириллицы.                  
                                                                                                     
  Примеры:                                                                                           
    spider query "SELECT status_code, count(*) FROM pages WHERE crawl_id = 3 GROUP BY 1"             
