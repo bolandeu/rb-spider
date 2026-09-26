@@ -120,7 +120,8 @@ async def _run(
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
         writer.add(page, depth=depth)
 
-        targets = [*page.links, page.redirect_url, page.refresh_url]
+        # canonical targets too: "canonical points to a non-indexable URL" needs the target's own response
+        targets = [*page.links, page.redirect_url, page.refresh_url, page.onpage.get("canonical_url")]
         new = [u for u in dict.fromkeys(targets) if u and urlsplit(u).netloc == host and u not in depth_of]
         if max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests already in flight
             new = new[: max(0, max_urls - len(depth_of))]

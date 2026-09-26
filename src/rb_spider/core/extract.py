@@ -30,7 +30,7 @@ class Page:
     refresh_kind: str | None = None  # "meta" | "http"
     error: str | None = None  # no response: why (status_code is 0)
     blocked: str | None = None  # not fetched on purpose: "robots_txt" (status_code is 0)
-    onpage: dict = field(default_factory=dict)  # title/description/h1/h2 details, see _onpage()
+    onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
     def no_response(cls, url: str, error: str) -> Page:
@@ -58,6 +58,70 @@ def _refresh_target(base: str, value: str | None) -> str | None:
 
 
 _WHITESPACE = re.compile(r"\s+")
+
+# Directive names Screaming Frog reports on (Directives tab); anything else is kept but unnamed.
+DIRECTIVES = {
+    "index", "noindex", "follow", "nofollow", "none", "noarchive", "nosnippet", "noimageindex",
+    "notranslate", "noodp", "noydir", "unavailable_after", "all", "max-snippet", "max-image-preview",
+    "max-video-preview", "indexifembedded",
+}  # fmt: skip
+_CANONICAL_BAD_ATTRS = ("hreflang", "lang", "media", "type")
+_LINK_HEADER = re.compile(r"<([^>]*)>\s*;([^,]*)")
+
+
+def _directive_tokens(value: str) -> list[str]:
+    """`noindex, nofollow` / `googlebot: noindex` / `unavailable_after: 2030-01-01` -> directive names."""
+    tokens = []
+    for raw in value.lower().split(","):
+        token = raw.strip()
+        head, sep, rest = token.partition(":")
+        if sep and head.strip() not in DIRECTIVES:  # "botname: directive" — keep the directive
+            token = rest.strip()
+        name = token.split(":", 1)[0].strip()
+        if name:
+            tokens.append(name)
+    return tokens
+
+
+def _header_canonicals(headers: dict[str, str]) -> list[str]:
+    """Targets of `Link: <url>; rel="canonical"` (the header can list several links)."""
+    return [
+        target.strip()
+        for target, params in _LINK_HEADER.findall(headers.get("link", ""))
+        if re.search(r'rel\s*=\s*"?canonical"?', params, re.IGNORECASE)
+    ]
+
+
+def _directives_and_canonical(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) -> dict:
+    """Directives and canonical from HTTP headers and (for HTML) the page, in `pages` column names."""
+    tokens = _directive_tokens(headers.get("x-robots-tag", ""))
+    raw_canonicals = [(href, False) for href in _header_canonicals(headers)]  # (href, from HTML)
+    robots_outside = canonical_outside = 0
+    invalid_attr = False
+    if tree is not None:
+        head_ids = {n.mem_id for n in tree.head.css("meta, link")} if tree.head else set()
+        for meta in tree.css("meta[name]"):
+            if (meta.attributes.get("name") or "").lower() == "robots":
+                tokens += _directive_tokens(meta.attributes.get("content") or "")
+                robots_outside += meta.mem_id not in head_ids
+        for link in tree.css("link[rel]"):
+            if "canonical" in (link.attributes.get("rel") or "").lower().split():
+                raw_canonicals.append(((link.attributes.get("href") or "").strip(), True))
+                canonical_outside += link.mem_id not in head_ids
+                invalid_attr |= any(attr in link.attributes for attr in _CANONICAL_BAD_ATTRS)
+    targets = [urljoin(url, href) for href, _ in raw_canonicals if href]
+    distinct = {normalize_url(t) for t in targets}
+    return {
+        "robots_directives": f",{','.join(dict.fromkeys(tokens))}," if tokens else None,
+        "robots_outside_head": robots_outside,
+        "canonical_url": normalize_url(targets[0]) if targets else None,
+        "canonical_count": len(raw_canonicals),
+        "canonical_conflict": len(distinct) > 1,
+        "canonical_outside_head": canonical_outside,
+        "canonical_invalid_attr": invalid_attr,
+        "canonical_relative": any(href and not urlsplit(href).scheme for href, _ in raw_canonicals),
+        "canonical_fragment": any("#" in href for href, _ in raw_canonicals),
+    }
 
 
 def _text(node) -> str:
@@ -108,18 +172,20 @@ def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes)
     page = Page(url=url, status_code=status_code, content_type=content_type, bytes=len(body))
     if refresh := _refresh_target(url, headers.get("refresh")):
         page.refresh_url, page.refresh_kind = refresh, "http"
+    is_html = bool(body) and "html" in (content_type or "text/html") and not 300 <= status_code < 400
+    tree = LexborHTMLParser(body) if is_html else None
+    page.onpage = _directives_and_canonical(url, headers, tree)
 
     if 300 <= status_code < 400:
         location = headers.get("location")
         page.redirect_url = _absolute(url, location) if location else None
         return page
-    if not body or "html" not in (content_type or "text/html"):
+    if tree is None:
         return page
 
-    tree = LexborHTMLParser(body)
     title = tree.css_first("title")
     page.title = _text(title) if title else None
-    page.onpage = _onpage(tree)
+    page.onpage |= _onpage(tree)
     if page.refresh_url is None:
         for meta in tree.css("meta[http-equiv]"):
             if (meta.attributes.get("http-equiv") or "").lower() == "refresh":

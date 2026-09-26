@@ -87,6 +87,46 @@ ONPAGE_TRAPS: dict[str, str] = {
     "/h2-long": _html("h2-long", body=f"<h1>H1 h2-long</h1><h2>{'Очень длинный подзаголовок раздела ' * 3}</h2>"),
 }
 
+
+def _canonical(href: str, extra: str = "") -> str:
+    return f'<link rel="canonical" href="{href}"{extra}>'
+
+
+def _robots(content: str) -> str:
+    return f'<meta name="robots" content="{content}">'
+
+
+# `{base}` becomes the polygon's own http://host:port at response time (absolute canonicals).
+DIRECTIVE_CANONICAL_TRAPS: dict[str, tuple[dict[str, str], str]] = {
+    # Canonicals
+    "/c-conflict": ({}, _html("c-conflict", head=_head("c-conflict", extra=_canonical("{base}/c-conflict") + _canonical("{base}/a")))),
+    "/c-multiple": ({}, _html("c-multiple", head=_head("c-multiple", extra=_canonical("{base}/c-multiple") * 2))),
+    "/c-nonindexable": ({}, _html("c-nonindexable", head=_head("c-nonindexable", extra=_canonical("{base}/r-noindex")))),
+    "/c-invalid": ({}, _html("c-invalid", head=_head("c-invalid", extra=_canonical("{base}/c-invalid", ' hreflang="ru"')))),
+    "/c-fragment": ({}, _html("c-fragment", head=_head("c-fragment", extra=_canonical("{base}/c-fragment#top")))),
+    "/c-outside": ({}, _html("c-outside", body=_canonical("{base}/c-outside") + "<h1>c-outside</h1><h2>c-outside</h2>")),
+    "/c-canonicalised": ({}, _html("c-canonicalised", head=_head("c-canonicalised", extra=_canonical("{base}/a")))),
+    "/c-missing": ({}, _html("c-missing")),  # the one clean page without a canonical (see NO_CANONICAL)
+    "/c-relative": ({}, _html("c-relative", head=_head("c-relative", extra=_canonical("/c-relative")))),
+    "/c-header-conflict": (
+        {"Link": '<{base}/a>; rel="canonical"'},
+        _html("c-header-conflict", head=_head("c-header-conflict", extra=_canonical("{base}/c-header-conflict"))),
+    ),
+    # Directives
+    "/r-outside": ({}, _html("r-outside", body=_robots("index, follow") + "<h1>r-outside</h1><h2>r-outside</h2>")),
+    "/r-noimageindex": ({}, _html("r-noimageindex", head=_head("r-noimageindex", extra=_robots("noimageindex")))),
+    "/r-noindex": ({}, _html("r-noindex", head=_head("r-noindex", extra=_robots("noindex")))),
+    "/r-noindex-header": ({"X-Robots-Tag": "noindex"}, _html("r-noindex-header")),
+    "/r-nofollow": ({}, _html("r-nofollow", head=_head("r-nofollow", extra=_robots("nofollow")))),
+    "/r-none": ({}, _html("r-none", head=_head("r-none", extra=_robots("none")))),
+    "/r-unavailable": ({"X-Robots-Tag": "unavailable_after: 2030-01-01"}, _html("r-unavailable")),
+    "/r-nosnippet": ({}, _html("r-nosnippet", head=_head("r-nosnippet", extra=_robots("nosnippet")))),
+    "/r-noodp": ({}, _html("r-noodp", head=_head("r-noodp", extra=_robots("noodp")))),
+    "/r-noydir": ({}, _html("r-noydir", head=_head("r-noydir", extra=_robots("noydir")))),
+    "/r-notranslate": ({}, _html("r-notranslate", head=_head("r-notranslate", extra=_robots("notranslate")))),
+}  # fmt: skip
+NO_CANONICAL = {"/c-missing"}
+
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/": (
         200,
@@ -110,6 +150,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/reset",
             "/to-missing",
             *ONPAGE_TRAPS,
+            *DIRECTIVE_CANONICAL_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -134,6 +175,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/http-refresh": (200, {"Refresh": "0; url=/c"}, _html("http-refresh")),
     # "/reset" closes the connection without answering (see _handle)
     **{path: (200, {}, html) for path, html in ONPAGE_TRAPS.items()},
+    **{path: (200, headers, html) for path, (headers, html) in DIRECTIVE_CANONICAL_TRAPS.items()},
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).
@@ -156,6 +198,7 @@ REACHABLE = {
     "/reset",
     "/to-missing",
     *ONPAGE_TRAPS,
+    *DIRECTIVE_CANONICAL_TRAPS,
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -200,6 +243,27 @@ EXPECTED_ISSUES = {
     "h2_non_sequential": {"/h2-nonseq", "/h1-missing"},
     "h2_duplicate": DUPLICATES,
     "h2_over_max": {"/h2-long"},
+    # Canonicals
+    "canonical_multiple_conflicting": {"/c-conflict", "/c-header-conflict"},
+    "canonical_non_indexable": {"/c-nonindexable"},
+    "canonical_invalid_attribute": {"/c-invalid"},
+    "canonical_fragment": {"/c-fragment"},
+    "canonical_outside_head": {"/c-outside"},
+    "canonical_canonicalised": {"/c-canonicalised", "/c-nonindexable", "/c-header-conflict"},  # header target first
+    "canonical_missing": {"/c-missing"},
+    "canonical_multiple": {"/c-conflict", "/c-multiple", "/c-header-conflict"},
+    "canonical_relative": {"/c-relative"},
+    # Directives
+    "directives_outside_head": {"/r-outside"},
+    "directives_noimageindex": {"/r-noimageindex"},
+    "directives_noindex": {"/r-noindex", "/r-noindex-header"},
+    "directives_nofollow": {"/r-nofollow"},
+    "directives_none": {"/r-none"},
+    "directives_unavailable_after": {"/r-unavailable"},
+    "directives_nosnippet": {"/r-nosnippet"},
+    "directives_noodp": {"/r-noodp"},
+    "directives_noydir": {"/r-noydir"},
+    "directives_notranslate": {"/r-notranslate"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
@@ -212,8 +276,11 @@ async def _handle(request: web.Request) -> web.StreamResponse:
         request.transport.abort()
         return web.Response()
     status, headers, body = ROUTES.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
-    headers = {"Content-Type": "text/html; charset=utf-8", **headers}
-    return web.Response(status=status, headers=headers, text=body)
+    base = f"http://{request.host}"
+    if status == 200 and "<head>" in body and 'rel="canonical"' not in body and request.path not in NO_CANONICAL:
+        body = body.replace("<head>", f"<head>{_canonical(base + request.path_qs)}", 1)  # clean pages: self
+    headers = {"Content-Type": "text/html; charset=utf-8", **{k: v.replace("{base}", base) for k, v in headers.items()}}
+    return web.Response(status=status, headers=headers, text=body.replace("{base}", base))
 
 
 @contextmanager

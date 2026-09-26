@@ -159,16 +159,16 @@
 
 ### Canonicals
 
-- [ ] `MVP` **Multiple Conflicting** — несколько canonical с разными URL (в HTML, в HTTP-заголовке или в обоих) _(SF: Issue, High)_
-- [ ] `MVP` **Non-Indexable Canonical** — canonical указывает на неиндексируемый URL _(SF: Issue, High)_
-- [ ] `MVP` **Invalid Attribute In Annotation** — у `rel="canonical"` лишние атрибуты `hreflang`, `lang`, `media` или `type` _(SF: Issue, High)_
-- [ ] `MVP` **Contains Fragment URL** — canonical содержит фрагмент `#…` _(SF: Issue, High)_
-- [ ] `MVP` **Outside \<head\>** — `<link rel="canonical">` вне `<head>` _(SF: Issue, High)_
-- [ ] `MVP` **Canonicalised** — canonical указывает на другой URL (страница «склеена» с другой) _(SF: Warning, High)_
-- [ ] `MVP` **Missing** — canonical нет ни в HTML, ни в HTTP-заголовке _(SF: Warning, Medium)_
-- [ ] `MVP` **Unlinked** — URL найден только через canonical, обычными ссылками на него не ведут _(SF: Warning, Medium)_
-- [ ] `MVP` **Multiple** — несколько canonical (пусть и одинаковых) _(SF: Warning, Low)_
-- [ ] `MVP` **Canonical Is Relative** — canonical задан относительным, а не абсолютным URL _(SF: Warning, Low)_
+- [x] `MVP` **Multiple Conflicting** — несколько canonical с разными URL (в HTML, в HTTP-заголовке или в обоих) _(SF: Issue, High)_
+- [x] `MVP` **Non-Indexable Canonical** — canonical указывает на неиндексируемый URL _(SF: Issue, High)_
+- [x] `MVP` **Invalid Attribute In Annotation** — у `rel="canonical"` лишние атрибуты `hreflang`, `lang`, `media` или `type` _(SF: Issue, High)_
+- [x] `MVP` **Contains Fragment URL** — canonical содержит фрагмент `#…` _(SF: Issue, High)_
+- [x] `MVP` **Outside \<head\>** — `<link rel="canonical">` вне `<head>` _(SF: Issue, High)_
+- [x] `MVP` **Canonicalised** — canonical указывает на другой URL (страница «склеена» с другой) _(SF: Warning, High)_
+- [x] `MVP` **Missing** — canonical нет ни в HTML, ни в HTTP-заголовке _(SF: Warning, Medium)_
+- [ ] `MVP` **Unlinked** (#9) — URL найден только через canonical, обычными ссылками на него не ведут _(SF: Warning, Medium)_
+- [x] `MVP` **Multiple** — несколько canonical (пусть и одинаковых) _(SF: Warning, Low)_
+- [x] `MVP` **Canonical Is Relative** — canonical задан относительным, а не абсолютным URL _(SF: Warning, Low)_
 
 ### Pagination — пагинация (rel next/prev)
 
@@ -182,16 +182,16 @@
 
 ### Directives — директивы (meta robots, X-Robots-Tag)
 
-- [ ] `MVP` **Outside \<head\>** — meta robots вне `<head>` _(SF: Issue, High)_
-- [ ] `MVP` **NoImageIndex** — директива `noimageindex` (не индексировать картинки страницы) _(SF: Issue, Low)_
-- [ ] `MVP` **Noindex** — `noindex` в meta robots или X-Robots-Tag: страница не попадёт в индекс _(SF: Warning, High)_
-- [ ] `MVP` **Nofollow** — `nofollow`: поисковику не переходить по ссылкам страницы _(SF: Warning, High)_
-- [ ] `MVP` **None** — `none` = `noindex, nofollow` _(SF: Warning, High)_
-- [ ] `MVP` **Unavailable_After** — `unavailable_after`: убрать из индекса после даты _(SF: Warning, Medium)_
-- [ ] `MVP` **NoSnippet** — `nosnippet`: не показывать сниппет в выдаче _(SF: Warning, Low)_
-- [ ] `MVP` **NoODP** — устаревшая директива `noodp` _(SF: Warning, Low)_
-- [ ] `MVP` **NoYDIR** — устаревшая директива `noydir` _(SF: Warning, Low)_
-- [ ] `MVP` **NoTranslate** — `notranslate`: не предлагать перевод страницы _(SF: Warning, Low)_
+- [x] `MVP` **Outside \<head\>** — meta robots вне `<head>` _(SF: Issue, High)_
+- [x] `MVP` **NoImageIndex** — директива `noimageindex` (не индексировать картинки страницы) _(SF: Issue, Low)_
+- [x] `MVP` **Noindex** — `noindex` в meta robots или X-Robots-Tag: страница не попадёт в индекс _(SF: Warning, High)_
+- [x] `MVP` **Nofollow** — `nofollow`: поисковику не переходить по ссылкам страницы _(SF: Warning, High)_
+- [x] `MVP` **None** — `none` = `noindex, nofollow` _(SF: Warning, High)_
+- [x] `MVP` **Unavailable_After** — `unavailable_after`: убрать из индекса после даты _(SF: Warning, Medium)_
+- [x] `MVP` **NoSnippet** — `nosnippet`: не показывать сниппет в выдаче _(SF: Warning, Low)_
+- [x] `MVP` **NoODP** — устаревшая директива `noodp` _(SF: Warning, Low)_
+- [x] `MVP` **NoYDIR** — устаревшая директива `noydir` _(SF: Warning, Low)_
+- [x] `MVP` **NoTranslate** — `notranslate`: не предлагать перевод страницы _(SF: Warning, Low)_
 
 ### Hreflang
 
@@ -466,7 +466,7 @@
 - [ ] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
 - [ ] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev
 - [ ] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
-- [ ] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
+- [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
 - [ ] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML, HTTP-заголовка и sitemap
 - [ ] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки
 - [ ] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap

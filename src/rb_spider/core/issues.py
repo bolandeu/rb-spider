@@ -34,8 +34,32 @@ class Rule:
 
 RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
-# On-page checks look at pages that are HTML and answered 200 (indexability refines this in #11).
+# On-page checks look at pages that are HTML and answered 200; duplicates only among indexable ones.
 HTML_OK = "status_code = 200 AND content_type LIKE '%html%'"
+INDEXABLE_HTML = f"{HTML_OK} AND indexable"
+
+# Why a URL can't be indexed — Screaming Frog's Indexability Status, first matching reason wins.
+_INDEXABILITY = sa.text(
+    """
+    UPDATE pages SET indexability_status = CASE
+        WHEN blocked = 'robots_txt' THEN 'Blocked by Robots.txt'
+        WHEN status_code = 0 THEN 'No Response'
+        WHEN status_code BETWEEN 300 AND 399 OR refresh_url IS NOT NULL THEN 'Redirected'
+        WHEN status_code BETWEEN 400 AND 499 THEN 'Client Error'
+        WHEN status_code >= 500 THEN 'Server Error'
+        WHEN robots_directives LIKE '%,noindex,%' OR robots_directives LIKE '%,none,%' THEN 'noindex'
+        WHEN canonical_url IS NOT NULL AND canonical_url <> url THEN 'Canonicalised'
+    END
+    WHERE crawl_id = :crawl_id
+    """
+)
+_INDEXABLE = sa.text("UPDATE pages SET indexable = indexability_status IS NULL WHERE crawl_id = :crawl_id")
+
+
+def compute_indexability(conn: sa.Connection, crawl_id: int) -> None:
+    """Fill pages.indexable / indexability_status — rules and reports rely on them."""
+    conn.execute(_INDEXABILITY, {"crawl_id": crawl_id})
+    conn.execute(_INDEXABLE, {"crawl_id": crawl_id})
 
 
 def _run_sql(query: sa.TextClause) -> RuleFinder:
@@ -57,7 +81,7 @@ def _duplicate(column: str) -> RuleFinder:
         sa.text(
             f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column name
             f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM pages"
-            f"  WHERE crawl_id = :crawl_id AND {HTML_OK} AND trim(coalesce({column}, '')) <> ''"
+            f"  WHERE crawl_id = :crawl_id AND {INDEXABLE_HTML} AND trim(coalesce({column}, '')) <> ''"
             ") WHERE n > 1 ORDER BY value, url"
         )
     )
@@ -267,7 +291,77 @@ RULES: list[Rule] = [
         _sql("refresh_kind = 'http'", "refresh_url"),
     ),
 ]
+
+
+def _directive(name: str) -> str:
+    return f"robots_directives LIKE '%,{name},%'"
+
+
+_NON_INDEXABLE_CANONICAL = _run_sql(
+    sa.text(
+        "SELECT p.url, p.canonical_url || ' — ' || t.indexability_status FROM pages p"
+        " JOIN pages t ON t.crawl_id = p.crawl_id AND t.url = p.canonical_url"
+        " WHERE p.crawl_id = :crawl_id AND p.canonical_url <> p.url AND NOT t.indexable ORDER BY p.url"  # self: see noindex
+    )
+)
+
+
+def _directive_canonical_rules() -> list[Rule]:
+    def r(code, group, name, kind, priority, description, find) -> Rule:
+        return Rule(code, group, f"{group}: {name}", kind, priority, description, find)
+
+    return [
+        # --- Canonicals
+        r("canonical_multiple_conflicting", "Canonicals", "Multiple Conflicting", "issue", "high",
+          "Несколько canonical с разными URL (в HTML и/или заголовке Link): поисковик выберет сам.",
+          _sql("canonical_conflict", "canonical_url")),
+        r("canonical_non_indexable", "Canonicals", "Non-Indexable Canonical", "issue", "high",
+          "Canonical ведёт на неиндексируемый URL (редирект, ошибка, noindex, запрет robots.txt…).",
+          _NON_INDEXABLE_CANONICAL),
+        r("canonical_invalid_attribute", "Canonicals", "Invalid Attribute In Annotation", "issue", "high",
+          "У <link rel=\"canonical\"> лишние атрибуты hreflang, lang, media или type: поисковик может его не принять.",
+          _sql("canonical_invalid_attr", "canonical_url")),
+        r("canonical_fragment", "Canonicals", "Contains Fragment URL", "issue", "high",
+          "Canonical содержит фрагмент #…: поисковики фрагмент отбрасывают, это признак ошибки.",
+          _sql("canonical_fragment", "canonical_url")),
+        r("canonical_outside_head", "Canonicals", "Outside <head>", "issue", "high",
+          "<link rel=\"canonical\"> вне <head>: поисковик его проигнорирует.", _sql("canonical_outside_head > 0")),
+        r("canonical_canonicalised", "Canonicals", "Canonicalised", "warning", "high",
+          "Canonical указывает на другой URL: страница «склеена» с ним и сама не индексируется.",
+          _sql("canonical_url IS NOT NULL AND canonical_url <> url", "canonical_url")),
+        r("canonical_missing", "Canonicals", "Missing", "warning", "medium",
+          "Canonical нет ни в HTML, ни в заголовке Link.", _sql(f"{HTML_OK} AND coalesce(canonical_count, 0) = 0")),
+        r("canonical_multiple", "Canonicals", "Multiple", "warning", "low",
+          "Несколько canonical (пусть и одинаковых).", _sql("canonical_count > 1", "CAST(canonical_count AS TEXT)")),
+        r("canonical_relative", "Canonicals", "Canonical Is Relative", "warning", "low",
+          "Canonical задан относительным URL: надёжнее абсолютный.", _sql("canonical_relative", "canonical_url")),
+        # --- Directives
+        r("directives_outside_head", "Directives", "Outside <head>", "issue", "high",
+          "<meta name=\"robots\"> вне <head>: поисковик его проигнорирует.", _sql("robots_outside_head > 0")),
+        r("directives_noimageindex", "Directives", "NoImageIndex", "issue", "low",
+          "noimageindex: картинки страницы не попадут в поиск по картинкам.", _sql(_directive("noimageindex"))),
+        r("directives_noindex", "Directives", "Noindex", "warning", "high",
+          "noindex в meta robots или X-Robots-Tag: страница не попадёт в индекс.", _sql(_directive("noindex"))),
+        r("directives_nofollow", "Directives", "Nofollow", "warning", "high",
+          "nofollow: поисковик не пойдёт по ссылкам страницы.", _sql(_directive("nofollow"))),
+        r("directives_none", "Directives", "None", "warning", "high",
+          "none = noindex, nofollow: страницы нет в индексе и ссылки не учитываются.", _sql(_directive("none"))),
+        r("directives_unavailable_after", "Directives", "Unavailable_After", "warning", "medium",
+          "unavailable_after: страница выпадет из индекса после указанной даты.",
+          _sql(_directive("unavailable_after"))),
+        r("directives_nosnippet", "Directives", "NoSnippet", "warning", "low",
+          "nosnippet: в выдаче не будет текстового сниппета.", _sql(_directive("nosnippet"))),
+        r("directives_noodp", "Directives", "NoODP", "warning", "low",
+          "noodp — устаревшая директива (каталог DMOZ закрыт), её можно убрать.", _sql(_directive("noodp"))),
+        r("directives_noydir", "Directives", "NoYDIR", "warning", "low",
+          "noydir — устаревшая директива (каталог Yahoo закрыт), её можно убрать.", _sql(_directive("noydir"))),
+        r("directives_notranslate", "Directives", "NoTranslate", "warning", "low",
+          "notranslate: поисковик не предложит перевод страницы.", _sql(_directive("notranslate"))),
+    ]  # fmt: skip
+
+
 RULES += _onpage_rules()
+RULES += _directive_canonical_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -282,6 +376,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
     """(Re)compute every rule for a crawl, replacing earlier findings. Returns the number of findings."""
     thresholds = thresholds or ThresholdSettings()
     with engine.begin() as conn:
+        compute_indexability(conn, crawl_id)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         rows = [
             {"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}

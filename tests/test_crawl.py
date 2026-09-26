@@ -190,3 +190,24 @@ def test_cli_analysis_without_crawl(args: tuple[str, ...]) -> None:
     code, payload = _invoke_json(*args)
     assert code == 2
     assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+
+
+def test_indexability_status_per_page(base_url: str, polygon_crawl) -> None:
+    engine, crawl_id = polygon_crawl
+    pages = _pages(engine, crawl_id)
+    expected = {
+        "/a": None,
+        "/private/secret": "Blocked by Robots.txt",
+        "/reset": "No Response",
+        "/old": "Redirected",
+        "/meta-refresh": "Redirected",
+        "/missing": "Client Error",
+        "/error": "Server Error",
+        "/r-noindex": "noindex",
+        "/r-noindex-header": "noindex",  # X-Robots-Tag counts like meta robots
+        "/r-none": "noindex",
+        "/c-canonicalised": "Canonicalised",
+    }
+    for path, status in expected.items():
+        page = pages[base_url + path]
+        assert (page["indexable"], page["indexability_status"]) == (status is None, status), path

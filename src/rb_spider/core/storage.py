@@ -75,6 +75,20 @@ pages = sa.Table(
     sa.Column("h2", sa.String),
     sa.Column("h2_count", sa.Integer),
     sa.Column("h2_sequential", sa.Boolean),  # the heading right before the first h2 is an h1
+    # directives: meta robots + X-Robots-Tag, stored as ",noindex,nofollow," so rules can match ",name,"
+    sa.Column("robots_directives", sa.String),
+    sa.Column("robots_outside_head", sa.Integer),
+    # canonical: <link rel=canonical> + `Link: <...>; rel="canonical"`; canonical_url is the first, absolute, no #fragment
+    sa.Column("canonical_url", sa.String),
+    sa.Column("canonical_count", sa.Integer),
+    sa.Column("canonical_conflict", sa.Boolean),  # more than one distinct target
+    sa.Column("canonical_outside_head", sa.Integer),
+    sa.Column("canonical_invalid_attr", sa.Boolean),  # hreflang / lang / media / type on rel=canonical
+    sa.Column("canonical_relative", sa.Boolean),
+    sa.Column("canonical_fragment", sa.Boolean),
+    # computed after the crawl (issues.analyze): can a search engine index this URL, and if not, why
+    sa.Column("indexable", sa.Boolean),
+    sa.Column("indexability_status", sa.String),
 )
 issues = sa.Table(
     "issues",

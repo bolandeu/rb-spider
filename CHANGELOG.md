@@ -21,4 +21,6 @@
 - `spider redirects [--only all|chains|errors]` — отчёт по редиректам: каждый шаг (3xx / meta / HTTP Refresh) до конечного URL и кода. Порог цепочки `thresholds.redirect_chain_hops`; `spider analyze` берёт пороги из текущих настроек (`--profile`, `--set`).
 - 24 on-page проверки: Page Titles, Meta Description, H1, H2 (нет, несколько, вне `<head>`, дубли, длина, alt в H1, порядок заголовков, title = H1). Пороги длины — раздел `thresholds`. Дубли ищутся одним проходом (оконная функция SQL), без сравнения каждой страницы с каждой.
 - Сбой соединения больше не печатает трассировку Crawlee: такие URL и так попадают в отчёт (`internal_no_response`).
+- 19 проверок директив и canonical: noindex / nofollow / none / nosnippet / noimageindex / unavailable_after / notranslate / устаревшие noodp и noydir (meta robots и X-Robots-Tag), meta robots вне `<head>`; canonical — нет, несколько, конфликт, вне `<head>`, лишние атрибуты, фрагмент, относительный, склейка с другим URL, ведёт на неиндексируемый URL (canonical из HTML и заголовка Link).
+- Индексируемость каждого URL и причина (как Indexability Status в Screaming Frog); проверки дублей учитывают только индексируемые страницы. Цели canonical тоже обходятся.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
