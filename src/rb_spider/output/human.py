@@ -307,3 +307,11 @@ def enriched(data: dict) -> None:
         return
     for name, count in data["stored"].items():
         console.print(f"{name}: сохранено метрик — {count} (обход #{data['crawl_id']})")
+
+
+def fetched(data: dict) -> None:
+    status = data["status"] if data["status"] is not None else "—"
+    where = data.get("final_url") or data["url"]
+    moved = f" ← {data['url']}" if data.get("redirects") else ""
+    title = (data.get("seo") or {}).get("title") or data.get("error") or ""
+    console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]")

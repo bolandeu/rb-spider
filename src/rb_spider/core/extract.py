@@ -208,6 +208,14 @@ def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str]) -> dic
     }
 
 
+def visible_text(body: bytes) -> str:
+    """The page's text as a reader sees it: no scripts, styles or templates, whitespace collapsed."""
+    tree = LexborHTMLParser(body)
+    tree.strip_tags(["script", "style", "noscript", "template"])
+    root = tree.body or tree.root
+    return _WHITESPACE.sub(" ", root.text(separator=" ")).strip() if root else ""
+
+
 def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
     links = []
     for anchor in tree.css("a[href]"):

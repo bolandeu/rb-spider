@@ -15,6 +15,7 @@ machine full of browsers would still need another download.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 import os
 import re
@@ -33,10 +34,8 @@ _SKIPPED_RESOURCES = {"image", "media", "font"}
 
 def ensure_available() -> None:
     """Fail early (before a crawl is registered) when the `render` extra isn't installed."""
-    try:
-        import playwright  # noqa: F401
-    except ImportError as exc:
-        raise RenderUnavailable("Playwright is not installed.") from exc
+    if importlib.util.find_spec("playwright") is None:
+        raise RenderUnavailable("Playwright is not installed.")
 
 
 _EXECUTABLES = (

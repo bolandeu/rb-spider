@@ -13,6 +13,7 @@ from .commands import (
     doctor,
     enrich,
     export,
+    fetch,
     init,
     issues,
     links,
@@ -55,6 +56,7 @@ app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="export")(export.export)
 app.command(name="query")(export.query)
+app.command(name="fetch")(fetch.fetch)
 app.command(name="enrichers")(enrich.enrichers)
 app.command(name="enrich")(enrich.enrich)
 

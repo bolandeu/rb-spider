@@ -795,6 +795,7 @@
 
 ### CLI и работа с данными
 
+- [x] `MVP` **`spider fetch` / `rb_spider.fetch`** (#24) — сборщик страниц для других инструментов без обхода и базы: редиректы, SEO-данные, ссылки, текст, Markdown для LLM, HTML; прокси и `--render`
 - [x] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
 - [ ] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
 - [x] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода

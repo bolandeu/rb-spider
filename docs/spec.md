@@ -94,6 +94,7 @@ spider compare <id1> <id2>                    # сравнение обходо�
 spider issues [crawl_id] [--severity high]
 spider urls [crawl_id] --issue <code>
 spider url <url>
+spider fetch <url>... | --list f [--render] [--include …] [--markdown]   # страницы без обхода и базы — для других инструментов (Python: rb_spider.fetch)
 spider links <url> --in|--out
 spider export [crawl_id] --format csv|json
 spider query "SELECT ..."

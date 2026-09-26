@@ -64,22 +64,16 @@ def test_rendering_extracts_js_title_h1_and_links(base_url: str, engine) -> None
 
 
 def test_without_playwright_a_clear_error(base_url: str, monkeypatch) -> None:
-    import builtins
-
-    real_import = builtins.__import__
-
-    def no_playwright(name, *args, **kwargs):
-        if name == "playwright" or name.startswith("playwright."):
-            raise ImportError(name)
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", no_playwright)
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name, *a: None if name == "playwright" else real_find_spec(name, *a)
+    )
     with pytest.raises(RenderUnavailable):
         render.ensure_available()
     result = CliRunner().invoke(app, ["--json", "crawl", f"{base_url}/js-only", "--render", "always"])
     assert result.exit_code == 1
     error = json.loads(result.stdout)["error"]
-    assert error["code"] == "RENDER_UNAVAILABLE" and "playwright install chromium" in error["action"]
+    assert error["code"] == "RENDER_UNAVAILABLE" and "render_browser" in error["action"]
 
 
 @needs_playwright
