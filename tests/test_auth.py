@@ -68,4 +68,5 @@ def test_doctor_reports_credential_checks(tmp_path: Path, fake_keyring) -> None:
     _, payload = invoke_json("--project", str(tmp_path), "doctor")
     names = [check["name"] for check in payload["checks"]]
     assert "credential_store" in names
-    assert "credential" in names
+    # credentials are checked only when the settings need one (test_crawl_settings: the proxy password)
+    assert not [name for name in names if name.startswith("credential:")]

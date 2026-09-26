@@ -25,4 +25,14 @@
 - Индексируемость каждого URL и причина (как Indexability Status в Screaming Frog); проверки дублей учитывают только индексируемые страницы. Цели canonical тоже обходятся.
 - Проверки контента: точные дубли (md5 HTML), «Lorem ipsum», мало текста (`thresholds.low_content_words`, 200 слов видимого текста).
 - `--store-html` (`crawl.store_html`): HTML страниц сжимается zstd и хранится в `spider-html.sqlite` рядом с базой; по умолчанию — только md5.
+- Настройки обхода: `max_depth`, `max_links_per_page`, `max_url_length`, `include` / `exclude` (регулярные выражения), `all_subdomains`, `stay_in_start_folder`, `max_rps`, `timeout_s`, `headers`, `content_exclude` (по умолчанию текст меню и подвала не считается), пресеты `user_agent` (googlebot, googlebot-smartphone, bingbot, yandexbot, chrome), прокси с чередованием и паролем из системного хранилища ключей; флаги `--max-depth`, `--user-agent`, `--ignore-robots`.
+- robots.txt читается от имени User-Agent обхода (или `robots_user_agent`), режимы `respect` / `ignore` / `report`, соблюдается Crawl-delay.
+- `spider doctor` проверяет настройки и только те секреты, которые они требуют (пароль прокси).
+
+### Changed
+
+- Ключ `crawl.respect_robots` заменён на `crawl.robots` (`respect` / `ignore` / `report`).
+
+### Added (продолжение)
+
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.

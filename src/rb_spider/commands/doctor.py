@@ -7,15 +7,17 @@ from pathlib import Path
 import typer
 
 from .. import output
-from ..core import services, storage
-from ..core.errors import CliTooOld
+from ..core import crawl as crawl_service
+from ..core import services, settings, storage
+from ..core.errors import CliError, CliTooOld
 from ..core.models import ProjectConfig
 from ..core.version import CLI_NAME, DEV_VERSION, installed_version
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
 
-def _auth_checks(provider: str) -> list[dict]:
+def _auth_checks(needed: list[str]) -> list[dict]:
+    """The keychain, plus every credential the resolved settings need (today: the proxy password)."""
     # credentials/ is dropped at generation time when include_auth=false;
     # detecting it at runtime keeps this file free of template logic.
     if importlib.util.find_spec(f"{_PACKAGE_NAME}.credentials") is None:
@@ -30,16 +32,27 @@ def _auth_checks(provider: str) -> list[dict]:
             "detail": backend or "no usable OS keychain backend; credentials must come from environment variables",
         }
     ]
-    available = credentials.get_credential(provider) is not None
-    checks.append(
-        {
-            "name": "credential",
-            "ok": available,
-            "detail": f"provider '{provider}'"
-            + ("" if available else f" — run '{CLI_NAME} auth login --provider {provider}'"),
-        }
-    )
+    for provider in needed:
+        available = credentials.get_credential(provider) is not None
+        checks.append(
+            {
+                "name": f"credential:{provider}",
+                "ok": available,
+                "detail": "" if available else f"run '{CLI_NAME} auth login --provider {provider}'",
+            }
+        )
     return checks
+
+
+def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[dict, list[str]]:
+    """Resolve the crawl settings like `spider crawl` would; returns the check and the credentials they need."""
+    try:
+        data = services.read_project_data(root) if root and config else None
+        crawl = settings.resolve(root, project_data=data).settings.crawl
+    except CliError as exc:
+        return {"name": "settings", "ok": False, "detail": exc.message}, []
+    needed = [crawl_service.PROXY_CREDENTIAL] if any("{password}" in u for u in crawl.proxy_urls) else []
+    return {"name": "settings", "ok": True}, needed
 
 
 @output.guard
@@ -49,11 +62,13 @@ def doctor(
     quiet: bool = output.QuietOption,
     verbose: bool = output.VerboseOption,
 ) -> None:
-    """Проверить окружение: Python, версию CLI, проект, конфиг, базу обходов, хранилище секретов.
+    """Проверить окружение: Python, версию CLI, проект, конфиг и настройки, базу обходов, секреты.
 
     Первое, что стоит запустить, если команда ведёт себя странно. Код выхода
     всегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.
-    Проверка `database` показывает путь к базе обходов (`SPIDER_DB_PATH` переопределяет).
+    `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет); `settings` —
+    настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
+    если `crawl.proxy_urls` его требует (`{password}`).
 
     Примеры:
       spider doctor
@@ -92,7 +107,9 @@ def doctor(
         }
     )
 
-    checks.extend(_auth_checks(config.provider.name if config else "default"))
+    settings_check, needed = _settings_check(root, config)
+    checks.append(settings_check)
+    checks.extend(_auth_checks(needed))
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(

@@ -6,8 +6,11 @@
  Обход в ширину от стартового URL, только внутри его хоста. Редиректы не                            
  проходятся автоматически: каждый шаг цепочки сохраняется как отдельная                             
  страница, цель редиректа обходится следом. Коды 3xx/4xx/5xx — это данные,                          
- а не ошибки. robots.txt соблюдается: запрещённые URL не скачиваются, но                            
- попадают в отчёт. После обхода сразу считаются проверки с порогами из                              
+ а не ошибки. robots.txt читается от имени нашего User-Agent: запрещённые URL                       
+ не скачиваются, но попадают в отчёт, Crawl-delay соблюдается (режимы —                             
+ ключ crawl.robots). Что обходить (include/exclude, поддомены, папка, лимиты),                      
+ скорость, заголовки и прокси — ключи раздела crawl, см. `spider config show`.                      
+ После обхода сразу считаются проверки с порогами из                                                
  раздела `thresholds` — смотреть в `spider issues`.                                                 
                                                                                                     
  Настройки — слоями: встроенные → глобальный конфиг → проект → `--profile` →                        
@@ -19,7 +22,8 @@
  Примеры:                                                                                           
    spider crawl https://example.com/                                                                
    spider crawl https://example.com/ --profile googlebot --max-urls 1000                            
-   spider crawl https://example.com/ --set crawl.respect_robots=false                               
+   spider crawl https://example.com/ --user-agent googlebot --max-depth 3                           
+   spider crawl https://example.com/ --set 'crawl.exclude=["\?sort="]' --set crawl.max_rps=5        
    spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой     
    spider --json crawl https://example.com/                                                         
                                                                                                     
@@ -32,22 +36,29 @@
 │                      [required]                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --profile            <str>               Профиль настроек: встроенный (`spider profiles list`)   │
-│                                          или из `.spider/profiles/`.                             │
-│ --config             <path>              TOML-файл настроек поверх профиля (формат как у         │
-│                                          профиля).                                               │
-│ --set                KEY=VALUE           Переопределить любой ключ: `--set crawl.max_urls=500`;  │
-│                                          можно повторять.                                        │
-│ --max-urls           <int range> [x>=1]  Остановиться после стольких URL (ключ crawl.max_urls;   │
-│                                          не задан — весь сайт).                                  │
-│ --concurrency        <int range> [x>=1]  Сколько запросов одновременно (ключ crawl.concurrency,  │
-│                                          по умолчанию 20).                                       │
-│ --store-html                             Сохранить HTML страниц сжатым рядом с базой (ключ       │
-│                                          crawl.store_html).                                      │
-│ --json                                   Вывод в JSON для агентов и скриптов (одна               │
-│                                          строка-конверт `{ok, ...}`).                            │
-│ --quiet                                  Печатать только основной результат, без пояснений.      │
-│ --verbose                                Подробная диагностика в stderr.                         │
-│ --help                                   Show this message and exit.                             │
+│ --profile              <str>               Профиль настроек: встроенный (`spider profiles list`) │
+│                                            или из `.spider/profiles/`.                           │
+│ --config               <path>              TOML-файл настроек поверх профиля (формат как у       │
+│                                            профиля).                                             │
+│ --set                  KEY=VALUE           Переопределить любой ключ: `--set                     │
+│                                            crawl.max_urls=500`; можно повторять.                 │
+│ --max-urls             <int range> [x>=1]  Остановиться после стольких URL (ключ crawl.max_urls; │
+│                                            не задан — весь сайт).                                │
+│ --concurrency          <int range> [x>=1]  Сколько запросов одновременно (ключ                   │
+│                                            crawl.concurrency, по умолчанию 20).                  │
+│ --max-depth            <int range> [x>=0]  Не глубже стольких кликов от старта (ключ             │
+│                                            crawl.max_depth).                                     │
+│ --user-agent           <str>               User-Agent: пресет (googlebot, googlebot-smartphone,  │
+│                                            bingbot, yandexbot, chrome) или строка                │
+│                                            (crawl.user_agent).                                   │
+│ --ignore-robots                            Не читать robots.txt, обходить всё (ключ crawl.robots │
+│                                            = ignore).                                            │
+│ --store-html                               Сохранить HTML страниц сжатым рядом с базой (ключ     │
+│                                            crawl.store_html).                                    │
+│ --json                                     Вывод в JSON для агентов и скриптов (одна             │
+│                                            строка-конверт `{ok, ...}`).                          │
+│ --quiet                                    Печатать только основной результат, без пояснений.    │
+│ --verbose                                  Подробная диагностика в stderr.                       │
+│ --help                                     Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

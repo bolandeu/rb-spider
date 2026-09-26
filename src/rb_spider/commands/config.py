@@ -77,7 +77,7 @@ def set_config(
 
     Примеры:
       spider config set crawl.concurrency 10
-      spider config set crawl.respect_robots false
+      spider config set crawl.robots report
       spider config set name shop
 
     JSON: `{key, value}`. Неизвестный ключ или неверный тип — выход 2.

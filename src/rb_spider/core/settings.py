@@ -15,15 +15,17 @@ commented template of `profiles init`, the JSON Schema and docs/profiles.md.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import tomllib
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import platformdirs
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .errors import InvalidArguments
 from .version import CLI_NAME
@@ -31,24 +33,118 @@ from .version import CLI_NAME
 _PACKAGE_NAME = __name__.split(".")[0]
 
 
+# `crawl.user_agent` accepts one of these names instead of a full string.
+USER_AGENT_PRESETS = {
+    "googlebot": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "googlebot-smartphone": (
+        "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.6778.204 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+    ),
+    "bingbot": "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+    "yandexbot": "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)",
+    "chrome": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+}
+
+
 class CrawlSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # --- how much
     max_urls: int | None = Field(
         None, ge=1, description="Остановиться после стольких URL; не задано — обойти весь сайт.", examples=[50000]
     )
-    concurrency: int = Field(20, ge=1, le=500, description="Сколько запросов к сайту выполняется одновременно.")
-    respect_robots: bool = Field(
-        True, description="Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт."
+    max_depth: int | None = Field(
+        None,
+        ge=0,
+        description="Не идти глубже стольких кликов от стартового URL; не задано — без ограничения.",
+        examples=[5],
     )
+    max_links_per_page: int | None = Field(
+        10000, ge=1, description="Брать с одной страницы не больше стольких ссылок; не задано — все."
+    )
+    max_url_length: int = Field(2000, ge=1, description="Не обходить URL длиннее стольких символов.")
+    # --- what
+    include: list[str] = Field(
+        [],
+        description="Обходить только URL, где находится хотя бы одно из этих регулярных выражений.",
+        examples=[["/catalog/"]],
+    )
+    exclude: list[str] = Field(
+        [],
+        description="Не обходить URL, где находится любое из этих регулярных выражений (важнее include).",
+        examples=[["\\?sort=", "/cart"]],
+    )
+    all_subdomains: bool = Field(
+        False, description="Считать поддомены (blog.site.ru и т.п.) частью сайта и обходить их."
+    )
+    stay_in_start_folder: bool = Field(
+        False, description="Обходить только внутри папки стартового URL (старт /blog/ — только /blog/…)."
+    )
+    content_exclude: list[str] = Field(
+        ["nav", "footer"],
+        description="CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»).",
+    )
+    # --- how fast
+    concurrency: int = Field(20, ge=1, le=500, description="Сколько запросов к сайту выполняется одновременно.")
+    max_rps: float | None = Field(
+        None, gt=0, description="Не больше стольких запросов в секунду; не задано — без ограничения.", examples=[5]
+    )
+    timeout_s: float = Field(20, gt=0, description="Сколько секунд ждать ответа, прежде чем считать URL неответившим.")
+    # --- as whom
+    user_agent: str | None = Field(
+        None,
+        description=(
+            "User-Agent запросов: своя строка или пресет — "
+            + ", ".join(USER_AGENT_PRESETS)
+            + "; не задано — как у обычного браузера (Firefox)."
+        ),
+        examples=["googlebot-smartphone"],
+    )
+    headers: dict[str, str] = Field(
+        {}, description="Дополнительные заголовки каждого запроса.", examples=[{"Accept-Language": "ru"}]
+    )
+    robots: Literal["respect", "ignore", "report"] = Field(
+        "respect",
+        description=(
+            "robots.txt: respect — запрещённое не скачивать (но показать в отчёте), с учётом Crawl-delay; "
+            "ignore — не читать; report — скачивать всё, но отмечать запрещённое."
+        ),
+    )
+    robots_user_agent: str | None = Field(
+        None,
+        description="От чьего имени читать robots.txt; не задано — от User-Agent запросов.",
+        examples=["Googlebot"],
+    )
+    proxy_urls: list[str] = Field(
+        [],
+        description=(
+            "Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из "
+            "`spider auth login --provider proxy`."
+        ),
+        examples=[["http://user:{password}@proxy.example:8000"]],
+    )
+    # --- what to keep
     store_html: bool = Field(
         False, description="Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5."
     )
-    user_agent: str | None = Field(
-        None,
-        description="Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox).",
-        examples=["Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"],
-    )
+
+    @field_validator("include", "exclude")
+    @classmethod
+    def _valid_regexes(cls, patterns: list[str]) -> list[str]:
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regular expression {pattern!r}: {exc}") from exc
+        return patterns
+
+    @property
+    def resolved_user_agent(self) -> str | None:
+        """The full User-Agent string: a preset name expanded, None for the browser default."""
+        return USER_AGENT_PRESETS.get(self.user_agent or "", self.user_agent)
 
 
 class ThresholdSettings(BaseModel):
@@ -292,10 +388,16 @@ def _field_rows() -> list[tuple[str, Any]]:
 
 
 def _toml_literal(value: Any) -> str:
+    """`value` as a one-line TOML literal (`true`, `"x"`, `["a", "b"]`, `{ "k" = "v" }`) for templates and docs."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, str):
-        return f'"{value}"'
+        return json.dumps(value, ensure_ascii=False)  # a JSON string is a valid TOML basic string
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_literal(v) for v in value) + "]"
+    if isinstance(value, dict):
+        pairs = ", ".join(f"{json.dumps(k, ensure_ascii=False)} = {_toml_literal(v)}" for k, v in value.items())
+        return "{ " + pairs + " }" if pairs else "{}"
     return str(value)
 
 

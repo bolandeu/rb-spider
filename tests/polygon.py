@@ -160,6 +160,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *ONPAGE_TRAPS,
             *DIRECTIVE_CANONICAL_TRAPS,
             *CONTENT_TRAPS,
+            "/g-blocked",
+            "/shop/",
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -168,7 +170,15 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/old": (301, {"Location": "/a"}, ""),
     "/missing": (404, {}, "<html><body>Не найдено</body></html>"),
     # --- Response Codes traps ---
-    "/robots.txt": (200, {"Content-Type": "text/plain"}, "User-agent: *\nDisallow: /private/\n"),
+    # Googlebot has its own group: /g-blocked is closed to it only (crawl.user_agent / robots_user_agent)
+    "/robots.txt": (
+        200,
+        {"Content-Type": "text/plain"},
+        "User-agent: *\nDisallow: /private/\n\nUser-agent: Googlebot\nDisallow: /private/\nDisallow: /g-blocked\n",
+    ),
+    "/g-blocked": (200, {}, _html("g-blocked")),
+    "/shop/": (200, {}, _html("shop", "/shop/item", "/a")),  # the start folder for stay_in_start_folder
+    "/shop/item": (200, {}, _html("shop-item")),
     "/private/secret": (200, {}, _html("secret")),  # never fetched: disallowed
     "/error": (500, {}, "<html><body>Ошибка сервера</body></html>"),
     "/chain1": (301, {"Location": "/chain2"}, ""),
@@ -210,6 +220,9 @@ REACHABLE = {
     *ONPAGE_TRAPS,
     *DIRECTIVE_CANONICAL_TRAPS,
     *CONTENT_TRAPS,
+    "/g-blocked",
+    "/shop/",
+    "/shop/item",
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -282,10 +295,15 @@ EXPECTED_ISSUES = {
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
+SEEN_HEADERS: list[dict[str, str]] = []  # every request's headers, lower-case names — proves crawl.headers are sent
+SLOW_S = 3.0  # "/slow" (linked from nowhere) answers after this long: a timeout trap
 
 
 async def _handle(request: web.Request) -> web.StreamResponse:
     SEEN_USER_AGENTS.add(request.headers.get("User-Agent", ""))
+    SEEN_HEADERS.append({k.lower(): v for k, v in request.headers.items()})
+    if request.path == "/slow":
+        await asyncio.sleep(SLOW_S)
     if request.path == "/reset":  # no response at all: the client sees a dropped connection
         assert request.transport is not None
         request.transport.abort()

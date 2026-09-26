@@ -39,10 +39,23 @@ concurrency = 10
 | Ключ | Тип | По умолчанию | Описание |
 | --- | --- | --- | --- |
 | `crawl.max_urls` | `int \| None` | — | Остановиться после стольких URL; не задано — обойти весь сайт. |
+| `crawl.max_depth` | `int \| None` | — | Не идти глубже стольких кликов от стартового URL; не задано — без ограничения. |
+| `crawl.max_links_per_page` | `int \| None` | `10000` | Брать с одной страницы не больше стольких ссылок; не задано — все. |
+| `crawl.max_url_length` | `int` | `2000` | Не обходить URL длиннее стольких символов. |
+| `crawl.include` | `list[str]` | `[]` | Обходить только URL, где находится хотя бы одно из этих регулярных выражений. |
+| `crawl.exclude` | `list[str]` | `[]` | Не обходить URL, где находится любое из этих регулярных выражений (важнее include). |
+| `crawl.all_subdomains` | `bool` | `false` | Считать поддомены (blog.site.ru и т.п.) частью сайта и обходить их. |
+| `crawl.stay_in_start_folder` | `bool` | `false` | Обходить только внутри папки стартового URL (старт /blog/ — только /blog/…). |
+| `crawl.content_exclude` | `list[str]` | `["nav", "footer"]` | CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»). |
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
-| `crawl.respect_robots` | `bool` | `true` | Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт. |
+| `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
+| `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
+| `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
+| `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |
+| `crawl.robots` | `Literal['respect', 'ignore', 'report']` | `"respect"` | robots.txt: respect — запрещённое не скачивать (но показать в отчёте), с учётом Crawl-delay; ignore — не читать; report — скачивать всё, но отмечать запрещённое. |
+| `crawl.robots_user_agent` | `str \| None` | — | От чьего имени читать robots.txt; не задано — от User-Agent запросов. |
+| `crawl.proxy_urls` | `list[str]` | `[]` | Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. |
 | `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
-| `crawl.user_agent` | `str \| None` | — | Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox). |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 | `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
 | `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |

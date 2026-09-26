@@ -33,12 +33,12 @@
 |---|---:|---:|---:|---:|---:|---:|
 | A. Проверки (issues) | 78 | 93 | 32 | 113 | 4 | 320 |
 | B. Сбор данных и вкладки | 15 | 22 | 7 | 8 | 1 | 53 |
-| C. Настройки обхода | 50 | 38 | 2 | 10 | 5 | 105 |
+| C. Настройки обхода | 44 | 44 | 2 | 10 | 5 | 105 |
 | D. Режимы | 6 | 3 | 2 | 4 | 1 | 16 |
 | E. Экспорт и отчёты | 11 | 24 | 8 | 11 | 2 | 56 |
 | F. Интеграции | 1 | 0 | 5 | 1 | 4 | 11 |
 | G. Наше, чего нет в SF | 22 | 4 | 0 | 0 | 0 | 26 |
-| **Итого** | **183** | **184** | **56** | **147** | **17** | **587** |
+| **Итого** | **177** | **190** | **56** | **147** | **17** | **587** |
 
 В разделе A 320 проверок SF, из них 92 — Accessibility (все `backlog`).
 
@@ -532,36 +532,36 @@
 
 У каждого типа — раздельно `follow` (переходить/проверять) и `store` (записывать в БД), как Crawl/Store в SF.
 
-- [ ] `MVP` **Images** → `collect.images.follow` / `collect.images.store`
-- [ ] `MVP` **CSS** → `collect.css.follow` / `.store`
-- [ ] `MVP` **JavaScript** → `collect.js.follow` / `.store`
-- [ ] `MVP` **Media (video/audio)** → `collect.media.follow` / `.store`
-- [ ] `MVP` **Internal Hyperlinks** → `collect.internal_links.follow` / `.store`
-- [ ] `MVP` **External Links** → `collect.external_links.follow` / `.store`
-- [ ] `MVP` **Canonicals** (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
-- [ ] `MVP` **Meta Refresh** → `collect.meta_refresh.follow` / `.store`
-- [ ] `MVP` **iframes** → `collect.iframes.follow` / `.store`
+- [ ] `MVP` **Images** (#12) → `collect.images.follow` / `collect.images.store`
+- [ ] `MVP` **CSS** (#12) → `collect.css.follow` / `.store`
+- [ ] `MVP` **JavaScript** (#12) → `collect.js.follow` / `.store`
+- [ ] `MVP` **Media (video/audio)** (#12) → `collect.media.follow` / `.store`
+- [ ] `MVP` **Internal Hyperlinks** (#9) → `collect.internal_links.follow` / `.store`
+- [ ] `MVP` **External Links** (#9) → `collect.external_links.follow` / `.store`
+- [ ] `MVP` **Canonicals** (#9) (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
+- [ ] `MVP` **Meta Refresh** (#9) → `collect.meta_refresh.follow` / `.store`
+- [ ] `MVP` **iframes** (#12) → `collect.iframes.follow` / `.store`
 - [ ] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [ ] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
 - [ ] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
 - [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
 - [ ] `backlog` **AMP** → `collect.amp.follow` / `.store`
 - [ ] `skip` **SWF (Flash)**
-- [ ] `MVP` **Check Links Outside of Start Folder** — проверять, но не обходить ссылки за пределами стартовой папки → `scope.check_outside_start_folder`
-- [ ] `MVP` **Crawl Outside of Start Folder** → `scope.crawl_outside_start_folder`
-- [ ] `MVP` **Crawl All Subdomains** — считать поддомены внутренними → `scope.all_subdomains`
-- [ ] `MVP` **Follow Internal / External "nofollow"** → `follow_nofollow.internal` / `follow_nofollow.external`
+- [ ] `MVP` **Check Links Outside of Start Folder** (#9) — проверять, но не обходить ссылки за пределами стартовой папки → `scope.check_outside_start_folder`
+- [x] `MVP` **Crawl Outside of Start Folder** → `scope.crawl_outside_start_folder`
+- [x] `MVP` **Crawl All Subdomains** — считать поддомены внутренними → `scope.all_subdomains`
+- [ ] `MVP` **Follow Internal / External "nofollow"** (#9) → `follow_nofollow.internal` / `follow_nofollow.external`
 - [ ] `v2` **Crawl Invalid Links** — пробовать синтаксически битые href → `scope.crawl_invalid_links`
 - [ ] `v2` **Crawl Linked XML Sitemaps** — найти sitemap через robots.txt или по списку → `sitemaps.discover`, `sitemaps.urls`
 
 ### Лимиты (Spider > Limits)
 
-- [ ] `MVP` **Limit Crawl Total** → `max_urls` / `--max-urls`
-- [ ] `MVP` **Limit Crawl Depth** → `limits.max_depth`
-- [ ] `MVP` **Max Redirects to Follow** → `limits.max_redirects`
-- [ ] `MVP` **Max URL Length to Crawl** → `limits.max_url_length`
-- [ ] `MVP` **Max Links per URL to Crawl** → `limits.max_links_per_page`
-- [ ] `MVP` **Max Page Size (KB) to Crawl** → `limits.max_page_size_kb`
+- [x] `MVP` **Limit Crawl Total** → `max_urls` / `--max-urls`
+- [x] `MVP` **Limit Crawl Depth** → `limits.max_depth`
+- [ ] `MVP` **Max Redirects to Follow** (#16) → `limits.max_redirects`
+- [x] `MVP` **Max URL Length to Crawl** → `limits.max_url_length`
+- [x] `MVP` **Max Links per URL to Crawl** → `limits.max_links_per_page`
+- [ ] `v2` **Max Page Size (KB) to Crawl** → `limits.max_page_size_kb`
 - [ ] `v2` **Limit URLs Per Crawl Depth** → `limits.max_urls_per_depth`
 - [ ] `v2` **Limit Max Folder Depth** → `limits.max_folder_depth`
 - [ ] `v2` **Limit Number of Query Strings** → `limits.max_query_params`
@@ -570,9 +570,9 @@
 
 ### Рендеринг (Spider > Rendering)
 
-- [ ] `MVP` **Rendering mode: Text Only / JavaScript** → `render = "never" | "always"`
+- [ ] `MVP` **Rendering mode: Text Only / JavaScript** (#15) → `render = "never" | "always"`
 - [ ] `v2` **Автовыбор рендеринга** → `render = "auto"` (AdaptivePlaywrightCrawler, см. spec.md)
-- [ ] `MVP` **AJAX Timeout** — сколько ждать JS после загрузки → `render_options.wait_ms`
+- [ ] `MVP` **AJAX Timeout** (#15) — сколько ждать JS после загрузки → `render_options.wait_ms`
 - [ ] `v2` **Window Size** (viewport, пресеты Googlebot desktop/mobile) → `render_options.viewport`
 - [ ] `v2` **JavaScript Error Reporting** → `render_options.console_log`
 - [ ] `v2` **Flatten Shadow DOM**, **Flatten iframes** → `render_options.flatten_shadow_dom`, `render_options.flatten_iframes`
@@ -582,12 +582,12 @@
 
 ### Дополнительно (Spider > Advanced)
 
-- [ ] `MVP` **Response Timeout** → `http.timeout`
-- [ ] `MVP` **5XX Response Retries** → `http.retries_5xx`
-- [ ] `MVP` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `issues.indexable_only`
-- [ ] `MVP` **Always Follow Redirects** (в режиме списка — до конечной цели) → `list.follow_redirects`
-- [ ] `MVP` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
-- [ ] `MVP` **Extract Images From IMG SRCSET Attribute** → `collect.images.srcset`
+- [x] `MVP` **Response Timeout** → `http.timeout`
+- [ ] `v2` **5XX Response Retries** → `http.retries_5xx`
+- [ ] `v2` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `issues.indexable_only`
+- [ ] `MVP` **Always Follow Redirects** (#16) (в режиме списка — до конечной цели) → `list.follow_redirects`
+- [ ] `v2` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
+- [ ] `MVP` **Extract Images From IMG SRCSET Attribute** (#12) → `collect.images.srcset`
 - [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
 - [ ] `v2` **Ignore Paginated URLs for Duplicate Filters** → `duplicates.ignore_paginated`
 - [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
@@ -600,35 +600,35 @@
 
 ### Пороги (Spider > Preferences)
 
-- [ ] `MVP` **Page Title: мин/макс символов** (30 / 60) → `thresholds.title_chars`
-- [ ] `MVP` **Meta Description: мин/макс символов** (70 / 155) → `thresholds.description_chars`
+- [x] `MVP` **Page Title: мин/макс символов** (30 / 60) → `thresholds.title_chars`
+- [x] `MVP` **Meta Description: мин/макс символов** (70 / 155) → `thresholds.description_chars`
 - [ ] `v2` **Title / Description: мин/макс пикселей** (200 / 561, 400 / 985) → `thresholds.title_px`, `thresholds.description_px`
-- [ ] `MVP` **Макс. длина H1 / H2** (70) → `thresholds.h1_chars`, `thresholds.h2_chars`
-- [ ] `MVP` **Макс. длина alt** (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
-- [ ] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
-- [ ] `MVP` **High Crawl Depth, High Internal / External Outlinks** → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
-- [ ] `MVP` **Список неинформативных анкоров** → `thresholds.non_descriptive_anchors`
+- [x] `MVP` **Макс. длина H1 / H2** (70) → `thresholds.h1_chars`, `thresholds.h2_chars`
+- [ ] `MVP` **Макс. длина alt** (#12) (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
+- [x] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
+- [ ] `MVP` **High Crawl Depth, High Internal / External Outlinks** (#9) → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
+- [ ] `MVP` **Список неинформативных анкоров** (#9) → `thresholds.non_descriptive_anchors`
 - [ ] `v2` **Макс. длина URL** (115) → `thresholds.url_chars`
 
 ### Контент (Config > Content)
 
-- [ ] `MVP` **Content Area** — какие элементы учитывать в тексте (по умолчанию `<body>` без `<nav>` и `<footer>`) → `content.include` / `content.exclude`
-- [ ] `MVP` **Exact duplicates (hash)** + **Only Check Indexable Pages** → `duplicates.exact`, `duplicates.indexable_only`
+- [x] `MVP` **Content Area** — какие элементы учитывать в тексте (по умолчанию `<body>` без `<nav>` и `<footer>`) → `content.include` / `content.exclude`
+- [ ] `v2` **Exact duplicates (hash)** + **Only Check Indexable Pages** → `duplicates.exact`, `duplicates.indexable_only`
 - [ ] `v2` **Near Duplicates** + порог сходства (90 %) → `duplicates.near`, `duplicates.near_threshold`
 - [ ] `backlog` **Spelling & Grammar** (языки, правила, словарь)
 - [ ] `backlog` **Embeddings** (Semantic Similarity, Low Relevance через AI-провайдера)
 
 ### robots.txt
 
-- [ ] `MVP` **Respect / Ignore robots.txt** → `respect_robots` / `--ignore-robots`
-- [ ] `MVP` **Ignore robots.txt but report status** — обходить, но отмечать, что было бы заблокировано → `robots.mode = "report"`
-- [ ] `MVP` **Show Internal URLs Blocked by Robots.txt** (+ совпавшая строка robots.txt) → `robots.show_internal_blocked`
+- [x] `MVP` **Respect / Ignore robots.txt** → `respect_robots` / `--ignore-robots`
+- [x] `MVP` **Ignore robots.txt but report status** — обходить, но отмечать, что было бы заблокировано → `robots.mode = "report"`
+- [ ] `v2` **Show Internal URLs Blocked by Robots.txt** (+ совпавшая строка robots.txt) → `robots.show_internal_blocked`
 - [ ] `v2` **Show External URLs Blocked by Robots.txt** → `robots.show_external_blocked`
 - [ ] `v2` **Custom Robots** — подменить robots.txt для обхода (тест правок) → `robots.custom`
 
 ### URL и домены
 
-- [ ] `MVP` **Include / Exclude** (regex) → `include`, `exclude`
+- [x] `MVP` **Include / Exclude** (regex) → `include`, `exclude`
 - [ ] `v2` **URL Rewriting: Remove Parameters** → `rewrite.remove_params`
 - [ ] `v2` **URL Rewriting: Regex Replace** → `rewrite.regex`
 - [ ] `v2` **URL Rewriting: Lowercase Discovered URLs, Percent Encoding Mode** → `rewrite.lowercase`, `rewrite.percent_encoding`
@@ -636,12 +636,12 @@
 
 ### Запросы
 
-- [ ] `MVP` **Speed: Max Threads** → `concurrency` / `--concurrency`
-- [ ] `MVP` **Speed: Max URI/s** → `max_rps`
-- [ ] `MVP` **User-Agent: пресеты и своя строка** → `user_agent` (пресеты `googlebot`, `googlebot-smartphone`, `yandexbot`…)
-- [ ] `MVP` **Robots User-Agent** — чью группу правил robots.txt соблюдать → `robots.user_agent`
-- [ ] `MVP` **HTTP Header** — произвольные заголовки запроса → `headers`
-- [ ] `MVP` **Proxy** → `proxy` / `--proxy` (в SF — один прокси; у нас ротация через Crawlee)
+- [x] `MVP` **Speed: Max Threads** → `concurrency` / `--concurrency`
+- [x] `MVP` **Speed: Max URI/s** → `max_rps`
+- [x] `MVP` **User-Agent: пресеты и своя строка** → `user_agent` (пресеты `googlebot`, `googlebot-smartphone`, `yandexbot`…)
+- [x] `MVP` **Robots User-Agent** — чью группу правил robots.txt соблюдать → `robots.user_agent`
+- [x] `MVP` **HTTP Header** — произвольные заголовки запроса → `headers`
+- [x] `MVP` **Proxy** → `proxy` / `--proxy` (в SF — один прокси; у нас ротация через Crawlee)
 - [ ] `v2` **Authentication: Basic / Digest** → `auth.basic` (пароль — в keychain)
 - [ ] `v2` **Trusted Certificates** (свои корневые сертификаты для MITM-прокси) → `http.ca_bundle`
 - [ ] `backlog` **Authentication: Forms Based** (вход через браузер, cookies для обхода)
@@ -656,7 +656,7 @@
 
 ### Анализ после обхода и профили
 
-- [ ] `MVP` **Crawl Analysis** — сайтовые проверки (дубли, unlinked canonical, non-indexable inlinks…) считаются SQL после обхода автоматически
+- [x] `MVP` **Crawl Analysis** — сайтовые проверки (дубли, unlinked canonical, non-indexable inlinks…) считаются SQL после обхода автоматически
 - [ ] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
 - [ ] `v2` **Crawl Analysis: полный список пунктов** (Pagination, Hreflang return links и др.) (не подтверждено)
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)

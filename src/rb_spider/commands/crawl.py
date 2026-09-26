@@ -23,6 +23,17 @@ def crawl(
     concurrency: int | None = typer.Option(
         None, "--concurrency", min=1, help="Сколько запросов одновременно (ключ crawl.concurrency, по умолчанию 20)."
     ),
+    max_depth: int | None = typer.Option(
+        None, "--max-depth", min=0, help="Не глубже стольких кликов от старта (ключ crawl.max_depth)."
+    ),
+    user_agent: str | None = typer.Option(
+        None,
+        "--user-agent",
+        help="User-Agent: пресет (googlebot, googlebot-smartphone, bingbot, yandexbot, chrome) или строка (crawl.user_agent).",
+    ),
+    ignore_robots: bool = typer.Option(
+        False, "--ignore-robots", help="Не читать robots.txt, обходить всё (ключ crawl.robots = ignore)."
+    ),
     store_html: bool | None = typer.Option(
         None, "--store-html", help="Сохранить HTML страниц сжатым рядом с базой (ключ crawl.store_html)."
     ),
@@ -35,8 +46,11 @@ def crawl(
     Обход в ширину от стартового URL, только внутри его хоста. Редиректы не
     проходятся автоматически: каждый шаг цепочки сохраняется как отдельная
     страница, цель редиректа обходится следом. Коды 3xx/4xx/5xx — это данные,
-    а не ошибки. robots.txt соблюдается: запрещённые URL не скачиваются, но
-    попадают в отчёт. После обхода сразу считаются проверки с порогами из
+    а не ошибки. robots.txt читается от имени нашего User-Agent: запрещённые URL
+    не скачиваются, но попадают в отчёт, Crawl-delay соблюдается (режимы —
+    ключ crawl.robots). Что обходить (include/exclude, поддомены, папка, лимиты),
+    скорость, заголовки и прокси — ключи раздела crawl, см. `spider config show`.
+    После обхода сразу считаются проверки с порогами из
     раздела `thresholds` — смотреть в `spider issues`.
 
     Настройки — слоями: встроенные → глобальный конфиг → проект → `--profile` →
@@ -48,7 +62,8 @@ def crawl(
     Примеры:
       spider crawl https://example.com/
       spider crawl https://example.com/ --profile googlebot --max-urls 1000
-      spider crawl https://example.com/ --set crawl.respect_robots=false
+      spider crawl https://example.com/ --user-agent googlebot --max-depth 3
+      spider crawl https://example.com/ --set 'crawl.exclude=["\\?sort="]' --set crawl.max_rps=5
       spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
       spider --json crawl https://example.com/
 
@@ -61,7 +76,14 @@ def crawl(
         profile,
         config_file,
         assignments,
-        {"crawl.max_urls": max_urls, "crawl.concurrency": concurrency, "crawl.store_html": store_html},
+        {
+            "crawl.max_urls": max_urls,
+            "crawl.concurrency": concurrency,
+            "crawl.max_depth": max_depth,
+            "crawl.user_agent": user_agent,
+            "crawl.robots": "ignore" if ignore_robots else None,
+            "crawl.store_html": store_html,
+        },
     )
     root = services.find_project_root(Path(ctx.obj.get("project") or Path.cwd()))
     project = services.load_config(root).name if root else crawl_service.project_for(url)

@@ -49,7 +49,7 @@ def test_defaults_come_from_the_model() -> None:
 
 
 def test_each_layer_overrides_the_previous_and_is_recorded(project: Path) -> None:
-    _write(settings.global_config_path(), "[crawl]\nconcurrency = 2\nmax_urls = 10\nrespect_robots = false\n")
+    _write(settings.global_config_path(), '[crawl]\nconcurrency = 2\nmax_urls = 10\nrobots = "ignore"\n')
     _write(project / ".spider/profiles/p.toml", 'extends = "fast"\n[crawl]\nmax_urls = 30\n')
     extra = _write(project / "extra.toml", "[crawl]\nmax_urls = 40\n")
     resolved = settings.resolve(
@@ -65,15 +65,15 @@ def test_each_layer_overrides_the_previous_and_is_recorded(project: Path) -> Non
     assert resolved.sources["crawl.max_urls"] == "set"
     assert resolved.sources["crawl.concurrency"] == "profile:fast"  # fast (50) beats global (2)
     assert resolved.settings.crawl.concurrency == 50
-    assert resolved.sources["crawl.respect_robots"] == "global"
+    assert resolved.sources["crawl.robots"] == "global"
     assert resolved.sources["crawl.user_agent"] == "default"
 
 
 def test_set_values_are_toml_literals_or_strings() -> None:
     resolved = settings.resolve(
-        None, environ={}, assignments=["crawl.respect_robots=false", "crawl.max_urls=5", "crawl.user_agent=Bot/1.0"]
+        None, environ={}, assignments=["crawl.robots=report", "crawl.max_urls=5", "crawl.user_agent=Bot/1.0"]
     )
-    assert resolved.settings.crawl.respect_robots is False
+    assert resolved.settings.crawl.robots == "report"
     assert resolved.settings.crawl.max_urls == 5
     assert resolved.settings.crawl.user_agent == "Bot/1.0"
 
@@ -217,10 +217,10 @@ def test_crawl_uses_settings_and_keeps_snapshot(base_url: str) -> None:
 
     code, shown = _invoke_json("crawls", "show")
     assert shown["id"] == crawl["crawl_id"]
-    assert shown["settings"]["crawl"] == {
+    snapshot = shown["settings"]["crawl"]
+    assert {k: snapshot[k] for k in ("max_urls", "concurrency", "robots", "user_agent")} == {
         "max_urls": 2,
         "concurrency": 50,
-        "respect_robots": True,
-        "store_html": False,
+        "robots": "respect",
         "user_agent": "SpiderTestBot/1.0",
     }

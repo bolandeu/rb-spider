@@ -111,6 +111,7 @@ spider profiles list | show <name> | init <name> [--from <preset>]
 - Удаление — с подтверждением; `--yes` для агента, `--dry-run` показывает, что удалится.
 - Долгий обход: по умолчанию на переднем плане с прогрессом; `--detach` — фоновый процесс, статус всегда в БД.
 - Поведение по умолчанию: уважать robots.txt, умеренная параллельность; `--ignore-robots`, `--concurrency` снимают ограничения.
+- robots.txt проверяет сам spider (парсер Crawlee `RobotsTxtFile`), а не Crawlee: Crawlee читает его только от имени `*`, а обход «глазами Googlebot» должен следовать группе Googlebot; режим `report` требует вердикта без пропуска URL. Crawl-delay превращается в ограничение запросов в минуту (сайт в обходе один).
 
 ---
 
@@ -140,12 +141,13 @@ extends = "googlebot"
 [crawl]
 max_urls = 50000
 concurrency = 20
-respect_robots = true
-user_agent = "..."            # строка целиком; пресеты имён — #7
+robots = "respect"            # respect | ignore | report
+user_agent = "googlebot-smartphone"   # пресет или строка целиком
 render = "never"              # #15
-include = ["^/catalog/"]      # #7
+include = ["/catalog/"]       # регулярные выражения
 exclude = ["\\?sort="]
 headers = { "Accept-Language" = "ru" }
+proxy_urls = ["http://user:{password}@proxy:8000"]   # пароль — spider auth login --provider proxy
 
 [collect.internal_links]
 follow = true

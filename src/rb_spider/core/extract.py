@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -169,9 +170,15 @@ def _onpage(tree: LexborHTMLParser) -> dict:
 _LOREM = re.compile(r"lorem\s+ipsum", re.IGNORECASE)
 
 
-def _content(tree: LexborHTMLParser, body: bytes) -> dict:
-    """Exact-duplicate hash and visible text size. Mutates `tree` (drops scripts): call it last."""
+DEFAULT_CONTENT_EXCLUDE = ("nav", "footer")
+
+
+def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str]) -> dict:
+    """Exact-duplicate hash and the page's own text (menus and footers aside). Mutates `tree`: call it last."""
     tree.strip_tags(["script", "style", "noscript", "template"])
+    for selector in exclude:
+        for node in tree.css(selector):
+            node.decompose()
     text = tree.body.text(separator=" ") if tree.body else ""
     return {
         "content_md5": hashlib.md5(body).hexdigest(),  # noqa: S324 — a fingerprint, not security
@@ -180,7 +187,14 @@ def _content(tree: LexborHTMLParser, body: bytes) -> dict:
     }
 
 
-def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes) -> Page:
+def parse_page(
+    url: str,
+    status_code: int,
+    headers: dict[str, str],
+    body: bytes,
+    *,
+    content_exclude: Sequence[str] = DEFAULT_CONTENT_EXCLUDE,
+) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
     content_type = headers.get("content-type")
@@ -211,5 +225,5 @@ def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes)
         link = _absolute(url, anchor.attributes.get("href") or "")
         if link:
             page.links.append(link)
-    page.onpage |= _content(tree, body)
+    page.onpage |= _content(tree, body, content_exclude)
     return page
