@@ -21,6 +21,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import event
 
+from .errors import InvalidArguments
 from .extract import Page
 from .version import CLI_NAME
 
@@ -56,6 +57,19 @@ pages = sa.Table(
     sa.Column("bytes", sa.Integer, nullable=False),
     sa.Column("depth", sa.Integer, nullable=False),
     sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("error", sa.String),  # why there is no response (status_code 0)
+    sa.Column("blocked", sa.String),  # "robots_txt": not fetched on purpose (status_code 0)
+    sa.Column("refresh_url", sa.String),  # target of a meta / HTTP Refresh
+    sa.Column("refresh_kind", sa.String),  # "meta" | "http"
+)
+issues = sa.Table(
+    "issues",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("code", sa.String, nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("detail", sa.String),
+    sa.Index("issues_by_code", "crawl_id", "code"),
 )
 
 
@@ -153,6 +167,10 @@ class PageWriter:
                 "bytes": page.bytes,
                 "depth": depth,
                 "fetched_at": _now(),
+                "error": page.error,
+                "blocked": page.blocked,
+                "refresh_url": page.refresh_url,
+                "refresh_kind": page.refresh_kind,
             }
         )
         if len(self._rows) >= self.batch_size:
@@ -201,3 +219,16 @@ def list_crawls(engine: sa.Engine, limit: int | None = None) -> list[CrawlRow]:
         row.started_at = row.started_at.replace(tzinfo=UTC)
         row.finished_at = row.finished_at.replace(tzinfo=UTC) if row.finished_at else None
     return rows
+
+
+def resolve_crawl_id(engine: sa.Engine, crawl_id: int | None) -> int:
+    """The given crawl if it exists, else (None) the newest one — what analysis commands default to."""
+    with engine.connect() as conn:
+        if crawl_id is None:
+            latest = conn.execute(sa.select(sa.func.max(crawls.c.id))).scalar()
+            if latest is None:
+                raise InvalidArguments(f"No crawls yet — run '{CLI_NAME} crawl <url>' first.")
+            return latest
+        if conn.execute(sa.select(crawls.c.id).where(crawls.c.id == crawl_id)).scalar() is None:
+            raise InvalidArguments(f"No crawl #{crawl_id} — see '{CLI_NAME} crawls list'.")
+        return crawl_id

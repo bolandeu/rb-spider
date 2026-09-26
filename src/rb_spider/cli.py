@@ -5,7 +5,7 @@ from importlib import resources
 import typer
 
 from . import output
-from .commands import auth, crawl, crawls, doctor, init, skill, status
+from .commands import auth, crawl, crawls, doctor, init, issues, skill, status
 from .commands import config as config_cmd
 from .core.version import CLI_NAME, DEV_VERSION, installed_version, package_summary
 
@@ -28,6 +28,9 @@ app.command(name="init")(init.init)
 app.command(name="status")(status.status)
 app.command(name="doctor")(doctor.doctor)
 app.command(name="crawl")(crawl.crawl)
+app.command(name="issues")(issues.issues)
+app.command(name="urls")(issues.urls)
+app.command(name="analyze")(issues.analyze)
 
 
 def _version_callback(value: bool) -> None:

@@ -34,6 +34,13 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/missing",
             "https://external.example/",  # another host: recorded as a link, never crawled
             "mailto:shop@example.com",  # not http(s): ignored
+            "/private/secret",
+            "/error",
+            "/chain1",
+            "/loop1",
+            "/meta-refresh",
+            "/http-refresh",
+            "/reset",
         ),
     ),
     "/a": (200, {}, _html("Страница A", "/c")),
@@ -41,15 +48,61 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/c": (200, {}, _html("Страница C")),
     "/old": (301, {"Location": "/a"}, ""),
     "/missing": (404, {}, _html("Не найдено")),
+    # --- traps: one per issue rule (EXPECTED_ISSUES below) ---
+    "/robots.txt": (200, {"Content-Type": "text/plain"}, "User-agent: *\nDisallow: /private/\n"),
+    "/private/secret": (200, {}, _html("Секрет")),  # never fetched: disallowed
+    "/error": (500, {}, _html("Ошибка сервера")),
+    "/chain1": (301, {"Location": "/chain2"}, ""),
+    "/chain2": (302, {"Location": "/a"}, ""),
+    "/loop1": (301, {"Location": "/loop2"}, ""),
+    "/loop2": (301, {"Location": "/loop1"}, ""),
+    "/meta-refresh": (200, {}, '<html><head><meta http-equiv="refresh" content="0; url=/c"></head></html>'),
+    "/http-refresh": (200, {"Refresh": "0; url=/c"}, _html("Обновление заголовком")),
+    # "/reset" closes the connection without answering (see _handle)
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).
-REACHABLE = {"/", "/a", "/b", "/b?sort=price", "/c", "/old", "/missing"}
+REACHABLE = {
+    "/",
+    "/a",
+    "/b",
+    "/b?sort=price",
+    "/c",
+    "/old",
+    "/missing",
+    "/private/secret",
+    "/error",
+    "/chain1",
+    "/chain2",
+    "/loop1",
+    "/loop2",
+    "/meta-refresh",
+    "/http-refresh",
+    "/reset",
+}
+
+# issue code -> polygon paths the rule must report (and nothing else).
+EXPECTED_ISSUES = {
+    "internal_no_response": {"/reset"},
+    "internal_client_error": {"/missing"},
+    "internal_server_error": {"/error"},
+    "internal_redirect_loop": {"/loop1", "/loop2"},
+    "internal_blocked_by_robots": {"/private/secret"},
+    "internal_redirect_chain": {"/chain1"},
+    "internal_redirection_3xx": {"/old", "/chain1", "/chain2", "/loop1", "/loop2"},
+    "internal_redirection_meta_refresh": {"/meta-refresh"},
+    "internal_redirection_http_refresh": {"/http-refresh"},
+}
 
 
-async def _handle(request: web.Request) -> web.Response:
+async def _handle(request: web.Request) -> web.StreamResponse:
+    if request.path == "/reset":  # no response at all: the client sees a dropped connection
+        assert request.transport is not None
+        request.transport.abort()
+        return web.Response()
     status, headers, body = ROUTES.get(request.path, (404, {}, _html("Не найдено")))
-    return web.Response(status=status, headers=headers, text=body, content_type="text/html")
+    headers = {"Content-Type": "text/html; charset=utf-8", **headers}
+    return web.Response(status=status, headers=headers, text=body)
 
 
 @contextmanager

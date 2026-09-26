@@ -48,21 +48,21 @@
 
 ### Response Codes — коды ответа
 
-- [ ] `MVP` **Internal No Response** — внутренний URL не ответил вовсе (таймаут, отказ соединения, кривой URL) _(SF: Issue, High)_
-- [ ] `MVP` **Internal Client Error (4XX)** — внутренний URL отдаёт 4xx (например, 404) _(SF: Issue, High)_
-- [ ] `MVP` **Internal Server Error (5XX)** — внутренний URL отдаёт 5xx (500, 503…) _(SF: Issue, High)_
-- [ ] `MVP` **Internal Redirect Loop** — цепочка редиректов возвращается на уже пройденный URL (петля) _(SF: Issue, High)_
-- [ ] `MVP` **Internal Blocked by Robots.txt** — внутренний URL запрещён в robots.txt, поисковик не сможет его обойти _(SF: Warning, High)_
-- [ ] `MVP` **Internal Blocked Resource** — внутренний ресурс (картинка, JS, CSS) недоступен: запрещён robots.txt или отдаёт ошибку _(SF: Warning, High)_
-- [ ] `MVP` **Internal Redirect Chain** — редирект ведёт на URL, который снова редиректит (2+ «прыжка») _(SF: Warning, Medium)_
-- [ ] `MVP` **External Blocked Resource** — внешний ресурс (картинка, JS, CSS) запрещён robots.txt или отдаёт ошибку _(SF: Warning, Medium)_
-- [ ] `MVP` **Internal Redirection (3XX)** — внутренний URL отдаёт серверный редирект (301, 302…) _(SF: Warning, Low)_
-- [ ] `MVP` **Internal Redirection (Meta Refresh)** — редирект через `<meta http-equiv="refresh">` на стороне браузера _(SF: Warning, Low)_
-- [ ] `MVP` **Internal Redirection (HTTP Refresh)** — редирект через HTTP-заголовок `Refresh` _(SF: Warning, Low)_
+- [x] `MVP` **Internal No Response** — внутренний URL не ответил вовсе (таймаут, отказ соединения, кривой URL) _(SF: Issue, High)_
+- [x] `MVP` **Internal Client Error (4XX)** — внутренний URL отдаёт 4xx (например, 404) _(SF: Issue, High)_
+- [x] `MVP` **Internal Server Error (5XX)** — внутренний URL отдаёт 5xx (500, 503…) _(SF: Issue, High)_
+- [x] `MVP` **Internal Redirect Loop** — цепочка редиректов возвращается на уже пройденный URL (петля) _(SF: Issue, High)_
+- [x] `MVP` **Internal Blocked by Robots.txt** — внутренний URL запрещён в robots.txt, поисковик не сможет его обойти _(SF: Warning, High)_
+- [ ] `MVP` **Internal Blocked Resource** (#12) — внутренний ресурс (картинка, JS, CSS) недоступен: запрещён robots.txt или отдаёт ошибку _(SF: Warning, High)_
+- [x] `MVP` **Internal Redirect Chain** — редирект ведёт на URL, который снова редиректит (2+ «прыжка») _(SF: Warning, Medium)_
+- [ ] `MVP` **External Blocked Resource** (#12) — внешний ресурс (картинка, JS, CSS) запрещён robots.txt или отдаёт ошибку _(SF: Warning, Medium)_
+- [x] `MVP` **Internal Redirection (3XX)** — внутренний URL отдаёт серверный редирект (301, 302…) _(SF: Warning, Low)_
+- [x] `MVP` **Internal Redirection (Meta Refresh)** — редирект через `<meta http-equiv="refresh">` на стороне браузера _(SF: Warning, Low)_
+- [x] `MVP` **Internal Redirection (HTTP Refresh)** — редирект через HTTP-заголовок `Refresh` _(SF: Warning, Low)_
 - [ ] `v2` **Internal Redirection (JavaScript)** — редирект, выполняемый JavaScript (нужен рендеринг и сравнение URL до/после) _(SF: Warning, Low)_
-- [ ] `MVP` **External No Response** — внешняя ссылка не ответила _(SF: Warning, Low)_
-- [ ] `MVP` **External Client Error (4XX)** — внешняя ссылка отдаёт 4xx (битая) _(SF: Warning, Low)_
-- [ ] `MVP` **External Server Error (5XX)** — внешняя ссылка отдаёт 5xx _(SF: Warning, Low)_
+- [ ] `MVP` **External No Response** (#9) — внешняя ссылка не ответила _(SF: Warning, Low)_
+- [ ] `MVP` **External Client Error (4XX)** (#9) — внешняя ссылка отдаёт 4xx (битая) _(SF: Warning, Low)_
+- [ ] `MVP` **External Server Error (5XX)** (#9) — внешняя ссылка отдаёт 5xx _(SF: Warning, Low)_
 
 ### Security — безопасность
 

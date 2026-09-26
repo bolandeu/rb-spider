@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from typer.testing import CliRunner
 
 from rb_spider.cli import app
-from rb_spider.core import storage
+from rb_spider.core import issues, storage
 from rb_spider.core.crawl import crawl_site
 from rb_spider.core.extract import parse_page
 
@@ -66,6 +66,45 @@ def test_crawl_stops_at_max_urls(base_url: str, engine) -> None:
     assert result.pages == 3
 
 
+# --- issues ------------------------------------------------------------------------
+
+
+def test_every_rule_has_a_polygon_trap() -> None:
+    assert set(polygon.EXPECTED_ISSUES) == set(issues.BY_CODE)
+
+
+@pytest.fixture(scope="module")
+def polygon_crawl(base_url: str):
+    """One full crawl of the polygon shared by the issue tests (crawling is the slow part)."""
+    with storage.database() as engine:
+        yield engine, crawl_site(engine, f"{base_url}/", "polygon").crawl_id
+
+
+@pytest.mark.parametrize("code", sorted(polygon.EXPECTED_ISSUES))
+def test_rule_finds_exactly_its_trap(code: str, base_url: str, polygon_crawl) -> None:
+    engine, crawl_id = polygon_crawl
+    _, rows = issues.urls_with(engine, crawl_id, code)
+    assert {row["url"].removeprefix(base_url) for row in rows} == polygon.EXPECTED_ISSUES[code]
+
+
+def test_redirect_details_show_the_path(base_url: str, polygon_crawl) -> None:
+    engine, crawl_id = polygon_crawl
+    [chain] = issues.urls_with(engine, crawl_id, "internal_redirect_chain")[1]
+    assert chain["detail"] == f"2 hops: {base_url}/chain1 → {base_url}/chain2 → {base_url}/a"
+
+
+def test_summary_puts_high_priority_first(polygon_crawl) -> None:
+    engine, crawl_id = polygon_crawl
+    priorities = [s.priority for s in issues.summary(engine, crawl_id)]
+    assert priorities == sorted(priorities, key=["high", "medium", "low"].index)
+
+
+def test_analyze_replaces_previous_findings(polygon_crawl) -> None:
+    engine, crawl_id = polygon_crawl
+    first = issues.analyze(engine, crawl_id)
+    assert issues.analyze(engine, crawl_id) == first  # recomputed, not appended
+
+
 # --- CLI ---------------------------------------------------------------------------
 
 
@@ -115,3 +154,38 @@ def test_parse_page_links_are_absolute_http_without_fragments() -> None:
 def test_parse_page_skips_non_html_and_bare_redirects() -> None:
     assert parse_page("https://s.example/f.pdf", 200, {"Content-Type": "application/pdf"}, b"%PDF").links == []
     assert parse_page("https://s.example/r", 302, {}, b"").redirect_url is None
+
+
+def test_cli_issues_urls_analyze(base_url: str) -> None:
+    code, crawl = _invoke_json("crawl", f"{base_url}/")
+    assert code == 0
+
+    code, summary = _invoke_json("issues")
+    assert code == 0
+    assert summary["crawl_id"] == crawl["crawl_id"]
+    by_code = {i["code"]: i for i in summary["issues"]}
+    assert by_code["internal_client_error"]["urls"] == 1
+    assert by_code["internal_client_error"]["priority"] == "high"
+
+    code, listing = _invoke_json("urls", "--issue", "internal_redirection_3xx", "--limit", "2")
+    assert code == 0
+    assert listing["total"] == len(polygon.EXPECTED_ISSUES["internal_redirection_3xx"])
+    assert len(listing["urls"]) == 2
+
+    code, analyzed = _invoke_json("analyze", str(crawl["crawl_id"]))
+    assert code == 0
+    assert analyzed["findings"] == sum(i["urls"] for i in summary["issues"])
+
+
+def test_cli_urls_unknown_issue_code(base_url: str) -> None:
+    _invoke_json("crawl", f"{base_url}/", "--max-urls", "1")
+    code, payload = _invoke_json("urls", "--issue", "no_such_check")
+    assert code == 2
+    assert "internal_client_error" in payload["error"]["message"]  # lists the known codes
+
+
+@pytest.mark.parametrize("args", [("issues",), ("issues", "999"), ("analyze",)])
+def test_cli_analysis_without_crawl(args: tuple[str, ...]) -> None:
+    code, payload = _invoke_json(*args)
+    assert code == 2
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"

@@ -28,15 +28,18 @@ from crawlee.http_clients import ImpitHttpClient
 from crawlee.storage_clients import MemoryStorageClient
 from crawlee.storages import RequestQueue
 
-from . import storage
+from . import issues, storage
 from .errors import InvalidArguments
-from .extract import normalize_url, parse_page
+from .extract import Page, normalize_url, parse_page
 
 PROGRESS_EVERY_S = 5.0
 
 # Crawlee warns that passing our own Configuration sets it globally as a side effect — intended
 # here (one crawl per process), so the warning is noise for the user.
 logging.getLogger("crawlee._service_locator").setLevel(logging.ERROR)
+# Crawl-delay from robots.txt isn't honoured yet (needs Crawlee's ThrottlingRequestManager) —
+# tracked in issue #7 (politeness settings); until then the per-crawl warning is noise.
+logging.getLogger("HttpCrawler").addFilter(lambda record: "Crawl-delay" not in record.getMessage())
 
 
 @dataclass
@@ -66,6 +69,7 @@ async def _run(
     writer: storage.PageWriter,
     max_urls: int | None,
     concurrency: int,
+    respect_robots: bool,
     on_progress: Callable[[int], None] | None,
 ) -> None:
     config = Configuration(log_level="WARNING")
@@ -88,30 +92,46 @@ async def _run(
         max_request_retries=1,
         request_handler_timeout=timedelta(seconds=60),
         ignore_http_error_status_codes=list(range(300, 600)),
+        respect_robots_txt_file=respect_robots,
         configure_logging=False,
     )
     host = urlsplit(start_url).netloc
-    seen = {start_url}
+    depth_of = {start_url: 0}  # every URL handed to the queue; its depth is known before it's fetched
     last_progress = time.monotonic()
 
-    @crawler.router.default_handler
-    async def handle(ctx: HttpCrawlingContext) -> None:
+    def progress() -> None:
         nonlocal last_progress
-        response = ctx.http_response
-        page = parse_page(ctx.request.url, response.status_code, dict(response.headers), await response.read())
-        writer.add(page, depth=ctx.request.crawl_depth)
-
-        targets = [*page.links, page.redirect_url] if page.redirect_url else page.links
-        new = [u for u in dict.fromkeys(targets) if urlsplit(u).netloc == host and u not in seen]
-        if max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests already in flight
-            new = new[: max(0, max_urls - len(seen))]
-        if new:
-            seen.update(new)
-            await ctx.add_requests(new)
-
         if on_progress and time.monotonic() - last_progress >= PROGRESS_EVERY_S:
             last_progress = time.monotonic()
             on_progress(writer.count)
+
+    @crawler.router.default_handler
+    async def handle(ctx: HttpCrawlingContext) -> None:
+        response = ctx.http_response
+        page = parse_page(ctx.request.url, response.status_code, dict(response.headers), await response.read())
+        depth = depth_of.get(page.url, ctx.request.crawl_depth)
+        writer.add(page, depth=depth)
+
+        targets = [*page.links, page.redirect_url, page.refresh_url]
+        new = [u for u in dict.fromkeys(targets) if u and urlsplit(u).netloc == host and u not in depth_of]
+        if max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests already in flight
+            new = new[: max(0, max_urls - len(depth_of))]
+        if new:
+            depth_of.update(dict.fromkeys(new, depth + 1))
+            await ctx.add_requests(new)
+        progress()
+
+    @crawler.failed_request_handler
+    async def failed(ctx, error: Exception) -> None:
+        # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
+        url = ctx.request.url
+        writer.add(Page.no_response(url, f"{type(error).__name__}: {error}"[:500]), depth=depth_of.get(url, 0))
+        progress()
+
+    @crawler.on_skipped_request
+    async def skipped(url: str, reason: str) -> None:
+        # Disallowed by robots.txt: never fetched, but part of the report (what a search bot can't reach).
+        writer.add(Page.blocked_by_robots(url), depth=depth_of.get(url, 0))
 
     try:
         await crawler.run([start_url])
@@ -126,6 +146,7 @@ def crawl_site(
     *,
     max_urls: int | None = None,
     concurrency: int = 20,
+    respect_robots: bool = True,
     on_progress: Callable[[int], None] | None = None,
 ) -> CrawlResult:
     """Crawl `start_url`'s host breadth-first and store every response under a new crawl."""
@@ -135,7 +156,7 @@ def crawl_site(
     started = time.monotonic()
     status = "failed"
     try:
-        asyncio.run(_run(start_url, writer, max_urls, concurrency, on_progress))
+        asyncio.run(_run(start_url, writer, max_urls, concurrency, respect_robots, on_progress))
         status = "finished"
     except KeyboardInterrupt:
         status = "interrupted"
@@ -143,4 +164,5 @@ def crawl_site(
     finally:
         writer.flush()
         pages = storage.finish_crawl(engine, crawl_id, status)
+        issues.analyze(engine, crawl_id)  # an interrupted crawl is still worth a report
     return CrawlResult(crawl_id, project, start_url, status, pages, round(time.monotonic() - started, 1))
