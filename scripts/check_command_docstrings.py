@@ -36,9 +36,13 @@ def _read(rev: str, path: str) -> str | None:
 
 
 def _functions(source: str) -> dict[str, tuple[str | None, str]]:
-    """Map public function name -> (docstring, fingerprint of signature + body without docstring)."""
+    """Map public top-level function name -> (docstring, fingerprint of signature + body without docstring).
+
+    Top level only: commands are module-level functions; a helper nested inside one is part of
+    its body (and so of its fingerprint), not a command of its own.
+    """
     functions: dict[str, tuple[str | None, str]] = {}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.parse(source).body:
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) or node.name.startswith("_"):
             continue
         docstring = ast.get_docstring(node)

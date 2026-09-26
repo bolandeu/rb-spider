@@ -675,7 +675,7 @@
 
 ## D. Режимы
 
-- [ ] `MVP` **Spider** — обход сайта от стартового URL по ссылкам → `spider crawl <url>`
+- [x] `MVP` **Spider** — обход сайта от стартового URL по ссылкам → `spider crawl <url>`
 - [ ] `MVP` **List** — обход списка URL из файла (глубина 0; для миграций вместе с Always Follow Redirects) → `spider crawl --list urls.txt`
 - [ ] `v2` **List: загрузка из XML sitemap, CSV, Excel** — извлечь URL из файла любого из этих форматов
 - [ ] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`

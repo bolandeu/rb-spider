@@ -1,0 +1,20 @@
+                                                                                                    
+ Usage: spider crawls list [OPTIONS]                                                                
+                                                                                                    
+ Показать обходы всех проектов, новые сверху.                                                       
+                                                                                                    
+ Примеры:                                                                                           
+   spider crawls list                                                                               
+   spider --json crawls list --limit 5                                                              
+                                                                                                    
+ JSON: `{crawls: [{id, project, start_url, status, started_at, finished_at, pages}]}`,              
+ даты — ISO 8601 в UTC; `status` — running | finished | failed | interrupted.                       
+                                                                                                    
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --limit        <int range> [x>=1]  Сколько последних обходов показать. [default: 20]             │
+│ --json                             Вывод в JSON для агентов и скриптов (одна строка-конверт      │
+│                                    `{ok, ...}`).                                                 │
+│ --quiet                            Печатать только основной результат, без пояснений.            │
+│ --help                             Show this message and exit.                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

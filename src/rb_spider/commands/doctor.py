@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from .. import output
-from ..core import services
+from ..core import services, storage
 from ..core.errors import CliTooOld
 from ..core.models import ProjectConfig
 from ..core.version import CLI_NAME, DEV_VERSION, installed_version
@@ -49,10 +49,11 @@ def doctor(
     quiet: bool = output.QuietOption,
     verbose: bool = output.VerboseOption,
 ) -> None:
-    """Проверить окружение: Python, версию CLI, проект, конфиг, хранилище секретов.
+    """Проверить окружение: Python, версию CLI, проект, конфиг, базу обходов, хранилище секретов.
 
     Первое, что стоит запустить, если команда ведёт себя странно. Код выхода
     всегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.
+    Проверка `database` показывает путь к базе обходов (`SPIDER_DB_PATH` переопределяет).
 
     Примеры:
       spider doctor
@@ -81,6 +82,15 @@ def doctor(
             checks.append({"name": "cli_compat", "ok": True, "detail": f"project requires >= {config.cli.min_version}"})
         except CliTooOld as exc:
             checks.append({"name": "cli_compat", "ok": False, "detail": exc.message})
+
+    database = storage.db_path()
+    checks.append(
+        {
+            "name": "database",
+            "ok": True,
+            "detail": f"{database}" + ("" if database.exists() else " (создастся при первом обходе)"),
+        }
+    )
 
     checks.extend(_auth_checks(config.provider.name if config else "default"))
 

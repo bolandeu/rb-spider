@@ -5,7 +5,7 @@ from importlib import resources
 import typer
 
 from . import output
-from .commands import auth, doctor, init, skill, status
+from .commands import auth, crawl, crawls, doctor, init, skill, status
 from .commands import config as config_cmd
 from .core.version import CLI_NAME, DEV_VERSION, installed_version, package_summary
 
@@ -22,10 +22,12 @@ app = typer.Typer(
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(auth.app, name="auth")
 app.add_typer(skill.app, name="skill")
+app.add_typer(crawls.app, name="crawls")
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)
 app.command(name="doctor")(doctor.doctor)
+app.command(name="crawl")(crawl.crawl)
 
 
 def _version_callback(value: bool) -> None:
