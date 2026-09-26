@@ -81,8 +81,8 @@ def test_init_force_resets_config(tmp_path: Path) -> None:
     assert payload["value"] == "default"
 
 
-def test_status_without_init_fails(tmp_path: Path) -> None:
-    code, payload = invoke_json("--project", str(tmp_path), "status")
+def test_project_command_without_init_fails(tmp_path: Path) -> None:
+    code, payload = invoke_json("--project", str(tmp_path), "config", "list")
     assert code == 4
     assert payload["ok"] is False
     assert payload["error"]["code"] == "PROJECT_NOT_INITIALIZED"
@@ -214,8 +214,13 @@ def test_unexpected_exception_prints_traceback_only_with_verbose() -> None:
     assert "Traceback" in loud.stderr or "RuntimeError" in loud.stderr
 
 
+def test_status_works_without_a_project(tmp_path: Path) -> None:
+    code, payload = invoke_json("--project", str(tmp_path), "status")
+    assert (code, payload["project"], payload["crawl"]) == (0, None, None)  # crawl progress needs no project
+
+
 def test_human_error_goes_to_stderr(tmp_path: Path) -> None:
-    result = invoke("--project", str(tmp_path), "status")
+    result = invoke("--project", str(tmp_path), "config", "list")
     assert result.exit_code == 4
     assert result.stdout == ""
     assert "Error:" in result.stderr

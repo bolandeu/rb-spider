@@ -27,9 +27,13 @@
    spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой     
    spider --json crawl https://example.com/                                                         
                                                                                                     
+ Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:                               
+ `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.             
+                                                                                                    
  Человеку — прогресс в stderr каждые 5 с и итог. JSON:                                              
  `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —                             
- finished | failed | interrupted. Неверный URL или настройка — код выхода 2.                        
+ finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,                         
+ detached, pid, log}`. Неверный URL или настройка — код выхода 2.                                   
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    url      <str>  Стартовый URL, например https://example.com/. Обходится только его хост.    │
@@ -53,6 +57,8 @@
 │                                            (crawl.user_agent).                                   │
 │ --ignore-robots                            Не читать robots.txt, обходить всё (ключ crawl.robots │
 │                                            = ignore).                                            │
+│ --detach                                   Запустить обход в фоне и сразу вернуться; следить —   │
+│                                            `spider status`.                                      │
 │ --store-html                               Сохранить HTML страниц сжатым рядом с базой (ключ     │
 │                                            crawl.store_html).                                    │
 │ --json                                     Вывод в JSON для агентов и скриптов (одна             │

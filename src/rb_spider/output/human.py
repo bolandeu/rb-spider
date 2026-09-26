@@ -140,3 +140,44 @@ def links_table(data: dict) -> None:
         anchor = link["anchor"] or (f"[img alt: {link['alt']}]" if link["alt"] else "")
         table.add_row(str(link["status_code"] if link["status_code"] is not None else "—"), other, anchor, kind)
     console.print(table)
+
+
+def status_view(data: dict) -> None:
+    if data["project"]:
+        key_values("Проект", {"имя": data["project"], "путь": data["path"]})
+    crawl = data["crawl"]
+    if crawl is None:
+        console.print("Обходов пока нет — `spider crawl <url>`.")
+        return
+    state = crawl["status"]
+    if state == "running":
+        state += (
+            " (процесс жив)"
+            if crawl["alive"]
+            else " (процесс завершился — `spider crawls resume`)"
+            if crawl["alive"] is False
+            else ""
+        )
+    key_values(
+        f"Обход #{crawl['id']}: {state}",
+        {"проект": crawl["project"], "старт": crawl["start_url"], "сохранено URL": crawl["pages"],
+         "в очереди": crawl["pending"], "pid": crawl["pid"] or "—"},
+    )  # fmt: skip
+
+
+def crawl_result(data: dict) -> None:
+    key_values(
+        f"Обход #{data['crawl_id']}: {data['status']}",
+        {
+            "проект": data["project"],
+            "старт": data["start_url"],
+            "страниц": data["pages"],
+            "время, с": data["elapsed_s"],
+        },
+    )
+
+
+def detached(data: dict) -> None:
+    console.print(f"Обход #{data['crawl_id']} запущен в фоне (pid {data['pid']}).")
+    console.print(f"  прогресс: spider status {data['crawl_id']}")
+    console.print(f"  лог: {data['log']}")

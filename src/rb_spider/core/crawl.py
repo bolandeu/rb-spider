@@ -18,11 +18,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
@@ -177,6 +181,7 @@ async def _run(
     writer: storage.PageWriter,
     all_settings: Settings,
     on_progress: Callable[[int], None] | None,
+    resume: storage.Frontier | None = None,
 ) -> None:
     settings, collect = all_settings.crawl, all_settings.collect
     user_agent = settings.resolved_user_agent
@@ -216,8 +221,8 @@ async def _run(
         configure_logging=False,
         **({"proxy_configuration": ProxyConfiguration(proxy_urls=list(proxies))} if proxies else {}),
     )
-    depth_of: dict[str, int] = {}  # every URL handed to the queue; its depth is known before it's fetched
-    reported_blocked: set[str] = set()  # robots = "report": fetched anyway, flagged as disallowed
+    # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
+    depth_of: dict[str, int] = dict(resume.seen) if resume else {}
     last_progress = time.monotonic()
 
     def progress() -> None:
@@ -251,13 +256,15 @@ async def _run(
         for url in new:
             depth_of[url] = depth
             check = roles[url] == "check"
-            if settings.robots != "ignore" and not await robots.allowed(url):
-                if settings.robots == "respect":  # never fetched, but part of the report
-                    writer.add(Page.blocked_by_robots(url), depth=depth)
-                    continue
-                reported_blocked.add(url)
-            admitted.append(Request.from_url(url, headers=headers or None, user_data={"check": check}))
+            writer.queued(url, depth, check)
+            if settings.robots == "respect" and not await robots.allowed(url):
+                writer.add(Page.blocked_by_robots(url), depth=depth)  # never fetched, but part of the report
+                continue
+            admitted.append(request(url, check))
         return admitted
+
+    def request(url: str, check: bool) -> Request:
+        return Request.from_url(url, headers=headers or None, user_data={"check": check})
 
     def resources_to_check(page: Page) -> tuple[list[str], list[dict]]:
         """Resources to check (status, size) and their link rows — collect.images / css / js / media / iframes."""
@@ -326,8 +333,8 @@ async def _run(
         )
         page.bytes = len(body)
         page.onpage |= {"external": not scope.internal(page.url), "parsed": not check}
-        if page.url in reported_blocked:
-            page.blocked = "robots_txt"
+        if settings.robots == "report" and not await robots.allowed(page.url):
+            page.blocked = "robots_txt"  # fetched anyway, flagged as disallowed
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
         if check:
             writer.add(page, depth=depth)
@@ -353,11 +360,55 @@ async def _run(
         progress()
 
     try:
-        start_requests = await admit([start_url], 0, start=True)
+        if resume and resume.seen:  # continue: the queue is whatever wasn't done
+            start_requests = [request(url, check) for url, _, check in resume.pending]
+        else:
+            start_requests = await admit([start_url], 0, start=True)
+        writer.flush()  # the start URL (and a robots verdict on it) is on disk before any fetching
         if start_requests:
             await crawler.run(start_requests)
     finally:
         await queue.drop()
+
+
+def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Settings | None = None) -> int:
+    """Record a new crawl with its settings; `run_crawl` does the work (now, or in a detached process)."""
+    settings = settings or Settings()
+    start_url = _validate_start_url(start_url)
+    proxy_urls(settings.crawl)  # a missing proxy password fails before a crawl is registered
+    return storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
+
+
+def run_crawl(
+    engine: sa.Engine,
+    crawl_id: int,
+    *,
+    on_progress: Callable[[int], None] | None = None,
+) -> CrawlResult:
+    """Crawl (or continue crawling) a registered crawl with its own settings, then run the checks.
+
+    Continuing picks up the `frontier` a previous run left — after Ctrl-C, a crash or kill -9.
+    """
+    row, snapshot = storage.get_crawl(engine, crawl_id)
+    settings = Settings.model_validate(snapshot or {})
+    resume = storage.load_frontier(engine, crawl_id)
+    writer = storage.PageWriter(engine, crawl_id, store_html=settings.crawl.store_html)
+    storage.set_pid(engine, crawl_id, os.getpid())
+    started = time.monotonic()
+    status = "failed"
+    try:
+        asyncio.run(_run(row.start_url, writer, settings, on_progress, resume))
+        status = "finished"
+    except KeyboardInterrupt:
+        status = "interrupted"
+        raise
+    finally:
+        writer.flush()
+        if writer.html_engine is not None:
+            writer.html_engine.dispose()
+        pages = storage.finish_crawl(engine, crawl_id, status)
+        issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
+    return CrawlResult(crawl_id, row.project, row.start_url, status, pages, round(time.monotonic() - started, 1))
 
 
 def crawl_site(
@@ -372,23 +423,42 @@ def crawl_site(
 
     The resolved settings are kept with the crawl (`spider crawls show`).
     """
-    settings = settings or Settings()
-    start_url = _validate_start_url(start_url)
-    proxy_urls(settings.crawl)  # a missing proxy password fails before a crawl is registered
-    crawl_id = storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
-    writer = storage.PageWriter(engine, crawl_id, store_html=settings.crawl.store_html)
-    started = time.monotonic()
-    status = "failed"
+    crawl_id = register_crawl(engine, start_url, project, settings)
+    return run_crawl(engine, crawl_id, on_progress=on_progress)
+
+
+def process_alive(pid: int | None) -> bool | None:
+    """Is the process running? None when it can't be told (no pid, or Windows, where os.kill would kill)."""
+    if pid is None or os.name == "nt":
+        return None
     try:
-        asyncio.run(_run(start_url, writer, settings, on_progress))
-        status = "finished"
-    except KeyboardInterrupt:
-        status = "interrupted"
-        raise
-    finally:
-        writer.flush()
-        if writer.html_engine is not None:
-            writer.html_engine.dispose()
-        pages = storage.finish_crawl(engine, crawl_id, status)
-        issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
-    return CrawlResult(crawl_id, project, start_url, status, pages, round(time.monotonic() - started, 1))
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def ensure_resumable(engine: sa.Engine, crawl_id: int) -> None:
+    """A crawl can be continued unless it finished or its process is still at it."""
+    row, _ = storage.get_crawl(engine, crawl_id)
+    if row.status == "finished":
+        raise InvalidArguments(f"Crawl #{crawl_id} has already finished — start a new one with `spider crawl`.")
+    if row.status == "running" and process_alive(storage.crawl_pid(engine, crawl_id)):
+        raise InvalidArguments(f"Crawl #{crawl_id} is still running — see `spider status {crawl_id}`.")
+
+
+def detach(crawl_id: int) -> tuple[int, Path]:
+    """Run a registered crawl in its own background process; returns its pid and log file."""
+    log_path = storage.db_path().parent / "logs" / f"crawl-{crawl_id}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, "-m", "rb_spider", "--quiet", "crawls", "resume", str(crawl_id)]
+    detached: dict = (
+        {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}  # type: ignore[attr-defined]
+        if os.name == "nt"
+        else {"start_new_session": True}
+    )
+    with log_path.open("ab") as log:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **detached)  # noqa: S603 — fixed argv
+    return process.pid, log_path

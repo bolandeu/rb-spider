@@ -9,6 +9,7 @@ when the database is opened. `metadata` below mirrors the latest migration.
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ crawls = sa.Table(
     sa.Column("finished_at", sa.DateTime(timezone=True)),
     sa.Column("pages", sa.Integer, nullable=False, server_default="0"),
     sa.Column("settings", sa.JSON),  # resolved settings the crawl ran with: explains why two crawls differ
+    sa.Column("pid", sa.Integer),  # process running the crawl (a detached one too) — to tell running from dead
 )
 pages = sa.Table(
     "pages",
@@ -103,6 +105,19 @@ pages = sa.Table(
     sa.Column("internal_nofollow_outlinks", sa.Integer),
     sa.Column("uncrawlable_outlinks", sa.Integer),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
+)
+# Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
+# so after a crash (kill -9) the pending rows are exactly what still has to be fetched: resume
+# rebuilds the in-memory queue from them, nothing is lost and nothing is fetched twice.
+frontier = sa.Table(
+    "frontier",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column("url", sa.String, primary_key=True),
+    sa.Column("depth", sa.Integer, nullable=False),
+    sa.Column("check_only", sa.Boolean, nullable=False),  # status only, not read (other sites, resources)
+    sa.Column("done", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Index("frontier_pending", "crawl_id", "done"),
 )
 links = sa.Table(
     "links",
@@ -224,16 +239,30 @@ _PAGE_COLUMNS = [column.name for column in pages.columns]
 
 
 class PageWriter:
-    """Buffers pages and writes them in batches: memory stays flat however big the site is.
+    """Buffers pages, links and queue entries and writes them in one transaction per batch.
 
-    With `store_html`, response bodies go zstd-compressed to the separate HTML database.
+    A batch goes out every `batch_size` pages or `flush_every_s` seconds, whichever comes first — memory
+    stays flat however big the site is, and `spider status` sees progress while the crawl runs. One
+    transaction for everything is what makes resume lossless (see `frontier`). With `store_html`,
+    response bodies go zstd-compressed to the separate HTML database.
     """
 
-    def __init__(self, engine: sa.Engine, crawl_id: int, batch_size: int = 500, *, store_html: bool = False) -> None:
-        self.engine, self.crawl_id, self.batch_size = engine, crawl_id, batch_size
+    def __init__(
+        self,
+        engine: sa.Engine,
+        crawl_id: int,
+        batch_size: int = 500,
+        *,
+        store_html: bool = False,
+        flush_every_s: float = 2.0,
+    ) -> None:
+        self.engine, self.crawl_id, self.batch_size, self.flush_every_s = engine, crawl_id, batch_size, flush_every_s
         self._rows: list[dict] = []
         self._links: list[dict] = []
+        self._queued: list[dict] = []
+        self._done: list[str] = []
         self._html: list[dict] = []
+        self._last_flush = time.monotonic()
         self.written = 0
         self.html_engine: sa.Engine | None = None
         if store_html:
@@ -248,7 +277,12 @@ class PageWriter:
         """Pages handed to the writer so far, flushed or not."""
         return self.written + len(self._rows)
 
+    def queued(self, url: str, depth: int, check_only: bool) -> None:
+        """A URL went into the crawl queue."""
+        self._queued.append({"crawl_id": self.crawl_id, "url": url, "depth": depth, "check_only": check_only})
+
     def add(self, page: Page, depth: int, body: bytes | None = None) -> None:
+        """A URL's result: stored with its queue entry marked done, in the same batch."""
         if self.html_engine is not None and body:
             self._html.append({"crawl_id": self.crawl_id, "url": page.url, "body": self._compressor.compress(body)})
         # Every row carries every column: a batch insert needs one shape, and a redirect or an
@@ -272,7 +306,8 @@ class PageWriter:
             }
             | page.onpage
         )
-        if len(self._rows) >= self.batch_size:
+        self._done.append(page.url)
+        if len(self._rows) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
             self.flush()
 
     def add_links(self, rows: list[dict]) -> None:
@@ -281,21 +316,73 @@ class PageWriter:
                             "nofollow": False, "alt_attr": None, "sized": None} | row for row in rows)  # fmt: skip
 
     def flush(self) -> None:
-        if self._links:
-            with self.engine.begin() as conn:
-                conn.execute(sa.insert(links), self._links)
-            self._links = []
-        if self._html and self.html_engine is not None:
+        self._last_flush = time.monotonic()
+        if self._html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned
             with self.html_engine.begin() as conn:
                 conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), self._html)
             self._html = []
-        if not self._rows:
+        if not (self._rows or self._links or self._queued):
             return
         with self.engine.begin() as conn:
-            # A URL reached twice keeps its latest response. SQLite syntax; remote DBs (v2) need an upsert.
-            conn.execute(sa.insert(pages).prefix_with("OR REPLACE"), self._rows)
+            if self._queued:
+                conn.execute(sa.insert(frontier).prefix_with("OR IGNORE"), self._queued)
+            if self._rows:
+                # A URL reached twice keeps its latest response. SQLite syntax; remote DBs (v2) need an upsert.
+                conn.execute(sa.insert(pages).prefix_with("OR REPLACE"), self._rows)
+                done = sa.update(frontier).where(
+                    frontier.c.crawl_id == self.crawl_id, frontier.c.url == sa.bindparam("u")
+                )
+                conn.execute(done.values(done=True), [{"u": url} for url in self._done])
+            if self._links:
+                conn.execute(sa.insert(links), self._links)
         self.written += len(self._rows)
-        self._rows = []
+        self._rows, self._links, self._queued, self._done = [], [], [], []
+
+
+def crawl_pid(engine: sa.Engine, crawl_id: int) -> int | None:
+    with engine.connect() as conn:
+        return conn.execute(sa.select(crawls.c.pid).where(crawls.c.id == crawl_id)).scalar()
+
+
+def set_pid(engine: sa.Engine, crawl_id: int, pid: int | None) -> None:
+    with engine.begin() as conn:
+        conn.execute(sa.update(crawls).where(crawls.c.id == crawl_id).values(pid=pid, status="running"))
+
+
+@dataclass
+class Frontier:
+    seen: dict[str, int]  # every queued URL -> depth
+    pending: list[tuple[str, int, bool]]  # (url, depth, check_only) not done yet
+
+
+def load_frontier(engine: sa.Engine, crawl_id: int) -> Frontier:
+    """The queue a crawl left behind: what it has seen, and what it still has to fetch."""
+    query = sa.select(frontier.c.url, frontier.c.depth, frontier.c.check_only, frontier.c.done).where(
+        frontier.c.crawl_id == crawl_id
+    )
+    seen: dict[str, int] = {}
+    pending: list[tuple[str, int, bool]] = []
+    with engine.connect() as conn:
+        for url, depth, check_only, done in conn.execute(query):
+            seen[url] = depth
+            if not done:
+                pending.append((url, depth, check_only))
+    return Frontier(seen, pending)
+
+
+@dataclass
+class Progress:
+    pages: int  # stored so far
+    pending: int  # queued, not fetched yet
+
+
+def progress(engine: sa.Engine, crawl_id: int) -> Progress:
+    with engine.connect() as conn:
+        stored = conn.execute(sa.select(sa.func.count()).where(pages.c.crawl_id == crawl_id)).scalar_one()
+        pending = conn.execute(
+            sa.select(sa.func.count()).where(frontier.c.crawl_id == crawl_id, sa.not_(frontier.c.done))
+        ).scalar_one()
+    return Progress(stored, pending)
 
 
 @dataclass

@@ -34,6 +34,9 @@ def crawl(
     ignore_robots: bool = typer.Option(
         False, "--ignore-robots", help="Не читать robots.txt, обходить всё (ключ crawl.robots = ignore)."
     ),
+    detach: bool = typer.Option(
+        False, "--detach", help="Запустить обход в фоне и сразу вернуться; следить — `spider status`."
+    ),
     store_html: bool | None = typer.Option(
         None, "--store-html", help="Сохранить HTML страниц сжатым рядом с базой (ключ crawl.store_html)."
     ),
@@ -67,9 +70,13 @@ def crawl(
       spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
       spider --json crawl https://example.com/
 
+    Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
+    `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
+
     Человеку — прогресс в stderr каждые 5 с и итог. JSON:
     `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
-    finished | failed | interrupted. Неверный URL или настройка — код выхода 2.
+    finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
+    detached, pid, log}`. Неверный URL или настройка — код выхода 2.
     """
     resolved = options.resolve(
         ctx,
@@ -93,18 +100,11 @@ def crawl(
             output.human.err_console.print(f"… {pages} URL")
 
     with storage.database() as engine:
-        result = crawl_service.crawl_site(
-            engine,
-            url,
-            project,
-            resolved.settings,
-            on_progress=progress,
-        )
-    output.emit_success(
-        ctx,
-        vars(result),
-        render_human=lambda d: output.human.key_values(
-            f"Обход #{d['crawl_id']}: {d['status']}",
-            {"проект": d["project"], "старт": d["start_url"], "страниц": d["pages"], "время, с": d["elapsed_s"]},
-        ),
-    )
+        crawl_id = crawl_service.register_crawl(engine, url, project, resolved.settings)
+        if detach:
+            pid, log = crawl_service.detach(crawl_id)
+            data = {"crawl_id": crawl_id, "project": project, "detached": True, "pid": pid, "log": str(log)}
+            output.emit_success(ctx, data, render_human=output.human.detached)
+            return
+        result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
+    output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
