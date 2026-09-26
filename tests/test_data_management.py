@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -79,10 +80,12 @@ def test_delete_asks_and_can_be_declined(base_url: str, engine) -> None:
 def test_delete_unknown_or_running_crawl(base_url: str, engine) -> None:
     code, data = _invoke("crawls", "delete", "999", "--yes")
     assert code == 2 and data["error"]["code"] == "INVALID_ARGUMENTS"
-    crawl_id = _crawl(engine, base_url, "site")
-    storage.set_pid(engine, crawl_id, None)  # status "running", pid unknown — may be alive
+    running, stale = _crawl(engine, base_url, "site"), _crawl(engine, base_url, "site")
+    storage.set_pid(engine, running, os.getpid())  # status "running", its process alive
     with pytest.raises(InvalidArguments, match="still running"):
-        maintenance.delete_crawls(engine, maintenance.select_crawls(engine, [crawl_id]))
+        maintenance.delete_crawls(engine, maintenance.select_crawls(engine, [running]))
+    storage.set_pid(engine, stale, None)  # "running" without a process: left from an old spider, deletable
+    assert maintenance.delete_crawls(engine, maintenance.select_crawls(engine, [stale])) == 5
 
 
 def test_prune_keep_last_per_project_and_older_than(base_url: str, engine) -> None:

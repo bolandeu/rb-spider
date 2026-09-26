@@ -39,7 +39,13 @@ def parse_age(value: str) -> timedelta:
 def _running(engine: sa.Engine, rows: list[storage.CrawlRow]) -> list[int]:
     from .crawl import process_alive
 
-    return [r.id for r in rows if r.status == "running" and process_alive(storage.crawl_pid(engine, r.id)) is not False]
+    def busy(row: storage.CrawlRow) -> bool:
+        # no pid: a crawl registered but never started, or made before pids were kept — nothing runs it;
+        # a pid we can't check (Windows) counts as running
+        pid = storage.crawl_pid(engine, row.id)
+        return row.status == "running" and pid is not None and process_alive(pid) is not False
+
+    return [r.id for r in rows if busy(r)]
 
 
 def select_crawls(engine: sa.Engine, crawl_ids: list[int]) -> list[storage.CrawlRow]:
