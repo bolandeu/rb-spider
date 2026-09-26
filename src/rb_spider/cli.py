@@ -5,7 +5,22 @@ from importlib import resources
 import typer
 
 from . import output
-from .commands import auth, crawl, crawls, db, doctor, init, issues, links, profiles, projects, redirects, skill, status
+from .commands import (
+    auth,
+    crawl,
+    crawls,
+    db,
+    doctor,
+    export,
+    init,
+    issues,
+    links,
+    profiles,
+    projects,
+    redirects,
+    skill,
+    status,
+)
 from .commands import config as config_cmd
 from .core.version import CLI_NAME, DEV_VERSION, installed_version, package_summary
 
@@ -36,6 +51,9 @@ app.command(name="urls")(issues.urls)
 app.command(name="analyze")(issues.analyze)
 app.command(name="redirects")(redirects.redirects)
 app.command(name="links")(links.links)
+app.command(name="url")(export.url)
+app.command(name="export")(export.export)
+app.command(name="query")(export.query)
 
 
 def _version_callback(value: bool) -> None:

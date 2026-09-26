@@ -1,0 +1,37 @@
+                                                                                                    
+ Usage: spider query [OPTIONS] {sql}                                                                
+                                                                                                    
+ Выполнить свой SQL-запрос к базе обходов — только чтение.                                          
+                                                                                                    
+ Для вопросов, на которые нет готовой команды. База открывается только для                          
+ чтения, а SQLite сам отклоняет всё, кроме SELECT: запись, ATTACH, PRAGMA.                          
+ Таблицы: pages, links, issues, crawls, projects, frontier; у строк обхода —                        
+ `crawl_id` (`spider crawls list`). Колонки — `spider export` с тем же набором                      
+ или `SELECT * FROM pages LIMIT 1`. Функция casefold(x) — регистр без учёта                         
+ кириллицы.                                                                                         
+                                                                                                    
+ Примеры:                                                                                           
+   spider query "SELECT status_code, count(*) FROM pages WHERE crawl_id = 3 GROUP BY 1"             
+   spider --json query "SELECT url, word_count FROM pages WHERE crawl_id = 3 ORDER BY 2 LIMIT 20"   
+   spider query "SELECT source, target FROM links WHERE crawl_id = 3 AND anchor = ''" --format csv  
+ -o empty.csv                                                                                       
+                                                                                                    
+ Выход — таблица (не больше `--limit` строк); JSON: `{columns, rows, truncated}`,                   
+ `rows` — массивы значений. С `--format` строки идут потоком без ограничения —                      
+ в stdout или в файл `-o` (тогда итог `{format, rows, path}`). Ошибка в                             
+ запросе или попытка записи — выход 2.                                                              
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    sql      <str>  Запрос SELECT (или WITH … SELECT) к базе обходов. [required]                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --limit           <int range> [x>=1]  Сколько строк показать (без --format). [default: 1000]     │
+│ --format          <csv|json>          Выгрузить все строки потоком: csv или json.                │
+│ --output  -o      <path>              Записать в файл; без него — поток данных в stdout (без     │
+│                                       JSON-конверта).                                            │
+│ --json                                Вывод в JSON для агентов и скриптов (одна строка-конверт   │
+│                                       `{ok, ...}`).                                              │
+│ --quiet                               Печатать только основной результат, без пояснений.         │
+│ --help                                Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

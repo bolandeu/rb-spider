@@ -240,3 +240,47 @@ def migrations(data: dict) -> None:
 
 def vacuumed(data: dict) -> None:
     console.print(f"Сжато: {_mb(data['before_bytes'])} → {_mb(data['after_bytes'])}")
+
+
+def exported(data: dict) -> None:
+    what = data.get("dataset", "запрос")
+    console.print(f"Выгружено {data['rows']} строк ({what}, {data['format']}) в {data['path']}")
+
+
+def url_details(data: dict) -> None:
+    page = data["page"]
+    index = "да" if page["indexable"] else f"нет — {page['indexability_status']}"
+    fields = {"код": page["status_code"], "тип": page["content_type"] or "—", "индексируется": index,
+              "глубина": page["depth"], "размер, байт": page["bytes"],
+              "входящих / исходящих ссылок": f"{data['inlinks']} / {data['outlinks']}"}  # fmt: skip
+    for key, label in (("redirect_url", "редирект на"), ("refresh_url", "refresh на"), ("canonical_url", "canonical"),
+                       ("title", "title"), ("meta_description", "description"), ("h1", "h1"),
+                       ("word_count", "слов"), ("error", "ошибка"), ("blocked", "заблокирован")):  # fmt: skip
+        if page.get(key) not in (None, ""):
+            fields[label] = page[key]
+    key_values(f"{page['url']} — обход #{data['crawl_id']}", fields)
+    if data["issues"]:
+        console.print("[bold]Проблемы[/bold]")
+        for issue in data["issues"]:
+            detail = f" — {issue['detail']}" if issue["detail"] else ""
+            console.print(f"  {issue['priority'] or ''} {issue['name']} ({issue['code']}){detail}")
+    if data["resources"]:
+        table = Table(box=None, pad_edge=False, title="Ресурсы", title_justify="left")
+        for column in ("код", "тип", "КБ", "URL", "alt"):
+            table.add_column(column)
+        for r in data["resources"]:
+            size = f"{r['bytes'] / 1024:.0f}" if r["bytes"] is not None else "—"
+            status = str(r["status_code"]) if r["status_code"] is not None else "—"
+            table.add_row(status, r["kind"], size, r["target"], r["alt"] or "")
+        console.print(table)
+
+
+def query_table(data: dict) -> None:
+    table = Table(box=None, pad_edge=False)
+    for column in data["columns"]:
+        table.add_column(column)
+    for row in data["rows"]:
+        table.add_row(*("—" if v is None else str(v) for v in row))
+    console.print(table)
+    if data["truncated"]:
+        err_console.print(f"Показаны первые {len(data['rows'])} строк — все: --format csv -o <файл>.")

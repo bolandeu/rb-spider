@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 
 import pytest
 
 from rb_spider.core import settings
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_session_db(tmp_path_factory) -> Iterator[None]:
+    """Module-scoped fixtures (a shared polygon crawl) are set up before the per-test fixture below:
+    without this they would write to the user's real crawl database."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("SPIDER_DB_PATH", str(tmp_path_factory.mktemp("session-db") / "spider.sqlite"))
+        yield
 
 
 @pytest.fixture(autouse=True)

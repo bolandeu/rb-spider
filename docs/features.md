@@ -494,12 +494,12 @@
 
 ### Нижние вкладки SF (детали выбранного URL) → `spider url` / `spider links`
 
-- [ ] `MVP` **URL Details** — сводка по URL: код, тип, размер, глубина, число ссылок
+- [x] `MVP` **URL Details** — сводка по URL: код, тип, размер, глубина, число ссылок
 - [x] `MVP` **Inlinks / Outlinks** — ссылки с колонками: анкор, alt, follow, target, rel, код ответа цели
 - [ ] `v2` **Link Path, Link Position, Link Origin** — XPath ссылки, её зона (nav, header, footer, content…), откуда взята (raw / rendered HTML)
-- [ ] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
+- [x] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
 - [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
-- [ ] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
+- [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
 - [ ] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования)
 - [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
@@ -701,9 +701,9 @@
 
 ### Экспорт
 
-- [ ] `MVP` **Экспорт вкладки / фильтра** → `spider urls --issue <code> --json`, `spider export --format csv|json`
+- [x] `MVP` **Экспорт вкладки / фильтра** → `spider urls --issue <code> --json`, `spider export --format csv|json`
 - [x] `MVP` **Экспорт деталей URL** (inlinks, outlinks, картинки) → `spider links <url> --in|--out --json`
-- [ ] `MVP` **Форматы CSV и JSON**
+- [x] `MVP` **Форматы CSV и JSON**
 - [ ] `v2` **Формат Excel (.xlsx)**
 - [ ] `v2` **Multi-Export** — много вкладок и отчётов за один вызов, пресеты
 - [ ] `skip` **Google Sheets / Google Drive**
@@ -711,9 +711,9 @@
 
 ### Bulk Export (массовые выгрузки)
 
-- [ ] `MVP` **Links: All Inlinks, All Outlinks, All Anchor Text, External Links**
-- [ ] `MVP` **Response Codes: inlinks к URL с каждым кодом** (например, все ссылки на 404)
-- [ ] `MVP` **Issues: All** — все сработавшие проверки со списками URL
+- [x] `MVP` **Links: All Inlinks, All Outlinks, All Anchor Text, External Links**
+- [x] `MVP` **Response Codes: inlinks к URL с каждым кодом** (например, все ссылки на 404)
+- [x] `MVP` **Issues: All** — все сработавшие проверки со списками URL
 - [ ] `v2` **Links: выгрузки по проблемам** (nofollow, без анкора, неинформативный анкор, localhost…)
 - [ ] `v2` **Queued URLs** — очередь необойдённых URL
 - [ ] `v2` **Path Type** — ссылки по типу пути: абсолютные, протокол-относительные, от корня, относительные
@@ -795,9 +795,9 @@
 
 ### CLI и работа с данными
 
-- [ ] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
+- [x] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
 - [ ] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
-- [ ] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода
+- [x] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода
 - [x] `MVP` **`spider crawls prune --keep-last N | --older-than 90d`** — чистка старых обходов
 - [x] `MVP` **`spider crawls delete <id>…`, `spider projects delete`** — с подтверждением, `--yes`, `--dry-run`
 - [x] `MVP` **`spider db info | migrate | vacuum`** — состояние БД, миграции Alembic, сжатие файла
