@@ -19,4 +19,6 @@
 - Профили: встроенные `default`, `googlebot`, `yandexbot`, `fast`, свои в `.spider/profiles/` с наследованием `extends`; `spider profiles list|show|init`. Ключ `crawl.user_agent`.
 - `spider crawls show` — обход и снимок настроек, с которыми он шёл. `docs/profiles.md` — слои, формат профиля и таблица ключей, сгенерированная из схемы.
 - `spider redirects [--only all|chains|errors]` — отчёт по редиректам: каждый шаг (3xx / meta / HTTP Refresh) до конечного URL и кода. Порог цепочки `thresholds.redirect_chain_hops`; `spider analyze` берёт пороги из текущих настроек (`--profile`, `--set`).
+- 24 on-page проверки: Page Titles, Meta Description, H1, H2 (нет, несколько, вне `<head>`, дубли, длина, alt в H1, порядок заголовков, title = H1). Пороги длины — раздел `thresholds`. Дубли ищутся одним проходом (оконная функция SQL), без сравнения каждой страницы с каждой.
+- Сбой соединения больше не печатает трассировку Crawlee: такие URL и так попадают в отчёт (`internal_no_response`).
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.

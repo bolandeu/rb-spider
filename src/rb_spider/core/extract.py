@@ -30,6 +30,7 @@ class Page:
     refresh_kind: str | None = None  # "meta" | "http"
     error: str | None = None  # no response: why (status_code is 0)
     blocked: str | None = None  # not fetched on purpose: "robots_txt" (status_code is 0)
+    onpage: dict = field(default_factory=dict)  # title/description/h1/h2 details, see _onpage()
 
     @classmethod
     def no_response(cls, url: str, error: str) -> Page:
@@ -56,6 +57,50 @@ def _refresh_target(base: str, value: str | None) -> str | None:
     return _absolute(base, match.group(1)) if match else None
 
 
+_WHITESPACE = re.compile(r"\s+")
+
+
+def _text(node) -> str:
+    return _WHITESPACE.sub(" ", node.text(separator=" ")).strip()
+
+
+def _onpage(tree: LexborHTMLParser) -> dict:
+    """What the Page Titles / Meta Description / H1 / H2 checks need, in `pages` column names."""
+    head = tree.head
+    titles = tree.css("title")
+    descriptions = [m for m in tree.css("meta[name]") if (m.attributes.get("name") or "").lower() == "description"]
+    in_head = {n.mem_id for n in head.css("title, meta")} if head else set()  # mem_id: stable node identity
+    headings = tree.css("h1, h2, h3, h4, h5, h6")
+    h1s = [h for h in headings if h.tag == "h1"]
+    h2s = [h for h in headings if h.tag == "h2"]
+
+    h1_text, h1_from_alt = None, False
+    if h1s:
+        h1_text = _text(h1s[0])
+        alts = [img.attributes.get("alt") or "" for img in h1s[0].css("img")]
+        if any(a.strip() for a in alts):
+            h1_from_alt = True
+            h1_text = " ".join(filter(None, [h1_text, *(a.strip() for a in alts)])).strip()
+    h2_sequential = None
+    if h2s:
+        first_h2 = next(i for i, h in enumerate(headings) if h.tag == "h2")
+        h2_sequential = first_h2 > 0 and headings[first_h2 - 1].tag == "h1"
+    return {
+        "title_count": len(titles),
+        "title_outside_head": sum(t.mem_id not in in_head for t in titles),
+        "meta_description": (descriptions[0].attributes.get("content") or "").strip() if descriptions else None,
+        "meta_description_count": len(descriptions),
+        "meta_description_outside_head": sum(m.mem_id not in in_head for m in descriptions),
+        "h1": h1_text,
+        "h1_count": len(h1s),
+        "h1_from_alt": h1_from_alt,
+        "h1_first_heading": bool(headings) and headings[0].tag == "h1" if h1s else None,
+        "h2": _text(h2s[0]) if h2s else None,
+        "h2_count": len(h2s),
+        "h2_sequential": h2_sequential,
+    }
+
+
 def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -73,7 +118,8 @@ def parse_page(url: str, status_code: int, headers: dict[str, str], body: bytes)
 
     tree = LexborHTMLParser(body)
     title = tree.css_first("title")
-    page.title = title.text(strip=True) if title else None
+    page.title = _text(title) if title else None
+    page.onpage = _onpage(tree)
     if page.refresh_url is None:
         for meta in tree.css("meta[http-equiv]"):
             if (meta.attributes.get("http-equiv") or "").lower() == "refresh":

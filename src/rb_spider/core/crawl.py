@@ -41,6 +41,9 @@ logging.getLogger("crawlee._service_locator").setLevel(logging.ERROR)
 # Crawl-delay from robots.txt isn't honoured yet (needs Crawlee's ThrottlingRequestManager) —
 # tracked in issue #7 (politeness settings); until then the per-crawl warning is noise.
 logging.getLogger("HttpCrawler").addFilter(lambda record: "Crawl-delay" not in record.getMessage())
+# A URL that never answers is data (issue internal_no_response, the error text is stored), not a
+# crash: without this Crawlee prints a full traceback per such URL.
+logging.getLogger("HttpCrawler").addFilter(lambda record: "reached maximum retries" not in record.getMessage())
 
 
 @dataclass

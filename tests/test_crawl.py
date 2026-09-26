@@ -57,7 +57,7 @@ def test_crawl_records_status_redirects_titles_and_depth(base_url: str, engine) 
     assert pages[f"{base_url}/old"]["status_code"] == 301
     assert pages[f"{base_url}/old"]["redirect_url"] == f"{base_url}/a"  # the hop is stored, not followed silently
     assert pages[f"{base_url}/missing"]["status_code"] == 404
-    assert pages[f"{base_url}/a"]["title"] == "Страница A"
+    assert pages[f"{base_url}/a"]["title"] == polygon.TITLE.format("a")
     assert pages[f"{base_url}/"]["depth"] == 0
     assert pages[f"{base_url}/c"]["depth"] == 2
 

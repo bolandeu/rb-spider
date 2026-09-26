@@ -95,43 +95,43 @@
 
 ### Page Titles — title
 
-- [ ] `MVP` **Missing** — нет `<title>`, он пустой или из пробелов _(SF: Issue, High)_
-- [ ] `MVP` **Multiple** — на странице несколько `<title>` _(SF: Issue, High)_
-- [ ] `MVP` **Outside \<head\>** — `<title>` стоит вне `<head>` _(SF: Issue, High)_
-- [ ] `MVP` **Duplicate** — одинаковый title у нескольких страниц _(SF: Opportunity, Medium)_
-- [ ] `MVP` **Over 60 Characters** — title длиннее 60 символов (может обрезаться в выдаче) _(SF: Opportunity, Medium)_
-- [ ] `MVP` **Below 30 Characters** — title короче 30 символов _(SF: Opportunity, Medium)_
+- [x] `MVP` **Missing** — нет `<title>`, он пустой или из пробелов _(SF: Issue, High)_
+- [x] `MVP` **Multiple** — на странице несколько `<title>` _(SF: Issue, High)_
+- [x] `MVP` **Outside \<head\>** — `<title>` стоит вне `<head>` _(SF: Issue, High)_
+- [x] `MVP` **Duplicate** — одинаковый title у нескольких страниц _(SF: Opportunity, Medium)_
+- [x] `MVP` **Over 60 Characters** — title длиннее 60 символов (может обрезаться в выдаче) _(SF: Opportunity, Medium)_
+- [x] `MVP` **Below 30 Characters** — title короче 30 символов _(SF: Opportunity, Medium)_
 - [ ] `v2` **Over 561 Pixels** — ширина title больше лимита выдачи Google в пикселях (нужна таблица ширин шрифта) _(SF: Opportunity, Medium)_
 - [ ] `v2` **Below 200 Pixels** — title заметно уже лимита выдачи в пикселях _(SF: Opportunity, Medium)_
-- [ ] `MVP` **Same as H1** — title дословно совпадает с `<h1>` _(SF: Opportunity, Low)_
+- [x] `MVP` **Same as H1** — title дословно совпадает с `<h1>` _(SF: Opportunity, Low)_
 
 ### Meta Description
 
-- [ ] `MVP` **Multiple** — несколько meta description на странице _(SF: Issue, Medium)_
-- [ ] `MVP` **Outside \<head\>** — meta description вне `<head>` (поисковик может проигнорировать) _(SF: Issue, Medium)_
-- [ ] `MVP` **Missing** — meta description нет, пустой или из пробелов _(SF: Opportunity, Low)_
-- [ ] `MVP` **Duplicate** — одинаковый meta description у нескольких страниц _(SF: Opportunity, Low)_
-- [ ] `MVP` **Over 155 Characters** — длиннее 155 символов (обрежется в сниппете) _(SF: Opportunity, Low)_
-- [ ] `MVP` **Below 70 Characters** — короче 70 символов _(SF: Opportunity, Low)_
+- [x] `MVP` **Multiple** — несколько meta description на странице _(SF: Issue, Medium)_
+- [x] `MVP` **Outside \<head\>** — meta description вне `<head>` (поисковик может проигнорировать) _(SF: Issue, Medium)_
+- [x] `MVP` **Missing** — meta description нет, пустой или из пробелов _(SF: Opportunity, Low)_
+- [x] `MVP` **Duplicate** — одинаковый meta description у нескольких страниц _(SF: Opportunity, Low)_
+- [x] `MVP` **Over 155 Characters** — длиннее 155 символов (обрежется в сниппете) _(SF: Opportunity, Low)_
+- [x] `MVP` **Below 70 Characters** — короче 70 символов _(SF: Opportunity, Low)_
 - [ ] `v2` **Over 985 Pixels** — шире лимита сниппета в пикселях _(SF: Opportunity, Low)_
 - [ ] `v2` **Below 400 Pixels** — заметно уже лимита сниппета в пикселях _(SF: Opportunity, Low)_
 
 ### H1
 
-- [ ] `MVP` **Missing** — нет `<h1>`, пустой или из пробелов _(SF: Issue, Medium)_
-- [ ] `MVP` **Multiple** — несколько `<h1>` на странице _(SF: Warning, Medium)_
-- [ ] `MVP` **Alt Text in h1** — текст h1 взят из alt картинки внутри `<h1>` _(SF: Warning, Low)_
-- [ ] `MVP` **Non-sequential** — `<h1>` не первый заголовок на странице _(SF: Warning, Low)_
-- [ ] `MVP` **Duplicate** — одинаковый h1 у нескольких страниц _(SF: Opportunity, Low)_
-- [ ] `MVP` **Over 70 Characters** — h1 длиннее 70 символов _(SF: Opportunity, Low)_
+- [x] `MVP` **Missing** — нет `<h1>`, пустой или из пробелов _(SF: Issue, Medium)_
+- [x] `MVP` **Multiple** — несколько `<h1>` на странице _(SF: Warning, Medium)_
+- [x] `MVP` **Alt Text in h1** — текст h1 взят из alt картинки внутри `<h1>` _(SF: Warning, Low)_
+- [x] `MVP` **Non-sequential** — `<h1>` не первый заголовок на странице _(SF: Warning, Low)_
+- [x] `MVP` **Duplicate** — одинаковый h1 у нескольких страниц _(SF: Opportunity, Low)_
+- [x] `MVP` **Over 70 Characters** — h1 длиннее 70 символов _(SF: Opportunity, Low)_
 
 ### H2
 
-- [ ] `MVP` **Missing** — нет `<h2>`, пустой или из пробелов _(SF: Warning, Low)_
-- [ ] `MVP` **Multiple** — несколько `<h2>` (информационно) _(SF: Warning, Low)_
-- [ ] `MVP` **Non-sequential** — `<h2>` идёт не сразу вторым уровнем после `<h1>` _(SF: Warning, Low)_
-- [ ] `MVP` **Duplicate** — одинаковые h2 у разных страниц _(SF: Opportunity, Low)_
-- [ ] `MVP` **Over 70 Characters** — h2 длиннее 70 символов _(SF: Opportunity, Low)_
+- [x] `MVP` **Missing** — нет `<h2>`, пустой или из пробелов _(SF: Warning, Low)_
+- [x] `MVP` **Multiple** — несколько `<h2>` (информационно) _(SF: Warning, Low)_
+- [x] `MVP` **Non-sequential** — `<h2>` идёт не сразу вторым уровнем после `<h1>` _(SF: Warning, Low)_
+- [x] `MVP` **Duplicate** — одинаковые h2 у разных страниц _(SF: Opportunity, Low)_
+- [x] `MVP` **Over 70 Characters** — h2 длиннее 70 символов _(SF: Opportunity, Low)_
 
 ### Content — контент
 

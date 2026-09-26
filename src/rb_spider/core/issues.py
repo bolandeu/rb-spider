@@ -32,14 +32,114 @@ class Rule:
     find: Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
 
-def _sql(where: str, detail: str = "NULL") -> Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]:
-    """A rule that is a filter over the crawl's pages."""
-    query = sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND ({where}) ORDER BY url")  # noqa: S608 — fixed rule text, crawl_id is bound
+RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], list[Finding]]
 
-    def find(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> list[Finding]:
-        return [(url, detail) for url, detail in conn.execute(query, {"crawl_id": crawl_id})]
+# On-page checks look at pages that are HTML and answered 200 (indexability refines this in #11).
+HTML_OK = "status_code = 200 AND content_type LIKE '%html%'"
+
+
+def _run_sql(query: sa.TextClause) -> RuleFinder:
+    def find(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> list[Finding]:
+        params = {"crawl_id": crawl_id, **thresholds.model_dump()}  # thresholds bind as :title_max_chars etc.
+        return [(url, detail) for url, detail in conn.execute(query, params)]
 
     return find
+
+
+def _sql(where: str, detail: str = "NULL") -> RuleFinder:
+    """A rule that is a filter over the crawl's pages; `where` may use thresholds as :name."""
+    return _run_sql(sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND ({where}) ORDER BY url"))  # noqa: S608 — fixed rule text, values are bound
+
+
+def _duplicate(column: str) -> RuleFinder:
+    """Pages whose `column` value is shared with another page (one pass: a window count per value)."""
+    return _run_sql(
+        sa.text(
+            f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column name
+            f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM pages"
+            f"  WHERE crawl_id = :crawl_id AND {HTML_OK} AND trim(coalesce({column}, '')) <> ''"
+            ") WHERE n > 1 ORDER BY value, url"
+        )
+    )
+
+
+def _length(column: str, op: str, threshold: str) -> RuleFinder:
+    return _sql(
+        f"{HTML_OK} AND trim(coalesce({column}, '')) <> '' AND length({column}) {op} :{threshold}",
+        f"length({column}) || ' симв.: ' || {column}",
+    )
+
+
+def _onpage_rules() -> list[Rule]:
+    def r(code, group, name, kind, priority, description, find) -> Rule:
+        return Rule(code, group, f"{group}: {name}", kind, priority, description, find)
+
+    missing = "trim(coalesce({c}, '')) = ''"
+    return [
+        # --- Page Titles
+        r("page_title_missing", "Page Titles", "Missing", "issue", "high",
+          "Нет <title>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='title')}")),
+        r("page_title_multiple", "Page Titles", "Multiple", "issue", "high",
+          "На странице несколько <title>.", _sql(f"{HTML_OK} AND title_count > 1", "CAST(title_count AS TEXT)")),
+        r("page_title_outside_head", "Page Titles", "Outside <head>", "issue", "high",
+          "<title> стоит вне <head>: поисковик может его не учесть.", _sql(f"{HTML_OK} AND title_outside_head > 0")),
+        r("page_title_duplicate", "Page Titles", "Duplicate", "opportunity", "medium",
+          "Одинаковый title у нескольких страниц: поисковику трудно различить их.", _duplicate("title")),
+        r("page_title_over_max", "Page Titles", "Over Max Characters", "opportunity", "medium",
+          "Title длиннее thresholds.title_max_chars: может обрезаться в выдаче.",
+          _length("title", ">", "title_max_chars")),
+        r("page_title_below_min", "Page Titles", "Below Min Characters", "opportunity", "medium",
+          "Title короче thresholds.title_min_chars: место в выдаче используется не полностью.",
+          _length("title", "<", "title_min_chars")),
+        r("page_title_same_as_h1", "Page Titles", "Same as H1", "opportunity", "low",
+          "Title дословно совпадает с H1: упущена возможность раскрыть страницу иначе.",
+          _sql(f"{HTML_OK} AND trim(coalesce(title, '')) <> '' AND title = h1", "title")),
+        # --- Meta Description
+        r("meta_description_multiple", "Meta Description", "Multiple", "issue", "medium",
+          "Несколько meta description на странице.",
+          _sql(f"{HTML_OK} AND meta_description_count > 1", "CAST(meta_description_count AS TEXT)")),
+        r("meta_description_outside_head", "Meta Description", "Outside <head>", "issue", "medium",
+          "Meta description вне <head>: поисковик может её проигнорировать.",
+          _sql(f"{HTML_OK} AND meta_description_outside_head > 0")),
+        r("meta_description_missing", "Meta Description", "Missing", "opportunity", "low",
+          "Meta description нет, она пустая или из пробелов: сниппет поисковик соберёт сам.",
+          _sql(f"{HTML_OK} AND {missing.format(c='meta_description')}")),
+        r("meta_description_duplicate", "Meta Description", "Duplicate", "opportunity", "low",
+          "Одинаковая meta description у нескольких страниц.", _duplicate("meta_description")),
+        r("meta_description_over_max", "Meta Description", "Over Max Characters", "opportunity", "low",
+          "Длиннее thresholds.description_max_chars: обрежется в сниппете.",
+          _length("meta_description", ">", "description_max_chars")),
+        r("meta_description_below_min", "Meta Description", "Below Min Characters", "opportunity", "low",
+          "Короче thresholds.description_min_chars: сниппет можно сделать информативнее.",
+          _length("meta_description", "<", "description_min_chars")),
+        # --- H1
+        r("h1_missing", "H1", "Missing", "issue", "medium",
+          "Нет <h1>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='h1')}")),
+        r("h1_multiple", "H1", "Multiple", "warning", "medium",
+          "Несколько <h1> на странице.", _sql(f"{HTML_OK} AND h1_count > 1", "CAST(h1_count AS TEXT)")),
+        r("h1_alt_text", "H1", "Alt Text in h1", "warning", "low",
+          "Текст H1 взят из alt картинки внутри <h1>: проверьте, что это осмысленный заголовок.",
+          _sql(f"{HTML_OK} AND h1_from_alt", "h1")),
+        r("h1_non_sequential", "H1", "Non-sequential", "warning", "low",
+          "<h1> не первый заголовок на странице.", _sql(f"{HTML_OK} AND h1_count > 0 AND NOT h1_first_heading")),
+        r("h1_duplicate", "H1", "Duplicate", "opportunity", "low",
+          "Одинаковый H1 у нескольких страниц.", _duplicate("h1")),
+        r("h1_over_max", "H1", "Over Max Characters", "opportunity", "low",
+          "H1 длиннее thresholds.h1_max_chars.", _length("h1", ">", "h1_max_chars")),
+        # --- H2
+        r("h2_missing", "H2", "Missing", "warning", "low",
+          "Нет <h2>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='h2')}")),
+        r("h2_multiple", "H2", "Multiple", "warning", "low",
+          "Несколько <h2> (информационно: обычно это нормально).",
+          _sql(f"{HTML_OK} AND h2_count > 1", "CAST(h2_count AS TEXT)")),
+        r("h2_non_sequential", "H2", "Non-sequential", "warning", "low",
+          "Первому <h2> предшествует не <h1>: уровни заголовков пропущены или перепутаны.",
+          _sql(f"{HTML_OK} AND h2_count > 0 AND NOT h2_sequential")),
+        r("h2_duplicate", "H2", "Duplicate", "opportunity", "low",
+          "Одинаковый первый H2 у нескольких страниц.", _duplicate("h2")),
+        r("h2_over_max", "H2", "Over Max Characters", "opportunity", "low",
+          "H2 длиннее thresholds.h2_max_chars.", _length("h2", ">", "h2_max_chars")),
+    ]  # fmt: skip
 
 
 def _redirect_graph(conn: sa.Connection, crawl_id: int) -> dict[str, str]:
@@ -167,6 +267,7 @@ RULES: list[Rule] = [
         _sql("refresh_kind = 'http'", "refresh_url"),
     ),
 ]
+RULES += _onpage_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

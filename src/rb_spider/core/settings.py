@@ -56,6 +56,16 @@ class ThresholdSettings(BaseModel):
     redirect_chain_hops: int = Field(
         2, ge=2, description="Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain)."
     )
+    title_max_chars: int = Field(60, ge=1, description="Title длиннее — «Page Titles: Over … Characters».")
+    title_min_chars: int = Field(30, ge=1, description="Title короче — «Page Titles: Below … Characters».")
+    description_max_chars: int = Field(
+        155, ge=1, description="Meta description длиннее — «Meta Description: Over … Characters»."
+    )
+    description_min_chars: int = Field(
+        70, ge=1, description="Meta description короче — «Meta Description: Below … Characters»."
+    )
+    h1_max_chars: int = Field(70, ge=1, description="H1 длиннее — «H1: Over … Characters».")
+    h2_max_chars: int = Field(70, ge=1, description="H2 длиннее — «H2: Over … Characters».")
 
 
 class Settings(BaseModel):

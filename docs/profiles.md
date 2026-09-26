@@ -43,6 +43,12 @@ concurrency = 10
 | `crawl.respect_robots` | `bool` | `true` | Соблюдать robots.txt: запрещённые URL не скачиваются, но попадают в отчёт. |
 | `crawl.user_agent` | `str \| None` | — | Заголовок User-Agent запросов; не задано — как у обычного браузера (Firefox). |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
+| `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
+| `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |
+| `thresholds.description_max_chars` | `int` | `155` | Meta description длиннее — «Meta Description: Over … Characters». |
+| `thresholds.description_min_chars` | `int` | `70` | Meta description короче — «Meta Description: Below … Characters». |
+| `thresholds.h1_max_chars` | `int` | `70` | H1 длиннее — «H1: Over … Characters». |
+| `thresholds.h2_max_chars` | `int` | `70` | H2 длиннее — «H2: Over … Characters». |
 <!-- keys:end -->
 
 ## Рецепты

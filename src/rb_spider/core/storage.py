@@ -62,6 +62,19 @@ pages = sa.Table(
     sa.Column("blocked", sa.String),  # "robots_txt": not fetched on purpose (status_code 0)
     sa.Column("refresh_url", sa.String),  # target of a meta / HTTP Refresh
     sa.Column("refresh_kind", sa.String),  # "meta" | "http"
+    # on-page elements (HTML pages only); the text is the first element, counts say how many there were
+    sa.Column("title_count", sa.Integer),
+    sa.Column("title_outside_head", sa.Integer),
+    sa.Column("meta_description", sa.String),
+    sa.Column("meta_description_count", sa.Integer),
+    sa.Column("meta_description_outside_head", sa.Integer),
+    sa.Column("h1", sa.String),
+    sa.Column("h1_count", sa.Integer),
+    sa.Column("h1_from_alt", sa.Boolean),  # the first h1's text comes from an image alt inside it
+    sa.Column("h1_first_heading", sa.Boolean),  # the first heading on the page is the h1
+    sa.Column("h2", sa.String),
+    sa.Column("h2_count", sa.Integer),
+    sa.Column("h2_sequential", sa.Boolean),  # the heading right before the first h2 is an h1
 )
 issues = sa.Table(
     "issues",
@@ -143,6 +156,9 @@ def finish_crawl(engine: sa.Engine, crawl_id: int, status: str) -> int:
         return count
 
 
+_PAGE_COLUMNS = [column.name for column in pages.columns]
+
+
 class PageWriter:
     """Buffers pages and writes them in batches: memory stays flat however big the site is."""
 
@@ -157,8 +173,11 @@ class PageWriter:
         return self.written + len(self._rows)
 
     def add(self, page: Page, depth: int) -> None:
+        # Every row carries every column: a batch insert needs one shape, and a redirect or an
+        # error page has no on-page fields at all.
         self._rows.append(
-            {
+            dict.fromkeys(_PAGE_COLUMNS)
+            | {
                 "crawl_id": self.crawl_id,
                 "url": page.url,
                 "status_code": page.status_code,
@@ -173,6 +192,7 @@ class PageWriter:
                 "refresh_url": page.refresh_url,
                 "refresh_kind": page.refresh_kind,
             }
+            | page.onpage
         )
         if len(self._rows) >= self.batch_size:
             self.flush()
