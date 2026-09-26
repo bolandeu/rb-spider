@@ -172,3 +172,36 @@ def test_url_response_details_and_request_headers(tmp_path, monkeypatch) -> None
     assert page["last_modified"] == "Wed, 01 Jan 2025 10:00:00 GMT"
     assert page["headers"]["last-modified"] == page["last_modified"] and "content-type" in page["headers"]
     assert data["request_headers"]["Accept-Language"] == "ru" and "Googlebot" in data["request_headers"]["User-Agent"]
+
+
+def test_overview_counts(crawled) -> None:
+    _, crawl_id = crawled
+    code, data = _json("overview")
+    assert code == 0 and data["crawl_id"] == crawl_id
+    totals = data["totals"]
+    assert totals["internal"] + totals["external"] == totals["stored"] and totals["still_queued"] == 0
+    assert totals["blocked_by_robots"] >= 1 and totals["no_response"] >= 1
+    assert {"html", "css", "js", "image"} <= set(data["content_types"])
+    assert {"2xx", "3xx", "4xx", "5xx", "blocked"} <= set(data["status"])
+    assert data["indexability"]["Indexable"] == totals["indexable"] and "noindex" in data["indexability"]
+    assert {"missing", "self_referencing", "canonicalised"} <= set(data["canonicals"])
+    assert data["directives"]["noindex"] >= 1 and data["depth"]["0"] == 1
+    code, out = _run("overview")
+    assert code == 0 and "Коды ответа" in out
+
+
+def test_link_counts_and_content_kind_in_export(crawled) -> None:
+    base_url, _ = crawled
+    code, data = _json("url", f"{base_url}/a")
+    page = data["page"]
+    assert page["inlinks"] >= page["unique_inlinks"] >= 1 and page["unique_outlinks"] >= 1
+    _, out = _run("export", "pages", "--type", "css")
+    rows = _csv(out)
+    assert rows and {r["content_kind"] for r in rows} == {"css"} and rows[0]["url"].endswith(".css")
+    code, data = _json("export", "links", "--type", "css")
+    assert code == 2
+
+
+def test_issues_have_a_percent(crawled) -> None:
+    code, data = _json("issues")
+    assert code == 0 and all(0 < issue["percent"] <= 100 for issue in data["issues"])

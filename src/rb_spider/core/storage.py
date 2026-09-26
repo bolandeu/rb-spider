@@ -113,6 +113,11 @@ pages = sa.Table(
     sa.Column("response_ms", sa.Integer),
     sa.Column("last_modified", sa.String),
     sa.Column("headers", sa.String),
+    # computed after the crawl (issues.analyze): <a href> links to the page from the site / pages linking to it /
+    # distinct pages of the site it links to
+    sa.Column("inlinks", sa.Integer),
+    sa.Column("unique_inlinks", sa.Integer),
+    sa.Column("unique_outlinks", sa.Integer),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,

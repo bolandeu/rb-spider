@@ -46,6 +46,8 @@
 - Скилл для агентов (`spider --ai`, `spider skill install`): как выбрать и составить профиль и в каком порядке звать команды анализа (drill-down).
 - `spider fetch <url>… | --list file|-` и публичный Python API `rb_spider.fetch` (`fetch`, `fetch_many`, `fetch_stream`) — общий сборщик страниц для других инструментов, без обхода и без базы: финальный URL, код, шаги редиректов, время, SEO-данные; `--include headers,links,resources,text,markdown,html`; прокси, User-Agent и профили — из настроек обхода; `--render` — через браузер. `--markdown` — страница Markdown-документом для LLM: свой конвертер на selectolax, основной контент без меню, подвала и сайдбаров, ссылки абсолютные, таблицы, списки, код.
 - У каждого URL хранятся время ответа (`response_ms`), заголовки ответа и Last-Modified; `spider url` показывает их и заголовки запроса обхода. `crawl.max_redirects` (по умолчанию 20) — сколько шагов одной цепочки редиректов проходить.
+- `spider overview` — сводка обхода (как Crawl Overview): найдено / заблокировано / не ответило / индексируется, типы содержимого сайта и чужих URL, коды ответа, индексируемость с причинами, canonical (нет / на себя / на другой URL), директивы, глубина.
+- Колонки ссылок у каждой страницы: `inlinks`, `unique_inlinks`, `unique_outlinks` (считаются в `analyze` одним проходом); `spider export pages --type html|js|css|image|pdf|other|unknown` и колонка `content_kind`; в `spider issues` — доля URL сайта (`percent`).
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 
 ### Changed

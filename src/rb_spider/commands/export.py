@@ -9,6 +9,7 @@ import typer
 
 from .. import output
 from ..core import export as export_service
+from ..core import overview as overview_service
 from ..core import storage
 from ..core.extract import normalize_url
 
@@ -86,6 +87,9 @@ def export(
         None, "--status", help="Код ответа: 404 или класс 4xx — у URL (pages) или у цели ссылки (links)."
     ),
     external: bool = typer.Option(False, "--external", help="Только чужие сайты: внешние URL или ссылки на них."),
+    kind: str | None = typer.Option(
+        None, "--type", help="Только URL этого типа (pages): html, js, css, image, pdf, other, unknown."
+    ),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
@@ -93,7 +97,8 @@ def export(
 
     Для таблиц и сторонних инструментов; вопрос к данным точнее задать
     `spider query`. Данные идут потоком — выгрузка любого размера не занимает
-    память. Колонки pages — все данные страницы (как в `spider url`), links —
+    память. Колонки pages — все данные страницы (как в `spider url`) и тип
+    `content_kind` (html, js, css, image, pdf, other, unknown), links —
     ссылки с кодом ответа цели (`target_status`), issues — находки с названием,
     типом и приоритетом проверки.
 
@@ -103,16 +108,18 @@ def export(
       spider export pages --issue page_title_missing --format json
       spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
       spider export links --external                           # все внешние ссылки
+      spider export pages --type css --status 4xx              # битые стили
 
     Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает). С `-o`
     печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`. Неизвестная
-    проверка, неверный `--status` или `--issue` для links — выход 2.
+    проверка или тип, неверный `--status`, `--issue` для links, `--type` не для pages —
+    выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         with engine.connect() as conn:
             table = export_service.dataset(
-                conn, crawl_id, what.value, issue=issue, target_status=target_status, external=external
+                conn, crawl_id, what.value, issue=issue, target_status=target_status, external=external, kind=kind
             )
             _stream(ctx, table, fmt, path, {"crawl_id": crawl_id, "dataset": what.value})
 
@@ -154,3 +161,34 @@ def query(
         rows = [list(row) for row in islice(table.rows, limit + 1)]
     data = {"columns": table.columns, "rows": rows[:limit], "truncated": len(rows) > limit}
     output.emit_success(ctx, data, render_human=output.human.query_table)
+
+
+@output.guard
+def overview(
+    ctx: typer.Context,
+    crawl_id: int | None = typer.Argument(None, help="Номер обхода (`spider crawls list`); по умолчанию — последний."),
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """Сводка обхода: сколько URL и каких — типы, коды ответа, индексируемость, canonical, директивы, глубина.
+
+    Первый взгляд на обход (как Crawl Overview в Screaming Frog) — до `spider
+    issues`. Только числа по URL сайта (и отдельно типы чужих URL); сами списки —
+    `spider export pages --type css`, `--status 4xx`, `spider urls --issue <код>`,
+    `spider query`.
+
+    Примеры:
+      spider overview
+      spider --json overview 12
+
+    JSON: `{crawl_id, totals: {stored, internal, external, blocked_by_robots,
+    no_response, indexable, queued_ever, still_queued}, content_types,
+    external_content_types, status, indexability, canonicals, directives, depth}`;
+    разделы — `{значение: число URL}`: status — 2xx…5xx, blocked, no_response;
+    canonicals — missing / self_referencing / canonicalised; directives и depth — среди
+    HTML-страниц сайта с кодом 200. Нет обхода — выход 2.
+    """
+    with storage.database() as engine:
+        crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+        data = overview_service.overview(engine, crawl_id)
+    output.emit_success(ctx, data, render_human=output.human.overview)

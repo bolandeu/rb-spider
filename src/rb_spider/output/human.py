@@ -55,10 +55,11 @@ def issues_table(data: dict) -> None:
         return
     console.print(f"[bold]Обход #{data['crawl_id']}[/bold] — подробности: spider urls --issue <код>")
     table = Table(box=None, pad_edge=False)
-    for column in ("приоритет", "тип", "проверка", "URL", "код"):
-        table.add_column(column, justify="right" if column == "URL" else "left")
+    for column in ("приоритет", "тип", "проверка", "URL", "%", "код"):
+        table.add_column(column, justify="right" if column in ("URL", "%") else "left")
     for issue in data["issues"]:
-        table.add_row(issue["priority"], issue["type"], issue["name"], str(issue["urls"]), issue["code"])
+        table.add_row(issue["priority"], issue["type"], issue["name"], str(issue["urls"]), f"{issue['percent']:g}",
+                      issue["code"])  # fmt: skip
     console.print(table)
 
 
@@ -325,3 +326,20 @@ def fetched(data: dict) -> None:
     moved = f" ← {data['url']}" if data.get("redirects") else ""
     title = (data.get("seo") or {}).get("title") or data.get("error") or ""
     console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]")
+
+
+_OVERVIEW_LABELS = {
+    "totals": "Итого", "content_types": "Типы (сайт)", "external_content_types": "Типы (чужие сайты)",
+    "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
+    "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)",
+}  # fmt: skip
+
+
+def overview(data: dict) -> None:
+    console.print(
+        f"[bold]Обход #{data['crawl_id']}[/bold] — списки: spider export pages --type/--status, spider issues"
+    )
+    for key, label in _OVERVIEW_LABELS.items():
+        values = data.get(key) or {}
+        if values:
+            console.print(f"[bold]{label}[/bold]: " + ", ".join(f"{k} {v}" for k, v in values.items()))

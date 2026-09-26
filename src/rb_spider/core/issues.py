@@ -68,6 +68,24 @@ def compute_indexability(conn: sa.Connection, crawl_id: int) -> None:
     conn.execute(_INDEXABLE, {"crawl_id": crawl_id})
 
 
+# Link counts per page from the site's own <a href> links: one grouped pass over `links` each, not a
+# query per page (UPDATE … FROM, SQLite 3.33+).
+_LINK_COUNTS = [
+    "UPDATE pages SET inlinks = 0, unique_inlinks = 0, unique_outlinks = 0 WHERE crawl_id = :crawl_id",
+    "UPDATE pages SET inlinks = s.n, unique_inlinks = s.u FROM (SELECT target, count(*) AS n,"
+    " count(DISTINCT source) AS u FROM links WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal"
+    " GROUP BY target) AS s WHERE pages.crawl_id = :crawl_id AND pages.url = s.target",
+    "UPDATE pages SET unique_outlinks = s.u FROM (SELECT source, count(DISTINCT target) AS u FROM links"
+    " WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal GROUP BY source) AS s"
+    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.source",
+]
+
+
+def compute_link_counts(conn: sa.Connection, crawl_id: int) -> None:
+    for statement in _LINK_COUNTS:
+        conn.execute(sa.text(statement), {"crawl_id": crawl_id})
+
+
 @dataclass(frozen=True)
 class SqlFinder:
     """A rule that is one `SELECT url, detail`; thresholds bind as :title_max_chars etc.
@@ -607,6 +625,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
     skipped = {r.code for r in not_checked(engine, crawl_id)}
     with engine.begin() as conn:
         compute_indexability(conn, crawl_id)
+        compute_link_counts(conn, crawl_id)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
         found = 0
         for r in RULES:
@@ -632,6 +651,7 @@ class IssueSummary:
     priority: str
     description: str
     urls: int
+    percent: float  # of the site's own URLs in the crawl
 
 
 def summary(engine: sa.Engine, crawl_id: int) -> list[IssueSummary]:
@@ -641,10 +661,23 @@ def summary(engine: sa.Engine, crawl_id: int) -> list[IssueSummary]:
         .where(storage.issues.c.crawl_id == crawl_id)
         .group_by(storage.issues.c.code)
     )
+    own = sa.select(sa.func.count()).where(
+        storage.pages.c.crawl_id == crawl_id, sa.not_(sa.func.coalesce(storage.pages.c.external, False))
+    )
     with engine.connect() as conn:
         counts = {code: n for code, n in conn.execute(query)}
+        total = conn.execute(own).scalar_one() or 1
     found = [
-        IssueSummary(r.code, r.group, r.name, r.type, r.priority, r.description, counts[r.code])
+        IssueSummary(
+            r.code,
+            r.group,
+            r.name,
+            r.type,
+            r.priority,
+            r.description,
+            counts[r.code],
+            round(100 * counts[r.code] / total, 1),
+        )
         for r in RULES
         if r.code in counts
     ]

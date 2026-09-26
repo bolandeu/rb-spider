@@ -459,19 +459,19 @@
 
 ### Основные вкладки и фильтры
 
-- [ ] `MVP` **Internal / External: тип содержимого** — фильтры HTML, JavaScript, CSS, Images, PDF, Other, Unknown (Flash — `skip`)
-- [ ] `MVP` **Response Codes: Success (2XX)** — список успешных URL; колонки Response Time, Redirect URL, Redirect Type
+- [x] `MVP` **Internal / External: тип содержимого** — фильтры HTML, JavaScript, CSS, Images, PDF, Other, Unknown (Flash — `skip`)
+- [x] `MVP` **Response Codes: Success (2XX)** — список успешных URL; колонки Response Time, Redirect URL, Redirect Type
 - [ ] `v2` **Security: HTTPS URLs** — список URL по HTTPS
 - [ ] `v2` **Meta Keywords** — сбор meta keywords и фильтры Missing / Duplicate / Multiple
-- [ ] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
+- [x] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
 - [ ] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev
-- [ ] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
+- [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
 - [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
 - [ ] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML, HTTP-заголовка и sitemap
 - [ ] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки
 - [ ] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap
 - [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
-- [ ] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
+- [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
 - [ ] `v3` **Links: Link Score** — внутренний «PageRank» 0–100
 - [ ] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений
 - [ ] `backlog` **Custom JavaScript** — результаты пользовательских JS-сниппетов
@@ -514,8 +514,8 @@
 
 ### Правая панель SF → `spider status` / `spider issues`
 
-- [ ] `MVP` **Overview** — сводка обхода: число URL по вкладкам и фильтрам
-- [ ] `MVP` **Issues** — все сработавшие проверки: тип, приоритет, число URL, % от общего, описание
+- [x] `MVP` **Overview** — сводка обхода: число URL по вкладкам и фильтрам
+- [x] `MVP` **Issues** — все сработавшие проверки: тип, приоритет, число URL, % от общего, описание
 - [ ] `v2` **Site Structure** — дерево каталогов (URL, индексируемые/нет) и гистограмма глубины
 - [ ] `v2` **Response Times** — гистограмма времени ответа
 - [ ] `v3` **API** — прогресс и ошибки подключённых API
@@ -727,7 +727,7 @@
 
 ### Отчёты (Reports)
 
-- [ ] `MVP` **Crawl Overview** — итоги: найдено / заблокировано / обойдено, типы содержимого, коды ответа
+- [x] `MVP` **Crawl Overview** — итоги: найдено / заблокировано / обойдено, типы содержимого, коды ответа
 - [x] `MVP` **Issues Overview** — сводка всех проблем → `spider issues`
 - [x] `MVP` **Redirects: All Redirects** — все редиректы
 - [x] `MVP` **Redirects: Redirect Chains** — цепочки из 2+ прыжков и петли, тип (HTTP / JS / meta refresh)

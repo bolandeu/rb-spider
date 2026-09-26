@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from . import enrich, issues, storage
 from .errors import InvalidArguments
+from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings
 
 DATASETS = ("pages", "links", "issues")
@@ -61,12 +62,20 @@ def dataset(
     issue: str | None = None,
     target_status: str | None = None,
     external: bool = False,
+    kind: str | None = None,
 ) -> Table:
     """A crawl's `pages`, `links` (with the target's status code) or `issues` (with rule names), filtered."""
     params: dict[str, Any] = {"crawl_id": crawl_id}
+    if kind is not None and what != "pages":
+        raise InvalidArguments("--type filters pages, not links or issues.")
     if what == "pages":
-        columns = [c.name for c in storage.pages.columns if c.name != "crawl_id"]
+        columns = [c.name for c in storage.pages.columns if c.name != "crawl_id"] + ["content_kind"]
         where = "p.crawl_id = :crawl_id"
+        if kind is not None:
+            if kind not in CONTENT_KINDS:
+                raise InvalidArguments(f"Unknown --type {kind}: one of {', '.join(CONTENT_KINDS)}.")
+            where += f" AND ({CONTENT_KIND_SQL}) = :kind"
+            params["kind"] = kind
         if issue is not None:
             issues.rule(issue)
             where += " AND p.url IN (SELECT url FROM issues WHERE crawl_id = :crawl_id AND code = :code)"
@@ -76,8 +85,8 @@ def dataset(
         if target_status is not None:
             clause, extra = _status_filter(target_status, "p.status_code")
             where, params = f"{where} AND {clause}", params | extra
-        select = ", ".join(f"p.{c}" for c in columns)
-        sql = f"SELECT {select} FROM pages p WHERE {where} ORDER BY p.url"  # noqa: S608 — fixed names, bound values
+        select = ", ".join(f"p.{c}" for c in columns[:-1])
+        sql = f"SELECT {select}, {CONTENT_KIND_SQL} FROM pages p WHERE {where} ORDER BY p.url"  # noqa: S608 — fixed names, bound values
     elif what == "links":
         columns = [c.name for c in storage.links.columns if c.name != "crawl_id"] + ["target_status"]
         where = "l.crawl_id = :crawl_id"

@@ -35,9 +35,9 @@ def issues(
     Проверки, чьи данные при обходе не собирались (выключен `collect.*`), не
     считаются «пройденными», а перечислены отдельно — «не проверялось».
 
-    JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls}],
+    JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls, percent}],
     not_checked: [{code, name, requires}]}`; `requires` — ключи `collect.*`, которые
-    для проверки должны быть включены.
+    для проверки должны быть включены; `percent` — доля от URL сайта в обходе.
     Нет такого обхода или обходов нет вообще — код выхода 2.
     """
     with storage.database() as engine:
