@@ -11,6 +11,12 @@ cat > "$hooks_dir/commit-msg" <<'EOF'
 exec python3 "$(git rev-parse --show-toplevel)/scripts/check_commit_msg.py" "$1"
 EOF
 
+# Before a push: everything CI runs (scripts/check.sh) — the local gate while GitHub Actions don't run.
+cat > "$hooks_dir/pre-push" <<'EOF'
+#!/usr/bin/env bash
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
+EOF
+
 rm -f "$hooks_dir/pre-commit"  # the docstring check moved into commit-msg
-chmod +x "$hooks_dir/commit-msg"
-echo "Installed commit-msg hook -> $hooks_dir"
+chmod +x "$hooks_dir/commit-msg" "$hooks_dir/pre-push"
+echo "Installed commit-msg and pre-push hooks -> $hooks_dir"

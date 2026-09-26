@@ -15,7 +15,8 @@ uv sync                                   # пишет uv.lock — он комм
 uv run spider                             # список команд; `uv run spider <команда> --help`
 uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
 SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest   # после намеренной правки справки или настроек: снимки --help и таблица docs/profiles.md
-scripts/install_hooks.sh                  # один раз после клонирования
+scripts/check.sh [--py312]                # всё, что гоняет CI; его же запускает хук pre-push
+scripts/install_hooks.sh                  # один раз после клонирования: commit-msg и pre-push
 ```
 
 Строка проверок — ровно то, что гоняет CI (Linux/macOS/Windows) перед `uv tool install .`. Пакет `rb-spider` (модуль `rb_spider`), команда и каталог проекта — `spider` / `.spider/` (`core/version.py`: `CLI_NAME`, `DIST_NAME`). `bench/` — отдельный uv-проект стенда, в пакет не входит.
