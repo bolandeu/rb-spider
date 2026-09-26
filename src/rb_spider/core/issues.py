@@ -497,10 +497,60 @@ def _link_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
+
+
+def _image_rules() -> list[Rule]:
+    def img(code, name, kind, priority, description, where, detail="NULL", requires=("collect.images.store",)) -> Rule:
+        """A rule over the page's <img> link rows; reported by image URL, detail — where it's used."""
+        query = (
+            f"SELECT target, count(DISTINCT source) || ' стр., например ' || min(source) || {detail} FROM links"  # noqa: S608
+            f" WHERE crawl_id = :crawl_id AND kind = 'image' AND ({where}) GROUP BY target ORDER BY target"
+        )
+        return Rule(code, "Images", f"Images: {name}", kind, priority, description, _links_sql(query), requires)
+
+    def blocked(code, name, priority, external) -> Rule:
+        where = "coalesce(p.external, 0)" if external else "NOT coalesce(p.external, 0)"
+        return Rule(code, "Response Codes", name, "warning", priority,
+                    ("Внешний" if external else "Внутренний") + " ресурс (картинка, CSS, JS…) недоступен: "
+                    "запрещён robots.txt, не отвечает или отдаёт ошибку — страница может отображаться неполно.",
+                    _links_sql(
+                        "SELECT p.url, coalesce(p.blocked, CAST(p.status_code AS TEXT)) FROM pages p"  # noqa: S608
+                        f" WHERE p.crawl_id = :crawl_id AND {where}"
+                        " AND (p.blocked IS NOT NULL OR p.status_code = 0 OR p.status_code >= 400)"
+                        " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = p.crawl_id AND l.target = p.url"
+                        f"   AND l.kind IN {RESOURCE_KINDS}) ORDER BY p.url"
+                    ),
+                    ("collect.images.follow",))  # fmt: skip
+
+    return [
+        img("images_missing_alt_text", "Missing Alt Text", "issue", "low",
+            "Атрибут alt есть, но пустой: для поисковика и незрячих картинка без описания "
+            "(нормально только для декоративных).", "alt_attr AND trim(coalesce(alt, '')) = ''"),
+        img("images_missing_alt_attribute", "Missing Alt Attribute", "issue", "low",
+            "У <img> нет атрибута alt вовсе.", "NOT alt_attr"),
+        Rule("images_over_max_kb", "Images", "Images: Over Max KB", "opportunity", "medium",
+             "Картинка тяжелее thresholds.image_kb КБ: замедляет загрузку страницы.",
+             _links_sql(
+                 "SELECT p.url, (p.bytes / 1024) || ' КБ' FROM pages p WHERE p.crawl_id = :crawl_id"
+                 " AND p.bytes > :image_kb * 1024 AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = p.crawl_id"
+                 "   AND l.target = p.url AND l.kind = 'image') ORDER BY p.url"),
+             ("collect.images.follow", "collect.images.store")),
+        img("images_alt_over_max", "Alt Text Over Max Characters", "opportunity", "low",
+            "Alt длиннее thresholds.alt_max_chars: описание должно быть коротким.",
+            "length(alt) > :alt_max_chars", "' — ' || max(length(alt)) || ' симв.'"),
+        img("images_missing_size", "Missing Size Attributes", "opportunity", "low",
+            "У <img> не заданы width и height: страница «прыгает» при загрузке (CLS).", "NOT sized"),
+        blocked("internal_blocked_resource", "Internal Blocked Resource", "high", external=False),
+        blocked("external_blocked_resource", "External Blocked Resource", "medium", external=True),
+    ]  # fmt: skip
+
+
 RULES += _onpage_rules()
 RULES += _directive_canonical_rules()
 RULES += _content_rules()
 RULES += _link_rules()
+RULES += _image_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

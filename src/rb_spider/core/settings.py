@@ -176,6 +176,14 @@ class CollectSettings(BaseModel):
     meta_refresh: FollowStore = Field(
         default_factory=FollowStore, description="Meta / HTTP Refresh: follow — обходить цели refresh."
     )
+    images: FollowStore = Field(
+        default_factory=FollowStore, description="Картинки <img>: follow — проверить код ответа и вес."
+    )
+    images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
+    css: FollowStore = Field(default_factory=FollowStore, description="Стили <link rel=stylesheet>.")
+    js: FollowStore = Field(default_factory=FollowStore, description="Скрипты <script src>.")
+    media: FollowStore = Field(default_factory=FollowStore, description="Видео и аудио <video>, <audio>, <source>.")
+    iframes: FollowStore = Field(default_factory=FollowStore, description="Встроенные фреймы <iframe>.")
 
 
 class ThresholdSettings(BaseModel):
@@ -199,6 +207,8 @@ class ThresholdSettings(BaseModel):
     low_content_words: int = Field(
         200, ge=1, description="Меньше слов в видимом тексте — «Content: Low Content Pages»."
     )
+    image_kb: int = Field(100, ge=1, description="Картинка тяжелее стольких КБ — «Images: Over … KB».")
+    alt_max_chars: int = Field(100, ge=1, description="Alt длиннее — «Images: Alt Text Over … Characters».")
     crawl_depth: int = Field(4, ge=1, description="Страницы на такой глубине и глубже — «Links: High Crawl Depth».")
     internal_outlinks: int = Field(
         1000, ge=1, description="Больше внутренних follow-ссылок — «Links: High Internal Outlinks»."

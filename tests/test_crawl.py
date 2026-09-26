@@ -174,7 +174,7 @@ def test_cli_issues_urls_analyze(base_url: str) -> None:
     assert code == 0
     assert summary["crawl_id"] == crawl["crawl_id"]
     by_code = {i["code"]: i for i in summary["issues"]}
-    assert by_code["internal_client_error"]["urls"] == 1
+    assert by_code["internal_client_error"]["urls"] == len(polygon.EXPECTED_ISSUES["internal_client_error"])
     assert by_code["internal_client_error"]["priority"] == "high"
 
     code, listing = _invoke_json("urls", "--issue", "internal_redirection_3xx", "--limit", "2")

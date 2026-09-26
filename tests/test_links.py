@@ -73,5 +73,18 @@ def test_not_following_external_links(base_url: str) -> None:
                 storage.pages.select().where(storage.pages.c.crawl_id == crawl_id, storage.pages.c.external)
             ).fetchall()
         skipped = {r.code for r in issues.not_checked(engine, crawl_id)}
-    assert externals == []
+    # no other site's link was checked; the external <img> still is — collect.images decides that
+    assert [row.url.rsplit("/", 2)[-2:] for row in externals] == [["img", "gone.png"]]
     assert {"external_no_response", "external_client_error", "external_server_error"} <= skipped
+
+
+def test_collect_images_follow_and_store(base_url: str) -> None:
+    with storage.database() as engine:
+        off = CollectSettings(images=FollowStore(follow=False, store=False))
+        crawl_id = crawl_site(engine, f"{base_url}/", "polygon", Settings(collect=off)).crawl_id
+        with engine.connect() as conn:
+            fetched = {row.url.removeprefix(base_url) for row in conn.execute(
+                storage.pages.select().where(storage.pages.c.crawl_id == crawl_id))}  # fmt: skip
+        skipped = {r.code for r in issues.not_checked(engine, crawl_id)}
+    assert "/img/big.png" not in fetched and "/style.css" in fetched  # images off, CSS still checked
+    assert {"images_missing_alt_attribute", "images_over_max_kb", "internal_blocked_resource"} <= skipped

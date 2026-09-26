@@ -110,12 +110,15 @@ links = sa.Table(
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("source", sa.String, nullable=False),
     sa.Column("target", sa.String, nullable=False),
-    sa.Column("kind", sa.String, nullable=False),  # hyperlink | canonical | redirect | refresh
+    # hyperlink | canonical | redirect | refresh | image | css | js | media | iframe (resources the page loads)
+    sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
     sa.Column("anchor", sa.String),
     sa.Column("alt", sa.String),  # alt of the image inside an image link
     sa.Column("rel", sa.String),
     sa.Column("nofollow", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Column("alt_attr", sa.Boolean),  # images: the alt attribute is present (even if empty)
+    sa.Column("sized", sa.Boolean),  # images: width and height are set in the HTML
     sa.Index("links_by_source", "crawl_id", "source"),
     sa.Index("links_by_target", "crawl_id", "target"),
 )
@@ -275,7 +278,7 @@ class PageWriter:
     def add_links(self, rows: list[dict]) -> None:
         """Link rows for this crawl: {source, target, kind, internal, anchor, alt, rel, nofollow}."""
         self._links.extend({"crawl_id": self.crawl_id, "anchor": None, "alt": None, "rel": None,
-                            "nofollow": False} | row for row in rows)  # fmt: skip
+                            "nofollow": False, "alt_attr": None, "sized": None} | row for row in rows)  # fmt: skip
 
     def flush(self) -> None:
         if self._links:

@@ -53,9 +53,9 @@
 - [x] `MVP` **Internal Server Error (5XX)** — внутренний URL отдаёт 5xx (500, 503…) _(SF: Issue, High)_
 - [x] `MVP` **Internal Redirect Loop** — цепочка редиректов возвращается на уже пройденный URL (петля) _(SF: Issue, High)_
 - [x] `MVP` **Internal Blocked by Robots.txt** — внутренний URL запрещён в robots.txt, поисковик не сможет его обойти _(SF: Warning, High)_
-- [ ] `MVP` **Internal Blocked Resource** (#12) — внутренний ресурс (картинка, JS, CSS) недоступен: запрещён robots.txt или отдаёт ошибку _(SF: Warning, High)_
+- [x] `MVP` **Internal Blocked Resource** — внутренний ресурс (картинка, JS, CSS) недоступен: запрещён robots.txt или отдаёт ошибку _(SF: Warning, High)_
 - [x] `MVP` **Internal Redirect Chain** — редирект ведёт на URL, который снова редиректит (2+ «прыжка») _(SF: Warning, Medium)_
-- [ ] `MVP` **External Blocked Resource** (#12) — внешний ресурс (картинка, JS, CSS) запрещён robots.txt или отдаёт ошибку _(SF: Warning, Medium)_
+- [x] `MVP` **External Blocked Resource** — внешний ресурс (картинка, JS, CSS) запрещён robots.txt или отдаёт ошибку _(SF: Warning, Medium)_
 - [x] `MVP` **Internal Redirection (3XX)** — внутренний URL отдаёт серверный редирект (301, 302…) _(SF: Warning, Low)_
 - [x] `MVP` **Internal Redirection (Meta Refresh)** — редирект через `<meta http-equiv="refresh">` на стороне браузера _(SF: Warning, Low)_
 - [x] `MVP` **Internal Redirection (HTTP Refresh)** — редирект через HTTP-заголовок `Refresh` _(SF: Warning, Low)_
@@ -149,13 +149,13 @@
 
 ### Images — изображения
 
-- [ ] `MVP` **Missing Alt Text** — атрибут alt есть, но пустой _(SF: Issue, Low)_
-- [ ] `MVP` **Missing Alt Attribute** — атрибута alt нет вовсе _(SF: Issue, Low)_
+- [x] `MVP` **Missing Alt Text** — атрибут alt есть, но пустой _(SF: Issue, Low)_
+- [x] `MVP` **Missing Alt Attribute** — атрибута alt нет вовсе _(SF: Issue, Low)_
 - [ ] `v2` **Background Images** — картинки из CSS `background` и подгружаемые динамически (нужен рендеринг) _(SF: Warning, Low)_
-- [ ] `MVP` **Over 100 kb** — картинка тяжелее 100 КБ _(SF: Opportunity, Medium)_
-- [ ] `MVP` **Alt Text Over 100 Characters** — alt длиннее 100 символов _(SF: Opportunity, Low)_
+- [x] `MVP` **Over 100 kb** — картинка тяжелее 100 КБ _(SF: Opportunity, Medium)_
+- [x] `MVP` **Alt Text Over 100 Characters** — alt длиннее 100 символов _(SF: Opportunity, Low)_
 - [ ] `v2` **Incorrectly Sized Images** — реальный размер картинки не совпадает с отображаемым (нужен рендеринг) _(SF: Opportunity, Low)_
-- [ ] `MVP` **Missing Size Attributes** — у `<img>` не заданы `width`/`height` в HTML _(SF: Opportunity, Low)_
+- [x] `MVP` **Missing Size Attributes** — у `<img>` не заданы `width`/`height` в HTML _(SF: Opportunity, Low)_
 
 ### Canonicals
 
@@ -532,15 +532,15 @@
 
 У каждого типа — раздельно `follow` (переходить/проверять) и `store` (записывать в БД), как Crawl/Store в SF.
 
-- [ ] `MVP` **Images** (#12) → `collect.images.follow` / `collect.images.store`
-- [ ] `MVP` **CSS** (#12) → `collect.css.follow` / `.store`
-- [ ] `MVP` **JavaScript** (#12) → `collect.js.follow` / `.store`
-- [ ] `MVP` **Media (video/audio)** (#12) → `collect.media.follow` / `.store`
+- [x] `MVP` **Images** → `collect.images.follow` / `collect.images.store`
+- [x] `MVP` **CSS** → `collect.css.follow` / `.store`
+- [x] `MVP` **JavaScript** → `collect.js.follow` / `.store`
+- [x] `MVP` **Media (video/audio)** → `collect.media.follow` / `.store`
 - [x] `MVP` **Internal Hyperlinks** → `collect.internal_links.follow` / `.store`
 - [x] `MVP` **External Links** → `collect.external_links.follow` / `.store`
 - [x] `MVP` **Canonicals** (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
 - [x] `MVP` **Meta Refresh** → `collect.meta_refresh.follow` / `.store`
-- [ ] `MVP` **iframes** (#12) → `collect.iframes.follow` / `.store`
+- [x] `MVP` **iframes** → `collect.iframes.follow` / `.store`
 - [ ] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [ ] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
 - [ ] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
@@ -587,7 +587,7 @@
 - [ ] `v2` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `issues.indexable_only`
 - [ ] `MVP` **Always Follow Redirects** (#16) (в режиме списка — до конечной цели) → `list.follow_redirects`
 - [ ] `v2` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
-- [ ] `MVP` **Extract Images From IMG SRCSET Attribute** (#12) → `collect.images.srcset`
+- [x] `MVP` **Extract Images From IMG SRCSET Attribute** → `collect.images.srcset`
 - [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
 - [ ] `v2` **Ignore Paginated URLs for Duplicate Filters** → `duplicates.ignore_paginated`
 - [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
@@ -604,7 +604,7 @@
 - [x] `MVP` **Meta Description: мин/макс символов** (70 / 155) → `thresholds.description_chars`
 - [ ] `v2` **Title / Description: мин/макс пикселей** (200 / 561, 400 / 985) → `thresholds.title_px`, `thresholds.description_px`
 - [x] `MVP` **Макс. длина H1 / H2** (70) → `thresholds.h1_chars`, `thresholds.h2_chars`
-- [ ] `MVP` **Макс. длина alt** (#12) (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
+- [x] `MVP` **Макс. длина alt** (100) и **вес картинки КБ** (100) → `thresholds.alt_chars`, `thresholds.image_kb`
 - [x] `MVP` **Порог Low Content** (200 слов) → `thresholds.min_words`
 - [x] `MVP` **High Crawl Depth, High Internal / External Outlinks** → `thresholds.crawl_depth`, `thresholds.internal_outlinks`, `thresholds.external_outlinks`
 - [x] `MVP` **Список неинформативных анкоров** → `thresholds.non_descriptive_anchors`

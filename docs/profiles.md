@@ -67,6 +67,17 @@ concurrency = 10
 | `collect.canonicals.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.meta_refresh.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.meta_refresh.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.images.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.images.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
+| `collect.css.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.css.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.js.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.js.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.media.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.media.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.iframes.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
+| `collect.iframes.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `thresholds.redirect_chain_hops` | `int` | `2` | Со скольких прыжков редирект считается цепочкой (Internal Redirect Chain). |
 | `thresholds.title_max_chars` | `int` | `60` | Title длиннее — «Page Titles: Over … Characters». |
 | `thresholds.title_min_chars` | `int` | `30` | Title короче — «Page Titles: Below … Characters». |
@@ -75,6 +86,8 @@ concurrency = 10
 | `thresholds.h1_max_chars` | `int` | `70` | H1 длиннее — «H1: Over … Characters». |
 | `thresholds.h2_max_chars` | `int` | `70` | H2 длиннее — «H2: Over … Characters». |
 | `thresholds.low_content_words` | `int` | `200` | Меньше слов в видимом тексте — «Content: Low Content Pages». |
+| `thresholds.image_kb` | `int` | `100` | Картинка тяжелее стольких КБ — «Images: Over … KB». |
+| `thresholds.alt_max_chars` | `int` | `100` | Alt длиннее — «Images: Alt Text Over … Characters». |
 | `thresholds.crawl_depth` | `int` | `4` | Страницы на такой глубине и глубже — «Links: High Crawl Depth». |
 | `thresholds.internal_outlinks` | `int` | `1000` | Больше внутренних follow-ссылок — «Links: High Internal Outlinks». |
 | `thresholds.external_outlinks` | `int` | `10` | Больше внешних follow-ссылок — «Links: High External Outlinks». |

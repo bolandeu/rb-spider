@@ -29,6 +29,17 @@ class Link:
 
 
 @dataclass
+class Resource:
+    """Something the page loads rather than links to: image, stylesheet, script, media, iframe."""
+
+    url: str
+    kind: str  # image | css | js | media | iframe
+    alt: str | None = None  # images
+    alt_attr: bool | None = None  # images: the alt attribute exists
+    sized: bool | None = None  # images: width and height attributes are both set
+
+
+@dataclass
 class Page:
     url: str
     status_code: int
@@ -37,6 +48,7 @@ class Page:
     redirect_url: str | None = None
     title: str | None = None
     links: list[Link] = field(default_factory=list)  # <a href> to http(s) URLs, in page order
+    resources: list[Resource] = field(default_factory=list)
     refresh_url: str | None = None  # client-side redirect target (meta / HTTP Refresh)
     refresh_kind: str | None = None  # "meta" | "http"
     error: str | None = None  # no response: why (status_code is 0)
@@ -216,6 +228,39 @@ def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
     return links
 
 
+def _srcset_urls(value: str) -> list[str]:
+    """`a.jpg 1x, b.jpg 480w` -> ["a.jpg", "b.jpg"]."""
+    return [part.strip().split()[0] for part in value.split(",") if part.strip()]
+
+
+def _resources(url: str, tree: LexborHTMLParser, srcset: bool) -> list[Resource]:
+    found: list[Resource] = []
+
+    def add(href: str | None, kind: str, **extra) -> None:
+        target = _absolute(url, href or "") if href else None
+        if target:
+            found.append(Resource(target, kind, **extra))
+
+    for img in tree.css("img"):
+        attrs = img.attributes
+        image = {"alt": (attrs.get("alt") or "").strip() if "alt" in attrs else None, "alt_attr": "alt" in attrs,
+                 "sized": bool(attrs.get("width")) and bool(attrs.get("height"))}  # fmt: skip
+        add(attrs.get("src"), "image", **image)
+        if srcset and attrs.get("srcset"):
+            for candidate in _srcset_urls(attrs.get("srcset") or ""):
+                add(candidate, "image", **image)
+    for link in tree.css("link[rel]"):
+        if "stylesheet" in (link.attributes.get("rel") or "").lower().split():
+            add(link.attributes.get("href"), "css")
+    for script in tree.css("script[src]"):
+        add(script.attributes.get("src"), "js")
+    for media in tree.css("video[src], audio[src], video source[src], audio source[src]"):
+        add(media.attributes.get("src"), "media")
+    for iframe in tree.css("iframe[src]"):
+        add(iframe.attributes.get("src"), "iframe")
+    return found
+
+
 _JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
 
 
@@ -240,6 +285,7 @@ def parse_page(
     body: bytes,
     *,
     content_exclude: Sequence[str] = DEFAULT_CONTENT_EXCLUDE,
+    srcset: bool = False,
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -268,6 +314,7 @@ def parse_page(
                     page.refresh_url, page.refresh_kind = refresh, "meta"
                 break
     page.links = _links(url, tree)
+    page.resources = _resources(url, tree, srcset)
     page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
     page.onpage |= _content(tree, body, content_exclude)
     return page

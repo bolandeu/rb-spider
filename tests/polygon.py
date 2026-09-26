@@ -12,6 +12,7 @@ import asyncio
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import PurePosixPath
 
 from aiohttp import web
 
@@ -182,6 +183,38 @@ LINK_TRAPS: dict[str, str] = {
 LINKED_FROM_HOME = [
     p for p in LINK_TRAPS if p not in {"/l-only-from-noindex", "/deep2", "/deep3", "/deep4", "/c-unlinked"}
 ]
+# Binary resources: path -> size in bytes (served as image/png etc.; see _handle).
+RESOURCES = {
+    "/logo.png": 2_000,
+    "/pic.png": 2_000,
+    "/img/ok.png": 2_000,
+    "/img/noalt.png": 2_000,
+    "/img/emptyalt.png": 2_000,
+    "/img/longalt.png": 2_000,
+    "/img/nosize.png": 2_000,
+    "/img/big.png": 150_000,  # over thresholds.image_kb (100)
+    "/style.css": 500,
+    "/app.js": 500,
+    "/private/hidden.png": 2_000,  # disallowed by robots.txt: never fetched
+}
+_IMG = '<img src="{src}" alt="{alt}" width="10" height="10">'
+IMAGE_TRAPS: dict[str, str] = {
+    "/i-images": _html(
+        "i-images",
+        "/",
+        head=_head("i-images", extra='<link rel="stylesheet" href="/style.css"><script src="/app.js"></script>'),
+        body=f"<h1>{H1.format('i-images')}</h1><h2>{H2.format('i-images')}</h2>"
+        + _IMG.format(src="/img/ok.png", alt="Нормальная картинка")
+        + '<img src="/img/noalt.png" width="10" height="10">'
+        + _IMG.format(src="/img/emptyalt.png", alt="")
+        + _IMG.format(src="/img/longalt.png", alt="Очень длинное описание картинки " * 5)
+        + '<img src="/img/nosize.png" alt="Без размеров">'
+        + _IMG.format(src="/img/big.png", alt="Тяжёлая картинка")
+        + _IMG.format(src="/img/broken.png", alt="Битая картинка")  # 404: blocked resource
+        + _IMG.format(src="/private/hidden.png", alt="Закрытая robots.txt")  # blocked resource
+        + _IMG.format(src="{local}/img/gone.png", alt="Чужая пропавшая"),  # external 404
+    ),
+}
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -213,6 +246,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/shop/",
             *LINKED_FROM_HOME,
             "/l-mixed",
+            *IMAGE_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -248,6 +282,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, headers, html) for path, (headers, html) in DIRECTIVE_CANONICAL_TRAPS.items()},
     **{path: (200, {}, html) for path, html in CONTENT_TRAPS.items()},
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
 }
 
 # URLs a full crawl of the polygon must reach (paths relative to the polygon's base URL).
@@ -276,6 +311,9 @@ REACHABLE = {
     "/shop/",
     "/shop/item",
     *LINK_TRAPS,
+    *IMAGE_TRAPS,
+    *RESOURCES,
+    "/img/broken.png",
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -285,6 +323,7 @@ EXTERNAL = {
     *(f"https://ext-{i}.invalid/" for i in range(11)),
     "LOCAL/missing",
     "LOCAL/error",
+    "LOCAL/img/gone.png",
 }
 
 DUPLICATES = {"/b", "/b?sort=price"}
@@ -293,10 +332,10 @@ DUPLICATES = {"/b", "/b?sort=price"}
 EXPECTED_ISSUES = {
     # Response Codes
     "internal_no_response": {"/reset"},
-    "internal_client_error": {"/missing"},
+    "internal_client_error": {"/missing", "/img/broken.png"},
     "internal_server_error": {"/error"},
     "internal_redirect_loop": {"/loop1", "/loop2"},
-    "internal_blocked_by_robots": {"/private/secret"},
+    "internal_blocked_by_robots": {"/private/secret", "/private/hidden.png"},
     "internal_redirect_chain": {"/chain1"},
     "internal_redirection_3xx": {"/old", "/chain1", "/chain2", "/loop1", "/loop2", "/to-missing"},
     "internal_redirection_meta_refresh": {"/meta-refresh"},
@@ -376,8 +415,16 @@ EXPECTED_ISSUES = {
     "canonical_unlinked": {"/c-unlinked"},
     # external URLs
     "external_no_response": {u for u in EXTERNAL if not u.startswith("LOCAL")},
-    "external_client_error": {"LOCAL/missing"},
+    "external_client_error": {"LOCAL/missing", "LOCAL/img/gone.png"},
     "external_server_error": {"LOCAL/error"},
+    # Images (reported by image URL) and resources
+    "images_missing_alt_text": {"/img/emptyalt.png"},
+    "images_missing_alt_attribute": {"/img/noalt.png", "/pic.png"},  # /pic.png: the no-anchor trap's image
+    "images_over_max_kb": {"/img/big.png"},
+    "images_alt_over_max": {"/img/longalt.png"},
+    "images_missing_size": {"/img/nosize.png", "/logo.png", "/pic.png"},  # the h1-alt and no-anchor traps too
+    "internal_blocked_resource": {"/img/broken.png", "/private/hidden.png"},
+    "external_blocked_resource": {"LOCAL/img/gone.png"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
@@ -390,6 +437,9 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     SEEN_HEADERS.append({k.lower(): v for k, v in request.headers.items()})
     if request.path == "/slow":
         await asyncio.sleep(SLOW_S)
+    if request.path in RESOURCES:
+        kind = {".css": "text/css", ".js": "text/javascript"}.get(PurePosixPath(request.path).suffix, "image/png")
+        return web.Response(body=b"\0" * RESOURCES[request.path], content_type=kind)
     if request.path == "/reset":  # no response at all: the client sees a dropped connection
         assert request.transport is not None
         request.transport.abort()

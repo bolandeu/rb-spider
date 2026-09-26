@@ -50,7 +50,12 @@ PROXY_CREDENTIAL = "proxy"
 logging.getLogger("crawlee._service_locator").setLevel(logging.ERROR)
 # A URL that never answers is data (issue internal_no_response, the error text is stored), not a
 # crash: without this Crawlee prints a full traceback per such URL.
-logging.getLogger("HttpCrawler").addFilter(lambda record: "reached maximum retries" not in record.getMessage())
+logging.getLogger("HttpCrawler").addFilter(
+    lambda record: not any(noise in record.getMessage() for noise in ("reached maximum retries", "Retrying request"))
+)
+# An unreachable robots.txt means "no rules" (search engines treat it so, and so does RobotsGate) —
+# routine for other sites' links, not something to warn about per host.
+logging.getLogger("crawlee._utils.robots").setLevel(logging.ERROR)
 
 
 @dataclass
@@ -221,15 +226,24 @@ async def _run(
             last_progress = time.monotonic()
             on_progress(writer.count)
 
-    async def admit(urls: list[str], depth: int, *, start: bool = False) -> list[Request]:
+    async def admit(urls: list[str], depth: int, *, start: bool = False, resources: bool = False) -> list[Request]:
         """URLs that pass scope, limits and robots.txt, as requests; disallowed ones go to the report.
 
-        The start URL is always crawled — it's what the user asked for — but robots.txt still applies.
-        URLs to check (other sites, outside the start folder) carry `user_data["check"]`: status only.
+        The start URL is always crawled — it's what the user asked for. URLs to check (other sites,
+        outside the start folder, and every resource: images, CSS, JS…) carry `user_data["check"]`:
+        status and size only. robots.txt applies to all of them — a disallowed resource is what
+        Screaming Frog calls a Blocked Resource.
         """
         if settings.max_depth is not None and depth > settings.max_depth:
             return []
-        roles = {u: "crawl" if start else scope.role(u) for u in dict.fromkeys(urls) if u not in depth_of}
+
+        def role(url: str) -> str | None:
+            if start:
+                return "crawl"
+            found = scope.role(url)
+            return "check" if resources and found else found
+
+        roles = {u: role(u) for u in dict.fromkeys(urls) if u not in depth_of}
         new = [u for u, role in roles.items() if role]
         if settings.max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests in flight
             new = new[: max(0, settings.max_urls - len(depth_of))]
@@ -237,13 +251,29 @@ async def _run(
         for url in new:
             depth_of[url] = depth
             check = roles[url] == "check"
-            if not check and settings.robots != "ignore" and not await robots.allowed(url):
+            if settings.robots != "ignore" and not await robots.allowed(url):
                 if settings.robots == "respect":  # never fetched, but part of the report
                     writer.add(Page.blocked_by_robots(url), depth=depth)
                     continue
                 reported_blocked.add(url)
             admitted.append(Request.from_url(url, headers=headers or None, user_data={"check": check}))
         return admitted
+
+    def resources_to_check(page: Page) -> tuple[list[str], list[dict]]:
+        """Resources to check (status, size) and their link rows — collect.images / css / js / media / iframes."""
+        check: list[str] = []
+        rows: list[dict] = []
+        options = {"image": collect.images, "css": collect.css, "js": collect.js, "media": collect.media,
+                   "iframe": collect.iframes}  # fmt: skip
+        for resource in page.resources:
+            option = options[resource.kind]
+            if option.store:
+                rows.append({"source": page.url, "target": resource.url, "kind": resource.kind,
+                             "internal": scope.internal(resource.url), "alt": resource.alt,
+                             "alt_attr": resource.alt_attr, "sized": resource.sized})  # fmt: skip
+            if option.follow:
+                check.append(resource.url)
+        return check, rows
 
     def links_to_follow(page: Page) -> tuple[list[str], list[dict]]:
         """What to enqueue from a crawled page, and the link rows to keep (collect.* decides both)."""
@@ -292,6 +322,7 @@ async def _run(
             dict(response.headers),
             b"" if check else body,  # a checked URL is not read: status, headers, redirect target only
             content_exclude=settings.content_exclude,
+            srcset=collect.images_srcset,
         )
         page.bytes = len(body)
         page.onpage |= {"external": not scope.internal(page.url), "parsed": not check}
@@ -304,9 +335,11 @@ async def _run(
             return
 
         follow, rows = links_to_follow(page)
+        check, resource_rows = resources_to_check(page)
         writer.add(page, depth=depth, body=body)
-        writer.add_links(rows)
-        if requests := await admit(follow, depth + 1):
+        writer.add_links(rows + resource_rows)
+        requests = await admit(follow, depth + 1) + await admit(check, depth + 1, resources=True)
+        if requests:
             await ctx.add_requests(requests)
         progress()
 
