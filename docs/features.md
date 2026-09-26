@@ -484,7 +484,7 @@
 
 ### Извлекаемые данные страницы (Spider > Extraction)
 
-- [ ] `MVP` **Page details** — title, meta description, h1, h2, word count, page size, hash (md5)
+- [x] `MVP` **Page details** — title, meta description, h1, h2, word count, page size, hash (md5)
 - [ ] `MVP` **URL details** — response time, заголовок Last-Modified, полные HTTP-заголовки запроса и ответа
 - [ ] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении
 - [ ] `v2` **Text to Code Ratio** — доля текста в HTML
@@ -585,7 +585,7 @@
 - [x] `MVP` **Response Timeout** → `http.timeout`
 - [ ] `v2` **5XX Response Retries** → `http.retries_5xx`
 - [ ] `v2` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `issues.indexable_only`
-- [ ] `MVP` **Always Follow Redirects** (#16) (в режиме списка — до конечной цели) → `list.follow_redirects`
+- [x] `MVP` **Always Follow Redirects** (#16) (в режиме списка — до конечной цели) → всегда в `crawl.mode = "list"`
 - [ ] `v2` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
 - [x] `MVP` **Extract Images From IMG SRCSET Attribute** → `collect.images.srcset`
 - [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
@@ -657,7 +657,7 @@
 ### Анализ после обхода и профили
 
 - [x] `MVP` **Crawl Analysis** — сайтовые проверки (дубли, unlinked canonical, non-indexable inlinks…) считаются SQL после обхода автоматически
-- [ ] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
+- [x] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
 - [ ] `v2` **Crawl Analysis: полный список пунктов** (Pagination, Hreflang return links и др.) (не подтверждено)
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
 - [ ] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
@@ -686,8 +686,8 @@
 ### Управление обходами
 
 - [x] `MVP` **Start / Resume** — запуск и продолжение прерванного обхода → `spider crawl`, `spider crawls resume <id>`
-- [ ] `MVP` **Pause** — остановка с возможностью продолжить (Ctrl+C или сигнал фоновому процессу)
-- [ ] `MVP` **Хранение обходов** — список, просмотр, удаление, проекты → `spider crawls list|show|delete`, `spider projects`
+- [x] `MVP` **Pause** — остановка с возможностью продолжить (Ctrl+C или сигнал фоновому процессу)
+- [x] `MVP` **Хранение обходов** — список, просмотр, удаление, проекты → `spider crawls list|show|delete`, `spider projects`
 - [x] `MVP` **Снимок конфига обхода** — итоговый конфиг сохраняется в `crawls`
 - [ ] `v2` **Re-spider selected URLs** — переобойти выбранные URL в существующем обходе
 - [ ] `backlog` **Lock crawl / rename / duplicate** — защита обхода от удаления, переименование, копия
@@ -728,7 +728,7 @@
 ### Отчёты (Reports)
 
 - [ ] `MVP` **Crawl Overview** — итоги: найдено / заблокировано / обойдено, типы содержимого, коды ответа
-- [ ] `MVP` **Issues Overview** — сводка всех проблем → `spider issues` (не подтверждено)
+- [x] `MVP` **Issues Overview** — сводка всех проблем → `spider issues`
 - [x] `MVP` **Redirects: All Redirects** — все редиректы
 - [x] `MVP` **Redirects: Redirect Chains** — цепочки из 2+ прыжков и петли, тип (HTTP / JS / meta refresh)
 - [x] `MVP` **Redirects: Redirects to Errors** — редиректы на заблокированные, неотвечающие, 4xx, 5xx
@@ -797,7 +797,7 @@
 
 - [x] `MVP` **`spider fetch` / `rb_spider.fetch`** (#24) — сборщик страниц для других инструментов без обхода и базы: редиректы, SEO-данные, ссылки, текст, Markdown для LLM, HTML; прокси и `--render`
 - [x] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
-- [ ] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
+- [x] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
 - [x] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода
 - [x] `MVP` **`spider crawls prune --keep-last N | --older-than 90d`** — чистка старых обходов
 - [x] `MVP` **`spider crawls delete <id>…`, `spider projects delete`** — с подтверждением, `--yes`, `--dry-run`
@@ -805,7 +805,7 @@
 - [x] `MVP` **`--detach`** — обход фоновым процессом, статус в БД
 - [x] `MVP` **Своя очередь обхода** — в памяти + фильтр виденных URL, снимок в SQLite в одной транзакции с результатами; возобновление без потерь
 - [x] `MVP` **`--store-html`** — хранить HTML (zstd) в отдельном SQLite-файле; по умолчанию только md5
-- [ ] `MVP` **Статус «не проверялось»** — проверка без нужных данных (сбор выключен) не выдаёт ложное «ок»
+- [x] `MVP` **Статус «не проверялось»** — проверка без нужных данных (сбор выключен) не выдаёт ложное «ок»
 - [ ] `MVP` **Переключаемый HTTP-клиент** → `http.client = "impit" | "curl"`
 - [ ] `v2` **Удалённые БД Postgres / MySQL** — DSN в keychain
 
@@ -826,8 +826,8 @@
 
 ### Тестирование и производительность
 
-- [ ] `MVP` **Синтетический полигон в pytest** — страница-ловушка на каждую проверку из этого файла; покрытие ≥ 90 %
-- [ ] `MVP` **`bench/gen_site.py`** — генератор статического сайта 10k/50k/100k страниц (seed, категории, пагинация, перелинковка) для замеров скорости и памяти; деплой через `hostme`
+- [x] `MVP` **Синтетический полигон в pytest** — страница-ловушка на каждую проверку из этого файла; покрытие ≥ 90 %
+- [x] `MVP` **`bench/bench_site.py`** — генератор статического сайта 10k/50k/100k страниц (seed, категории, пагинация, перелинковка) для замеров скорости и памяти; деплой через `hostme`
 
 ### Доработки rb-sitemap-xml
 
