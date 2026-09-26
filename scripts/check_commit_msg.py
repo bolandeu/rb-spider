@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check_command_docstrings import find_stale  # noqa: E402
+from check_command_docstrings import find_stale
 
 TYPES = ("feat", "fix", "perf", "refactor", "test", "docs", "build", "chore")
 BEHAVIOUR_TYPES = ("feat", "fix")

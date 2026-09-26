@@ -4,8 +4,24 @@
 
 ## Статус
 
-Этап: **прототип производительности сделан (#3), кода пакета нет.** Следующий шаг — каркас пакета (#1).
+Этап: **каркас пакета готов (#1), команд обхода нет.** Следующий шаг — сквозной обход (#4).
 Этот блок заменяется на месте при смене этапа; история — в git и CHANGELOG.
+
+## Разработка
+
+```bash
+uv sync                                   # пишет uv.lock — он коммитится (CI: `uv lock --check`)
+uv run spider                             # список команд; `uv run spider <команда> --help`
+uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
+SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest tests/test_help.py   # после намеренной правки справки
+scripts/install_hooks.sh                  # один раз после клонирования
+```
+
+Строка проверок — ровно то, что гоняет CI (Linux/macOS/Windows) перед `uv tool install .`. Пакет `rb-spider` (модуль `rb_spider`), команда и каталог проекта — `spider` / `.spider/` (`core/version.py`: `CLI_NAME`, `DIST_NAME`). `bench/` — отдельный uv-проект стенда, в пакет не входит.
+
+Слои (архитектура `cli-builder`): `commands/` — только разбор аргументов → вызов сервиса → `output.emit_success`; логика — `core/`; внешние сервисы — `providers/`; секреты — `credentials/` (keychain + env `SPIDER_<PROVIDER>_<FIELD>`), никогда в `.spider/config.toml`. Группы команд — `output.group(...)`, каждая команда — под `@output.guard`, необратимые — `--dry-run` + `output.require_confirmation`.
+
+Релиз: `uv run scripts/release.py patch|minor|major` из чистого `main` (версия, дата в CHANGELOG, тег, push — push делает пользователь). `version =` руками не менять.
 
 ## Документы
 
@@ -32,7 +48,7 @@ Docstring команды и `help=` её опций — **единственны
 | Документ | Источник |
 | --- | --- |
 | `--help` каждой команды | docstring функции + `help=` опций |
-| Справочник команд в `data/SKILL.md` и README | генерируется из Typer-приложения |
+| Список команд | голый `spider` (первая строка каждого docstring); в `data/SKILL.md` и README команд **нет** — там только соглашения, иначе они устареют |
 | `docs/profiles.md` (справочник ключей) | генерируется из pydantic-схемы конфига (`description=` полей) |
 
 Изменил поведение, флаг, значение по умолчанию, exit-код или формат вывода — в **том же коммите** обнови docstring / `help=` / `description=` и перегенерируй документы.

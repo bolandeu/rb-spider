@@ -23,11 +23,43 @@ from pathlib import Path
 
 TOP, SUB, PER_PAGE, RELATED = 10, 10, 24, 8
 STATIC = ["about", "contacts", "delivery", "payment", "returns", "faq", "blog", "news", "privacy", "terms"]
-WORDS = (
-    "краулер сайт страница ссылка индекс поиск товар каталог цена доставка скидка заказ "
-    "качество гарантия отзыв бренд модель размер цвет материал склад наличие новинка "
-    "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor"
-).split()
+WORDS = [
+    "краулер",
+    "сайт",
+    "страница",
+    "ссылка",
+    "индекс",
+    "поиск",
+    "товар",
+    "каталог",
+    "цена",
+    "доставка",
+    "скидка",
+    "заказ",
+    "качество",
+    "гарантия",
+    "отзыв",
+    "бренд",
+    "модель",
+    "размер",
+    "цвет",
+    "материал",
+    "склад",
+    "наличие",
+    "новинка",
+    "lorem",
+    "ipsum",
+    "dolor",
+    "sit",
+    "amet",
+    "consectetur",
+    "adipiscing",
+    "elit",
+    "sed",
+    "do",
+    "eiusmod",
+    "tempor",
+]
 
 
 class Site:
@@ -63,7 +95,7 @@ class Site:
 
     def _page(self, rng: random.Random, title: str, h1: str, body: str, canonical: str) -> bytes:
         head = (
-            f"<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\"><title>{title}</title>"
+            f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>{title}</title>'
             f'<meta name="description" content="{self._text(rng, 140)}">'
             f'<meta name="robots" content="noindex, nofollow"><link rel="canonical" href="{canonical}">'
             "</head><body>"
@@ -72,7 +104,7 @@ class Site:
         filler = self.page_bytes - len(html.encode()) - 200
         if filler > 0:
             paras = [f"<p>{self._text(rng, 600)}</p>" for _ in range(filler // 1100 + 1)]
-            html += "<div class=\"text\">" + "".join(paras) + "</div>"
+            html += '<div class="text">' + "".join(paras) + "</div>"
         return (html + self._footer() + "</body></html>").encode()
 
     # --- routing ---------------------------------------------------------------
@@ -104,14 +136,20 @@ class Site:
                     f'<a href="/c/{t}/{s}/page-{j}.html">{j}</a> '
                     for j in range(max(1, k - 3), min(self.list_pages, k + 3) + 1)
                 )
-                return 200, self._page(rng, f"Раздел {t}.{s} — стр. {k}", f"Раздел {t}.{s}", items + nav, path), "text/html"
+                return (
+                    200,
+                    self._page(rng, f"Раздел {t}.{s} — стр. {k}", f"Раздел {t}.{s}", items + nav, path),
+                    "text/html",
+                )
             if parts[0] == "p" and len(parts) == 2:
                 pid = int(parts[1].removesuffix(".html"))
                 if not 0 <= pid < self.products:
                     raise ValueError
                 t, s = self._sub_of(pid)
                 crumbs = f'<a href="/">Главная</a> / <a href="/c/{t}/">{t}</a> / <a href="/c/{t}/{s}/">{t}.{s}</a>'
-                related = "".join(f'<a href="/p/{rng.randrange(self.products)}.html">Похожий</a> ' for _ in range(RELATED))
+                related = "".join(
+                    f'<a href="/p/{rng.randrange(self.products)}.html">Похожий</a> ' for _ in range(RELATED)
+                )
                 return 200, self._page(rng, f"Товар {pid}", f"Товар {pid}", crumbs + related, path), "text/html"
         except ValueError:
             pass
@@ -153,9 +191,12 @@ def serve(args: argparse.Namespace) -> None:
     sock.listen(1024)
     sock.set_inheritable(True)
     site = Site(args.pages, args.page_kb, args.seed)
-    print(f"PROTOTYPE bench site: {site.total} pages, ~{args.page_kb} KB each, http://127.0.0.1:{args.port}/ ({args.workers} workers)")
+    print(
+        f"PROTOTYPE bench site: {site.total} pages, ~{args.page_kb} KB each, http://127.0.0.1:{args.port}/ ({args.workers} workers)"
+    )
     procs = [
-        multiprocessing.Process(target=_worker, args=(sock, args.pages, args.page_kb, args.seed)) for _ in range(args.workers)
+        multiprocessing.Process(target=_worker, args=(sock, args.pages, args.page_kb, args.seed))
+        for _ in range(args.workers)
     ]
     for p in procs:
         p.start()
