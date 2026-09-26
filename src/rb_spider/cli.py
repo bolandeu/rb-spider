@@ -5,7 +5,7 @@ from importlib import resources
 import typer
 
 from . import output
-from .commands import auth, crawl, crawls, doctor, init, issues, skill, status
+from .commands import auth, crawl, crawls, doctor, init, issues, profiles, skill, status
 from .commands import config as config_cmd
 from .core.version import CLI_NAME, DEV_VERSION, installed_version, package_summary
 
@@ -23,6 +23,7 @@ app.add_typer(config_cmd.app, name="config")
 app.add_typer(auth.app, name="auth")
 app.add_typer(skill.app, name="skill")
 app.add_typer(crawls.app, name="crawls")
+app.add_typer(profiles.app, name="profiles")
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

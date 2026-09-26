@@ -659,7 +659,7 @@
 - [ ] `MVP` **Crawl Analysis** — сайтовые проверки (дубли, unlinked canonical, non-indexable inlinks…) считаются SQL после обхода автоматически
 - [ ] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
 - [ ] `v2` **Crawl Analysis: полный список пунктов** (Pagination, Hreflang return links и др.) (не подтверждено)
-- [ ] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
+- [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
 - [ ] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
 - [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (не подтверждено)
 
@@ -688,7 +688,7 @@
 - [ ] `MVP` **Start / Resume** — запуск и продолжение прерванного обхода → `spider crawl`, `spider crawls resume <id>`
 - [ ] `MVP` **Pause** — остановка с возможностью продолжить (Ctrl+C или сигнал фоновому процессу)
 - [ ] `MVP` **Хранение обходов** — список, просмотр, удаление, проекты → `spider crawls list|show|delete`, `spider projects`
-- [ ] `MVP` **Снимок конфига обхода** — итоговый конфиг сохраняется в `crawls`
+- [x] `MVP` **Снимок конфига обхода** — итоговый конфиг сохраняется в `crawls`
 - [ ] `v2` **Re-spider selected URLs** — переобойти выбранные URL в существующем обходе
 - [ ] `backlog` **Lock crawl / rename / duplicate** — защита обхода от удаления, переименование, копия
 - [ ] `backlog` **Экспорт/импорт обхода файлом** (аналог `.seospider`)
@@ -810,13 +810,13 @@
 
 ### Конфиг и профили
 
-- [ ] `MVP` **8 слоёв конфига** — встроенные → глобальный → проект → профиль → `--config` → env `SPIDER_…` → флаги → `--set`
-- [ ] `MVP` **`--set dotted.key=value`** — переопределить любой ключ
-- [ ] `MVP` **`spider config show --resolved`** — итоговый конфиг с источником каждого значения
-- [ ] `MVP` **`spider config validate <file>`**
-- [ ] `MVP` **`spider config schema`** — JSON Schema конфига для агентов
-- [ ] `MVP` **`spider profiles list | show | init [--from preset]`** — профили с наследованием `extends`; шаблон с комментариями
-- [ ] `MVP` **Встроенные пресеты** — `default`, `googlebot`, `yandexbot`, `fast`
+- [x] `MVP` **8 слоёв конфига** — встроенные → глобальный → проект → профиль → `--config` → env `SPIDER_…` → флаги → `--set`
+- [x] `MVP` **`--set dotted.key=value`** — переопределить любой ключ
+- [x] `MVP` **`spider config show`** — итоговый конфиг с источником каждого значения
+- [x] `MVP` **`spider config validate <file>`**
+- [x] `MVP` **`spider config schema`** — JSON Schema конфига для агентов
+- [x] `MVP` **`spider profiles list | show | init [--from preset]`** — профили с наследованием `extends`; шаблон с комментариями
+- [x] `MVP` **Встроенные пресеты** — `default`, `googlebot`, `yandexbot`, `fast`
 
 ### Документация и агенты
 

@@ -4,7 +4,7 @@
 
 ## Статус
 
-Этап: **обход (#4) и движок проверок (#6) готовы: `crawl` → `issues` → `urls`.** Дальше — конфиг и профили (#5), затем проверки по группам (#8, #10, #11, #13), большие обходы (#14).
+Этап: **обход (#4), проверки (#6), настройки и профили (#5) готовы.** Дальше — настройки обхода (#7), проверки по группам (#8, #10, #11, #13), ссылки (#9), большие обходы (#14).
 Этот блок заменяется на месте при смене этапа; история — в git и CHANGELOG.
 
 ## Разработка
@@ -13,7 +13,7 @@
 uv sync                                   # пишет uv.lock — он коммитится (CI: `uv lock --check`)
 uv run spider                             # список команд; `uv run spider <команда> --help`
 uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
-SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest tests/test_help.py   # после намеренной правки справки
+SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest   # после намеренной правки справки или настроек: снимки --help и таблица docs/profiles.md
 scripts/install_hooks.sh                  # один раз после клонирования
 ```
 

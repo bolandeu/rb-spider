@@ -21,7 +21,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 | Почти-дубли (v2) | datasketch (MinHash/LSH) | Поддерживается | пакет `simhash` — заброшен |
 | robots.txt | protego (через Crawlee) | Уже внутри Crawlee | reppy — заброшен |
 | Sitemap | соседний пакет **rb-sitemap-xml** | Свой, развиваем | ultimate-sitemap-parser — GPL-3.0 |
-| Конфиг | **pydantic-settings** | Слои TOML/env из коробки, JSON Schema | — |
+| Конфиг | **pydantic** + своё слияние слоёв (~40 строк, `core/settings.py`) | Слияние плоских `раздел.ключ` запоминает слой каждого значения — это нужно `config show`; схема и описания — из pydantic | pydantic-settings — не хранит, из какого слоя пришло значение |
 | CLI | Архитектура скилла `cli-builder`: Python 3.12+, uv, Typer, конфиг проекта, секреты в keychain, вывод человек/`--json`, ИИ-понятные ошибки, коды выхода | Единая архитектура всех CLI пользователя | — |
 
 Готовые SEO-краулеры (advertools — на Scrapy, SEOnaut — Go, LibreCrawl, pyseoanalyzer) как зависимость не берём; advertools и SEOnaut — источник списков колонок и проверок.
@@ -102,7 +102,7 @@ spider crawls prune --keep-last N | --older-than 90d [--project X]
 spider db info | migrate | vacuum
 
 # конфиг
-spider config show [--profile X] --resolved   # у каждого значения — слой-источник
+spider config show [--profile X] [--set k=v]   # итог, у каждого значения — слой-источник
 spider config validate <file>
 spider config schema                          # JSON Schema для агентов
 spider profiles list | show <name> | init <name> [--from <preset>]
@@ -121,7 +121,7 @@ spider profiles list | show <name> | init <name> [--from <preset>]
 Порядок слоёв (следующий перекрывает предыдущий):
 
 1. Встроенные значения (pydantic-модель)
-2. Глобальный конфиг `~/.config/spider/config.toml`
+2. Глобальный конфиг `platformdirs.user_config_dir("spider")/config.toml` (macOS: `~/Library/Application Support/spider/`)
 3. Конфиг проекта `.spider/config.toml`
 4. Профиль `--profile NAME` (с наследованием `extends = "..."`)
 5. Явный файл `--config path.toml`
@@ -131,16 +131,19 @@ spider profiles list | show <name> | init <name> [--from <preset>]
 
 Встроенные пресеты: `default`, `googlebot`, `yandexbot`, `fast` (всё лишнее выключено). Пользовательские профили — в `.spider/profiles/*.toml`.
 
-Пример профиля:
+Ключи сгруппированы по разделам — TOML-таблицам (`[crawl]`, дальше `[collect]`, `[http]`…); путь ключа для `--set` и env — `раздел.ключ`. Слой вносит только явно заданные ключи, поэтому проектный файл не перекрывает глобальный значениями по умолчанию. Действующий справочник ключей — `docs/profiles.md` (генерируется). Пример профиля (часть ключей появится в своих задачах — #7, #9, #15):
 
 ```toml
+description = "Магазин глазами Googlebot"
 extends = "googlebot"
-user_agent = "googlebot-smartphone"   # пресет или своя строка
-render = "never"
+
+[crawl]
 max_urls = 50000
 concurrency = 20
 respect_robots = true
-include = ["^/catalog/"]
+user_agent = "..."            # строка целиком; пресеты имён — #7
+render = "never"              # #15
+include = ["^/catalog/"]      # #7
 exclude = ["\\?sort="]
 headers = { "Accept-Language" = "ru" }
 

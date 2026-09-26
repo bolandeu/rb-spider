@@ -70,3 +70,44 @@ def issue_urls_table(data: dict) -> None:
     for row in data["urls"]:
         table.add_row(str(row["status_code"] or "—"), row["url"], row["detail"] or "")
     console.print(table)
+
+
+def settings_table(data: dict) -> None:
+    table = Table(box=None, pad_edge=False)
+    for column in ("ключ", "значение", "откуда"):
+        table.add_column(column)
+    for section, values in data["settings"].items():
+        for key, value in values.items():
+            dotted = f"{section}.{key}"
+            shown = "—" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
+            table.add_row(dotted, shown, data["sources"].get(dotted, ""))
+    console.print(table)
+
+
+def profiles_table(data: dict) -> None:
+    table = Table(box=None, pad_edge=False)
+    for column in ("профиль", "где", "наследует", "описание"):
+        table.add_column(column)
+    for p in data["profiles"]:
+        table.add_row(p["name"], p["where"], p["extends"] or "", p["description"] or "")
+    console.print(table)
+
+
+def profile_chain(data: dict) -> None:
+    for level in data["chain"]:
+        console.print(f"[bold]{level['profile']}[/bold]")
+        for section, values in level["settings"].items():
+            for key, value in values.items():
+                console.print(f"  {section}.{key} = {value}")
+
+
+def crawl_details(data: dict) -> None:
+    key_values(
+        f"Обход #{data['id']}: {data['status']}",
+        {k: data[k] for k in ("project", "start_url", "started_at", "finished_at", "pages")},
+    )
+    if data["settings"]:
+        console.print("[bold]Настройки[/bold]")
+        for section, values in data["settings"].items():
+            for key, value in values.items():
+                console.print(f"  {section}.{key} = {'—' if value is None else value}")

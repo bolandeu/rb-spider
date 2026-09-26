@@ -11,6 +11,7 @@ from rb_spider.cli import app
 from rb_spider.core import issues, storage
 from rb_spider.core.crawl import crawl_site
 from rb_spider.core.extract import parse_page
+from rb_spider.core.settings import CrawlSettings
 
 from . import polygon
 
@@ -62,7 +63,7 @@ def test_crawl_records_status_redirects_titles_and_depth(base_url: str, engine) 
 
 
 def test_crawl_stops_at_max_urls(base_url: str, engine) -> None:
-    result = crawl_site(engine, f"{base_url}/", "polygon", max_urls=3)
+    result = crawl_site(engine, f"{base_url}/", "polygon", CrawlSettings(max_urls=3))
     assert result.pages == 3
 
 

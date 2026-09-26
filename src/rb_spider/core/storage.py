@@ -44,6 +44,7 @@ crawls = sa.Table(
     sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("finished_at", sa.DateTime(timezone=True)),
     sa.Column("pages", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("settings", sa.JSON),  # resolved settings the crawl ran with: explains why two crawls differ
 )
 pages = sa.Table(
     "pages",
@@ -117,7 +118,7 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def start_crawl(engine: sa.Engine, project: str, start_url: str) -> int:
+def start_crawl(engine: sa.Engine, project: str, start_url: str, settings: dict | None = None) -> int:
     """Register a running crawl (creating the project on first use) and return its id."""
     with engine.begin() as conn:
         project_id = conn.execute(sa.select(projects.c.id).where(projects.c.name == project)).scalar()
@@ -126,7 +127,7 @@ def start_crawl(engine: sa.Engine, project: str, start_url: str) -> int:
             project_id = conn.execute(insert_project).scalar_one()
         insert_crawl = (
             sa.insert(crawls)
-            .values(project_id=project_id, start_url=start_url, status="running", started_at=_now())
+            .values(project_id=project_id, start_url=start_url, status="running", started_at=_now(), settings=settings)
             .returning(crawls.c.id)
         )
         return conn.execute(insert_crawl).scalar_one()
@@ -195,6 +196,30 @@ class CrawlRow:
     started_at: datetime
     finished_at: datetime | None
     pages: int
+
+
+def get_crawl(engine: sa.Engine, crawl_id: int) -> tuple[CrawlRow, dict | None]:
+    """One crawl and the settings snapshot it ran with (None for crawls made before snapshots)."""
+    query = (
+        sa.select(
+            crawls.c.id,
+            projects.c.name,
+            crawls.c.start_url,
+            crawls.c.status,
+            crawls.c.started_at,
+            crawls.c.finished_at,
+            crawls.c.pages,
+            crawls.c.settings,
+        )
+        .join(projects, projects.c.id == crawls.c.project_id)
+        .where(crawls.c.id == crawl_id)
+    )
+    with engine.connect() as conn:
+        *fields, snapshot = conn.execute(query).one()
+    row = CrawlRow(*fields)
+    row.started_at = row.started_at.replace(tzinfo=UTC)
+    row.finished_at = row.finished_at.replace(tzinfo=UTC) if row.finished_at else None
+    return row, snapshot
 
 
 def list_crawls(engine: sa.Engine, limit: int | None = None) -> list[CrawlRow]:

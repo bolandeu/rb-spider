@@ -1,0 +1,5 @@
+description = "Обход глазами основного робота Яндекса"
+extends = "default"
+
+[crawl]
+user_agent = "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)"

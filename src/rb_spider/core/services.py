@@ -54,17 +54,27 @@ def load_config(project_root: Path, *, check_compat: bool = True) -> ProjectConf
     Only `doctor` passes `check_compat=False` — it reports the mismatch as
     one of its checks instead of failing on it.
     """
-    data = tomllib.loads(config_path(project_root).read_text())
-    config = ProjectConfig.model_validate(data)
+    config = ProjectConfig.model_validate(read_project_data(project_root))
     if check_compat:
         check_cli_compat(config)
     return config
 
 
-def save_config(project_root: Path, config: ProjectConfig) -> None:
+def read_project_data(project_root: Path) -> dict:
+    """The project file as written: project fields plus any settings sections (`[crawl]`, ...)."""
+    path = config_path(project_root)
+    return tomllib.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def write_project_data(project_root: Path, data: dict) -> None:
     path = config_path(project_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(tomli_w.dumps(config.model_dump()))
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+
+
+def save_config(project_root: Path, config: ProjectConfig) -> None:
+    """Write the project fields, keeping settings sections the user put in the same file."""
+    write_project_data(project_root, {**read_project_data(project_root), **config.model_dump()})
 
 
 def init_project(project_root: Path, name: str) -> ProjectConfig:

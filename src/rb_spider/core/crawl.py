@@ -20,7 +20,7 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
-from crawlee import ConcurrencySettings
+from crawlee import ConcurrencySettings, Request
 from crawlee.configuration import Configuration
 from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
 from crawlee.events import LocalEventManager
@@ -31,6 +31,7 @@ from crawlee.storages import RequestQueue
 from . import issues, storage
 from .errors import InvalidArguments
 from .extract import Page, normalize_url, parse_page
+from .settings import CrawlSettings
 
 PROGRESS_EVERY_S = 5.0
 
@@ -67,11 +68,15 @@ def project_for(url: str) -> str:
 async def _run(
     start_url: str,
     writer: storage.PageWriter,
-    max_urls: int | None,
-    concurrency: int,
-    respect_robots: bool,
+    settings: CrawlSettings,
     on_progress: Callable[[int], None] | None,
 ) -> None:
+    max_urls, concurrency = settings.max_urls, settings.concurrency
+    headers = {"User-Agent": settings.user_agent} if settings.user_agent else None
+
+    def request(url: str) -> Request:
+        return Request.from_url(url, headers=headers)
+
     config = Configuration(log_level="WARNING")
     storage_client = MemoryStorageClient()
     # A queue of its own per crawl: Crawlee caches the default queue per process, so a second
@@ -92,7 +97,7 @@ async def _run(
         max_request_retries=1,
         request_handler_timeout=timedelta(seconds=60),
         ignore_http_error_status_codes=list(range(300, 600)),
-        respect_robots_txt_file=respect_robots,
+        respect_robots_txt_file=settings.respect_robots,
         configure_logging=False,
     )
     host = urlsplit(start_url).netloc
@@ -118,7 +123,7 @@ async def _run(
             new = new[: max(0, max_urls - len(depth_of))]
         if new:
             depth_of.update(dict.fromkeys(new, depth + 1))
-            await ctx.add_requests(new)
+            await ctx.add_requests([request(u) for u in new])
         progress()
 
     @crawler.failed_request_handler
@@ -134,7 +139,7 @@ async def _run(
         writer.add(Page.blocked_by_robots(url), depth=depth_of.get(url, 0))
 
     try:
-        await crawler.run([start_url])
+        await crawler.run([request(start_url)])
     finally:
         await queue.drop()
 
@@ -143,20 +148,23 @@ def crawl_site(
     engine: sa.Engine,
     start_url: str,
     project: str,
+    settings: CrawlSettings | None = None,
     *,
-    max_urls: int | None = None,
-    concurrency: int = 20,
-    respect_robots: bool = True,
     on_progress: Callable[[int], None] | None = None,
+    snapshot: dict | None = None,
 ) -> CrawlResult:
-    """Crawl `start_url`'s host breadth-first and store every response under a new crawl."""
+    """Crawl `start_url`'s host breadth-first and store every response under a new crawl.
+
+    `snapshot` is the full resolved settings to keep with the crawl (the CLI passes it).
+    """
+    settings = settings or CrawlSettings()
     start_url = _validate_start_url(start_url)
-    crawl_id = storage.start_crawl(engine, project, start_url)
+    crawl_id = storage.start_crawl(engine, project, start_url, snapshot)
     writer = storage.PageWriter(engine, crawl_id)
     started = time.monotonic()
     status = "failed"
     try:
-        asyncio.run(_run(start_url, writer, max_urls, concurrency, respect_robots, on_progress))
+        asyncio.run(_run(start_url, writer, settings, on_progress))
         status = "finished"
     except KeyboardInterrupt:
         status = "interrupted"

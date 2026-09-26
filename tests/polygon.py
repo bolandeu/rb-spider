@@ -95,7 +95,11 @@ EXPECTED_ISSUES = {
 }
 
 
+SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
+
+
 async def _handle(request: web.Request) -> web.StreamResponse:
+    SEEN_USER_AGENTS.add(request.headers.get("User-Agent", ""))
     if request.path == "/reset":  # no response at all: the client sees a dropped connection
         assert request.transport is not None
         request.transport.abort()
