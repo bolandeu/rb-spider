@@ -68,12 +68,32 @@ def compute_indexability(conn: sa.Connection, crawl_id: int) -> None:
     conn.execute(_INDEXABLE, {"crawl_id": crawl_id})
 
 
-def _run_sql(query: sa.TextClause) -> RuleFinder:
-    def find(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> list[Finding]:
-        params = {"crawl_id": crawl_id, **thresholds.model_dump()}  # thresholds bind as :title_max_chars etc.
-        return [(url, detail) for url, detail in conn.execute(query, params)]
+@dataclass(frozen=True)
+class SqlFinder:
+    """A rule that is one `SELECT url, detail`; thresholds bind as :title_max_chars etc.
 
-    return find
+    `analyze` doesn't read its findings into Python: `store` copies them inside SQLite — a crawl where
+    every page has several issues would otherwise hold them all in memory at once.
+    """
+
+    query: sa.TextClause
+
+    def __call__(self, conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> list[Finding]:
+        return [(url, detail) for url, detail in conn.execute(self.query, self._params(crawl_id, thresholds))]
+
+    def store(self, conn: sa.Connection, crawl_id: int, code: str, thresholds: ThresholdSettings) -> int:
+        insert = sa.text(
+            f"INSERT INTO issues (crawl_id, code, url, detail) SELECT :crawl_id, :rule_code, * FROM ({self.query.text})"  # noqa: S608 — fixed rule text
+        )
+        return conn.execute(insert, self._params(crawl_id, thresholds) | {"rule_code": code}).rowcount
+
+    @staticmethod
+    def _params(crawl_id: int, thresholds: ThresholdSettings) -> dict:
+        return {"crawl_id": crawl_id, **thresholds.model_dump()}
+
+
+def _run_sql(query: sa.TextClause) -> RuleFinder:
+    return SqlFinder(query)
 
 
 def _sql(where: str, detail: str = "NULL", *, external: bool = False) -> RuleFinder:
@@ -588,15 +608,19 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
     with engine.begin() as conn:
         compute_indexability(conn, crawl_id)
         conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
-        rows = [
-            {"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}
-            for r in RULES
-            if r.code not in skipped
-            for url, detail in r.find(conn, crawl_id, thresholds)
-        ]
-        if rows:
-            conn.execute(sa.insert(storage.issues), rows)
-    return len(rows)
+        found = 0
+        for r in RULES:
+            if r.code in skipped:
+                continue
+            if isinstance(r.find, SqlFinder):
+                found += r.find.store(conn, crawl_id, r.code, thresholds)
+                continue
+            rows = [{"crawl_id": crawl_id, "code": r.code, "url": url, "detail": detail}
+                    for url, detail in r.find(conn, crawl_id, thresholds)]  # fmt: skip
+            if rows:
+                conn.execute(sa.insert(storage.issues), rows)
+            found += len(rows)
+    return found
 
 
 @dataclass

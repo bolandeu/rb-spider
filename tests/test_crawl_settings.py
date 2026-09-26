@@ -13,9 +13,10 @@ from typer.testing import CliRunner
 from rb_spider.cli import app
 from rb_spider.core import crawl as crawl_service
 from rb_spider.core import storage
-from rb_spider.core.crawl import Scope, crawl_site, proxy_urls, requests_per_minute
+from rb_spider.core.crawl import crawl_site, proxy_urls, requests_per_minute
 from rb_spider.core.errors import AuthRequired
 from rb_spider.core.extract import parse_page
+from rb_spider.core.scope import Scope
 from rb_spider.core.settings import USER_AGENT_PRESETS, CrawlSettings, Settings
 
 from . import polygon

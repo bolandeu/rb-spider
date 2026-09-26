@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from typer.testing import CliRunner
 
 from rb_spider.cli import app
+from rb_spider.core import crawl as crawl_module
 from rb_spider.core import issues, storage
 from rb_spider.core.crawl import crawl_site
 from rb_spider.core.extract import parse_page
@@ -58,6 +59,23 @@ def test_crawl_reaches_every_polygon_page(base_url: str, engine) -> None:
     assert internal == {base_url + path for path in polygon.REACHABLE}
     assert external == polygon.EXTERNAL  # checked, not crawled
     assert result.pages == len(polygon.REACHABLE) + len(polygon.EXTERNAL)
+
+
+def test_parser_worker_processes_store_the_same_as_inline(base_url: str, engine, monkeypatch) -> None:
+    """Big crawls parse in worker processes (crawl.parse_workers): pages and links must not change."""
+
+    def crawl(workers: int) -> tuple[dict, list]:
+        result = crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(parse_workers=workers)))
+        pages = {url: {k: v for k, v in row.items() if k != "fetched_at"} | {"crawl_id": 0}
+                 for url, row in _pages(engine, result.crawl_id).items()}  # fmt: skip
+        with engine.connect() as conn:
+            query = sa.select(storage.links).where(storage.links.c.crawl_id == result.crawl_id)
+            links = sorted(tuple(row)[1:] for row in conn.execute(query))
+        return pages, links
+
+    inline = crawl(0)
+    monkeypatch.setattr(crawl_module, "PARSE_POOL_AFTER", 0)  # every page goes to the pool
+    assert crawl(2) == inline
 
 
 def test_crawl_records_status_redirects_titles_and_depth(base_url: str, engine) -> None:

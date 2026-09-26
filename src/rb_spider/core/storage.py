@@ -8,11 +8,13 @@ when the database is opened. `metadata` below mirrors the latest migration.
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,6 +27,7 @@ from sqlalchemy import event
 
 from .errors import InvalidArguments
 from .extract import Page
+from .scope import LINK_FIELDS
 from .version import CLI_NAME
 
 metadata = sa.MetaData()
@@ -236,6 +239,36 @@ def finish_crawl(engine: sa.Engine, crawl_id: int, status: str) -> int:
 
 
 _PAGE_COLUMNS = [column.name for column in pages.columns]
+_LINK_COLUMNS = ["crawl_id", *LINK_FIELDS]
+
+
+def _insert_json(table: sa.Table, columns: list[str], verb: str = "INSERT") -> str:
+    """Insert rows passed as one JSON array of arrays (`json_each`): SQLite runs the whole batch in one
+    step, without Python's GIL — `executemany` takes the GIL back after every row, and with the crawl's
+    event loop busy on the same GIL that made writing three times slower."""
+    values = ", ".join(f"json_extract(value, '$[{i}]')" for i in range(len(columns)))
+    return f"{verb} INTO {table.name} ({', '.join(columns)}) SELECT {values} FROM json_each(?)"  # noqa: S608 — fixed names
+
+
+_JSON_CHUNK = 5000  # rows per statement: a bounded JSON argument keeps SQLite's memory flat
+_INSERT_PAGES = _insert_json(pages, _PAGE_COLUMNS, "INSERT OR REPLACE")  # a URL reached twice keeps its latest response
+_INSERT_LINKS = _insert_json(links, _LINK_COLUMNS)
+_INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
+_MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
+
+
+def _timestamp() -> str:
+    """`_now()` as SQLAlchemy stores a DateTime in SQLite — the writer bypasses SQLAlchemy's types."""
+    return _now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+@dataclass
+class _Batch:
+    pages: list[tuple] = field(default_factory=list)
+    links: list[tuple] = field(default_factory=list)
+    queued: list[tuple] = field(default_factory=list)
+    done: list[str] = field(default_factory=list)
+    html: list[dict] = field(default_factory=list)
 
 
 class PageWriter:
@@ -245,6 +278,11 @@ class PageWriter:
     stays flat however big the site is, and `spider status` sees progress while the crawl runs. One
     transaction for everything is what makes resume lossless (see `frontier`). With `store_html`,
     response bodies go zstd-compressed to the separate HTML database.
+
+    Batches are written by a thread of their own (SQLite works without holding the GIL, so the crawl
+    goes on meanwhile), one at a time: a new batch waits for the previous one, so a slow disk slows the
+    crawl down instead of piling batches up in memory. Rows are plain tuples, sent to SQLite as JSON
+    (`_insert_json`) — at ~80 links a page, SQLAlchemy's per-row work cost more than SQLite's.
     """
 
     def __init__(
@@ -257,13 +295,11 @@ class PageWriter:
         flush_every_s: float = 2.0,
     ) -> None:
         self.engine, self.crawl_id, self.batch_size, self.flush_every_s = engine, crawl_id, batch_size, flush_every_s
-        self._rows: list[dict] = []
-        self._links: list[dict] = []
-        self._queued: list[dict] = []
-        self._done: list[str] = []
-        self._html: list[dict] = []
+        self._batch = _Batch()
+        self._thread = ThreadPoolExecutor(1, thread_name_prefix="spider-writer")
+        self._writing: Future | None = None
         self._last_flush = time.monotonic()
-        self.written = 0
+        self.count = 0  # pages handed to the writer so far, written or not
         self.html_engine: sa.Engine | None = None
         if store_html:
             path = html_db_path()
@@ -272,71 +308,82 @@ class PageWriter:
             html_metadata.create_all(self.html_engine)
             self._compressor = zstandard.ZstdCompressor(level=3)
 
-    @property
-    def count(self) -> int:
-        """Pages handed to the writer so far, flushed or not."""
-        return self.written + len(self._rows)
-
     def queued(self, url: str, depth: int, check_only: bool) -> None:
         """A URL went into the crawl queue."""
-        self._queued.append({"crawl_id": self.crawl_id, "url": url, "depth": depth, "check_only": check_only})
+        self._batch.queued.append((self.crawl_id, url, depth, check_only))
 
     def add(self, page: Page, depth: int, body: bytes | None = None) -> None:
         """A URL's result: stored with its queue entry marked done, in the same batch."""
         if self.html_engine is not None and body:
-            self._html.append({"crawl_id": self.crawl_id, "url": page.url, "body": self._compressor.compress(body)})
+            self._batch.html.append(
+                {"crawl_id": self.crawl_id, "url": page.url, "body": self._compressor.compress(body)}
+            )
         # Every row carries every column: a batch insert needs one shape, and a redirect or an
         # error page has no on-page fields at all.
-        self._rows.append(
-            dict.fromkeys(_PAGE_COLUMNS)
-            | {
-                "crawl_id": self.crawl_id,
-                "url": page.url,
-                "status_code": page.status_code,
-                "redirect_url": page.redirect_url,
-                "content_type": page.content_type,
-                "title": page.title,
-                "bytes": page.bytes,
-                "depth": depth,
-                "fetched_at": _now(),
-                "error": page.error,
-                "blocked": page.blocked,
-                "refresh_url": page.refresh_url,
-                "refresh_kind": page.refresh_kind,
-            }
-            | page.onpage
-        )
-        self._done.append(page.url)
-        if len(self._rows) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
-            self.flush()
+        row = page.onpage | {
+            "crawl_id": self.crawl_id,
+            "url": page.url,
+            "status_code": page.status_code,
+            "redirect_url": page.redirect_url,
+            "content_type": page.content_type,
+            "title": page.title,
+            "bytes": page.bytes,
+            "depth": depth,
+            "fetched_at": _timestamp(),
+            "error": page.error,
+            "blocked": page.blocked,
+            "refresh_url": page.refresh_url,
+            "refresh_kind": page.refresh_kind,
+        }
+        self._batch.pages.append(tuple(row.get(column) for column in _PAGE_COLUMNS))
+        self._batch.done.append(page.url)
+        self.count += 1
+        if len(self._batch.pages) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
+            self.flush(wait=False)
 
-    def add_links(self, rows: list[dict]) -> None:
-        """Link rows for this crawl: {source, target, kind, internal, anchor, alt, rel, nofollow}."""
-        self._links.extend({"crawl_id": self.crawl_id, "anchor": None, "alt": None, "rel": None,
-                            "nofollow": False, "alt_attr": None, "sized": None} | row for row in rows)  # fmt: skip
+    def add_links(self, rows: list[tuple]) -> None:
+        """`links` rows for this crawl, in `scope.LINK_FIELDS` order."""
+        crawl_id = (self.crawl_id,)
+        self._batch.links.extend(crawl_id + row for row in rows)
 
-    def flush(self) -> None:
+    def flush(self, *, wait: bool = True) -> None:
+        """Hand the buffered rows to the writer thread; `wait` — return once everything is on disk."""
         self._last_flush = time.monotonic()
-        if self._html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned
+        batch, self._batch = self._batch, _Batch()
+        self._wait()
+        if batch.pages or batch.links or batch.queued or batch.html:
+            self._writing = self._thread.submit(self._write, batch)
+        if wait:
+            self._wait()
+
+    def close(self) -> None:
+        """Write what's left and stop the writer thread."""
+        try:
+            self.flush()
+        finally:
+            self._thread.shutdown()
+            if self.html_engine is not None:
+                self.html_engine.dispose()
+
+    def _wait(self) -> None:
+        if self._writing is not None:
+            writing, self._writing = self._writing, None
+            writing.result()  # a failed write surfaces here, in the crawl
+
+    def _write(self, batch: _Batch) -> None:
+        if batch.html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned
             with self.html_engine.begin() as conn:
-                conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), self._html)
-            self._html = []
-        if not (self._rows or self._links or self._queued):
-            return
+                conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), batch.html)
         with self.engine.begin() as conn:
-            if self._queued:
-                conn.execute(sa.insert(frontier).prefix_with("OR IGNORE"), self._queued)
-            if self._rows:
-                # A URL reached twice keeps its latest response. SQLite syntax; remote DBs (v2) need an upsert.
-                conn.execute(sa.insert(pages).prefix_with("OR REPLACE"), self._rows)
-                done = sa.update(frontier).where(
-                    frontier.c.crawl_id == self.crawl_id, frontier.c.url == sa.bindparam("u")
-                )
-                conn.execute(done.values(done=True), [{"u": url} for url in self._done])
-            if self._links:
-                conn.execute(sa.insert(links), self._links)
-        self.written += len(self._rows)
-        self._rows, self._links, self._queued, self._done = [], [], [], []
+            for sql, rows in (
+                (_INSERT_QUEUED, batch.queued),
+                (_INSERT_PAGES, batch.pages),
+                (_INSERT_LINKS, batch.links),
+            ):
+                for chunk in range(0, len(rows), _JSON_CHUNK):  # SQLite parses a JSON argument whole
+                    conn.exec_driver_sql(sql, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
+            if batch.done:
+                conn.exec_driver_sql(_MARK_DONE, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
 
 
 def crawl_pid(engine: sa.Engine, crawl_id: int) -> int | None:

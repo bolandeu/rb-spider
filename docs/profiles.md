@@ -53,6 +53,7 @@ concurrency = 10
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
 | `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
+| `crawl.parse_workers` | `int \| None` | — | Сколько отдельных процессов разбирают HTML на больших обходах; 0 — всё в основном процессе; не задано — по числу ядер, не больше 4. |
 | `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
 | `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |
 | `crawl.robots` | `Literal['respect', 'ignore', 'report']` | `"respect"` | robots.txt: respect — запрещённое не скачивать (но показать в отчёте), с учётом Crawl-delay; ignore — не читать; report — скачивать всё, но отмечать запрещённое. |

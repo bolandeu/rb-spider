@@ -1,11 +1,11 @@
 """Crawl a site with Crawlee and store every response in the crawl database.
 
-Crawlee only fetches (queue, concurrency, HTTP); `extract.parse_page` reads the response and
+Crawlee only fetches (queue, concurrency, HTTP); `scope.PageReader` reads the response and
 `storage.PageWriter` persists it in batches. Choices below come from the performance prototype
 (issue #3, docs/spec.md section 2):
 - redirects are not followed by the HTTP client — every hop is a page of its own for SEO;
-- the queue is in memory, and URLs already seen are dropped before reaching it (the durable,
-  resumable queue is issue #14);
+- the queue is in memory (`queue.MemoryQueue`), URLs already seen are dropped before reaching it,
+  and the `frontier` table mirrors it for resuming;
 - 3xx/4xx/5xx are data, not errors, so Crawlee must not retry or fail on them.
 
 robots.txt is checked here, not by Crawlee: Crawlee always reads it as `*`, while a crawl as
@@ -17,15 +17,17 @@ throttling queue isn't needed.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
-import re
 import subprocess
 import sys
 import time
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import timedelta
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -38,15 +40,19 @@ from crawlee.events import LocalEventManager
 from crawlee.http_clients import HttpClient, ImpitHttpClient
 from crawlee.proxy_configuration import ProxyConfiguration
 from crawlee.storage_clients import MemoryStorageClient
-from crawlee.storages import RequestQueue
 
 from ..credentials import manager as credentials
 from . import issues, storage
 from .errors import AuthRequired, InvalidArguments
-from .extract import Page, normalize_url, parse_page
+from .extract import Page, normalize_url
+from .queue import MemoryQueue
+from .scope import PageReader, Reading, Scope, init_worker, read_in_worker
 from .settings import CrawlSettings, Settings
 
 PROGRESS_EVERY_S = 5.0
+# Parsing is half the CPU of a crawl; past this many pages it moves to worker processes. Small crawls
+# (and tests) stay in one process: spawning workers costs more than it saves there.
+PARSE_POOL_AFTER = 200
 PROXY_CREDENTIAL = "proxy"
 
 # Crawlee warns that passing our own Configuration sets it globally as a side effect — intended
@@ -84,51 +90,6 @@ def project_for(url: str) -> str:
     return urlsplit(url).netloc
 
 
-class Scope:
-    """Which URLs belong to the crawl: the site (host or subdomains), the start folder, include/exclude, length."""
-
-    def __init__(self, start_url: str, settings: CrawlSettings) -> None:
-        start = urlsplit(start_url)
-        self.host = start.netloc
-        self.domain = start.hostname.removeprefix("www.") if start.hostname else self.host
-        self.all_subdomains = settings.all_subdomains
-        self.folder = start.path[: start.path.rfind("/") + 1] if settings.stay_in_start_folder else ""
-        self.include = [re.compile(p) for p in settings.include]
-        self.exclude = [re.compile(p) for p in settings.exclude]
-        self.max_url_length = settings.max_url_length
-        self.check_outside_folder = settings.check_outside_start_folder
-        self.check_external = True  # narrowed by collect.external_links.follow at the link level
-
-    def internal(self, url: str) -> bool:
-        """Part of the site (the start host, or any subdomain with `all_subdomains`)."""
-        parts = urlsplit(url)
-        if self.all_subdomains:
-            hostname = parts.hostname or ""
-            return hostname == self.domain or hostname.endswith(f".{self.domain}")
-        return parts.netloc == self.host
-
-    def role(self, url: str) -> str | None:
-        """ "crawl" — fetch and read it; "check" — fetch for the status code only; None — leave it alone.
-
-        include/exclude and the length cap apply to every URL (as in Screaming Frog); other sites and,
-        with `check_outside_start_folder`, the site outside the start folder are only checked.
-        """
-        if len(url) > self.max_url_length:
-            return None
-        if self.include and not any(p.search(url) for p in self.include):
-            return None
-        if any(p.search(url) for p in self.exclude):
-            return None
-        if not self.internal(url):
-            return "check" if self.check_external else None
-        if self.folder and not urlsplit(url).path.startswith(self.folder):
-            return "check" if self.check_outside_folder else None
-        return "crawl"
-
-    def crawlable(self, url: str) -> bool:
-        return self.role(url) == "crawl"
-
-
 class RobotsGate:
     """robots.txt verdicts for the crawl's user agent, one robots.txt per host, fetched once."""
 
@@ -154,6 +115,45 @@ class RobotsGate:
     async def crawl_delay(self, url: str) -> int | None:
         robots = await self._file(url)
         return robots.get_crawl_delay(self.user_agent) if robots else None
+
+
+class Parser:
+    """Reads fetched pages (`scope.PageReader`), in worker processes once the crawl is big enough.
+
+    The event loop, HTTP and database writes share one core; parsing HTML and sorting its links is
+    most of a crawl's CPU, and offloading it is what lets a crawl go past ~600 URL/s. Workers
+    (`crawl.parse_workers`) start lazily, on the first page past `PARSE_POOL_AFTER`.
+    """
+
+    def __init__(self, reader: PageReader, workers: int | None) -> None:
+        self.reader = reader
+        self.workers = min(4, max(0, (os.cpu_count() or 1) - 1)) if workers is None else workers
+        self.pool: ProcessPoolExecutor | None = None
+        self.parsed = 0
+
+    async def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
+        self.parsed += 1
+        if check or not body or not self.workers or self.parsed <= PARSE_POOL_AFTER:
+            return self.reader.read(url, status_code, headers, body, check=check)
+        if self.pool is None:
+            self._hide_main()
+            self.pool = ProcessPoolExecutor(self.workers, initializer=init_worker, initargs=(self.reader,))
+        call = functools.partial(read_in_worker, url, status_code, headers, body)
+        return await asyncio.get_running_loop().run_in_executor(self.pool, call)
+
+    def _hide_main(self) -> None:
+        """Keep workers light: a spawned worker re-runs the main module, and the `spider` entry script
+        imports the whole CLI (~40 MB more per worker). multiprocessing skips a main module whose spec
+        is named `*.__main__` — so for the pool's lifetime the entry script gets one."""
+        self._main = sys.modules["__main__"]
+        self._main_spec = getattr(self._main, "__spec__", None)
+        if self._main_spec is None:
+            self._main.__spec__ = ModuleSpec("rb_spider.__main__", None)
+
+    def close(self) -> None:
+        if self.pool is not None:
+            self.pool.shutdown(cancel_futures=True)
+            self._main.__spec__ = self._main_spec
 
 
 def proxy_urls(settings: CrawlSettings) -> list[str]:
@@ -194,11 +194,11 @@ async def _run(
 
     config = Configuration(log_level="WARNING")
     storage_client = MemoryStorageClient()
-    # A queue of its own per crawl: Crawlee caches the default queue per process, so a second
-    # crawl in the same process (library use, tests) would see every URL as already handled.
-    queue = await RequestQueue.open(
-        alias=f"crawl-{writer.crawl_id}", storage_client=storage_client, configuration=config
-    )
+
+    def request(url: str, check: bool) -> Request:
+        return Request.from_url(url, headers=headers or None, user_data={"check": check})
+
+    queue = MemoryQueue(request)
     concurrency = settings.concurrency
     crawler = HttpCrawler(
         http_client=http_client,
@@ -223,6 +223,7 @@ async def _run(
     )
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
+    parser = Parser(PageReader(scope, settings, collect), settings.parse_workers)
     last_progress = time.monotonic()
 
     def progress() -> None:
@@ -231,8 +232,8 @@ async def _run(
             last_progress = time.monotonic()
             on_progress(writer.count)
 
-    async def admit(urls: list[str], depth: int, *, start: bool = False, resources: bool = False) -> list[Request]:
-        """URLs that pass scope, limits and robots.txt, as requests; disallowed ones go to the report.
+    async def admit(urls: list[str], depth: int, *, start: bool = False, resources: bool = False) -> None:
+        """Enqueue the URLs that pass scope, limits and robots.txt; disallowed ones go to the report.
 
         The start URL is always crawled — it's what the user asked for. URLs to check (other sites,
         outside the start folder, and every resource: images, CSS, JS…) carry `user_data["check"]`:
@@ -240,7 +241,7 @@ async def _run(
         Screaming Frog calls a Blocked Resource.
         """
         if settings.max_depth is not None and depth > settings.max_depth:
-            return []
+            return
 
         def role(url: str) -> str | None:
             if start:
@@ -252,7 +253,6 @@ async def _run(
         new = [u for u, role in roles.items() if role]
         if settings.max_urls is not None:  # exact bound: Crawlee's own limit is overshot by requests in flight
             new = new[: max(0, settings.max_urls - len(depth_of))]
-        admitted = []
         for url in new:
             depth_of[url] = depth
             check = roles[url] == "check"
@@ -260,94 +260,22 @@ async def _run(
             if settings.robots == "respect" and not await robots.allowed(url):
                 writer.add(Page.blocked_by_robots(url), depth=depth)  # never fetched, but part of the report
                 continue
-            admitted.append(request(url, check))
-        return admitted
-
-    def request(url: str, check: bool) -> Request:
-        return Request.from_url(url, headers=headers or None, user_data={"check": check})
-
-    def resources_to_check(page: Page) -> tuple[list[str], list[dict]]:
-        """Resources to check (status, size) and their link rows — collect.images / css / js / media / iframes."""
-        check: list[str] = []
-        rows: list[dict] = []
-        options = {"image": collect.images, "css": collect.css, "js": collect.js, "media": collect.media,
-                   "iframe": collect.iframes}  # fmt: skip
-        for resource in page.resources:
-            option = options[resource.kind]
-            if option.store:
-                rows.append({"source": page.url, "target": resource.url, "kind": resource.kind,
-                             "internal": scope.internal(resource.url), "alt": resource.alt,
-                             "alt_attr": resource.alt_attr, "sized": resource.sized})  # fmt: skip
-            if option.follow:
-                check.append(resource.url)
-        return check, rows
-
-    def links_to_follow(page: Page) -> tuple[list[str], list[dict]]:
-        """What to enqueue from a crawled page, and the link rows to keep (collect.* decides both)."""
-        follow: list[str] = []
-        rows: list[dict] = []
-        counts = {"internal_outlinks": 0, "external_outlinks": 0, "internal_nofollow_outlinks": 0}
-        for link in page.links:
-            internal = scope.internal(link.url)
-            kind = collect.internal_links if internal else collect.external_links
-            if not link.nofollow:
-                counts["internal_outlinks" if internal else "external_outlinks"] += 1
-            elif internal:
-                counts["internal_nofollow_outlinks"] += 1
-            if kind.store:
-                rows.append({"source": page.url, "target": link.url, "kind": "hyperlink", "internal": internal,
-                             "anchor": link.anchor, "alt": link.alt, "rel": link.rel, "nofollow": link.nofollow})  # fmt: skip
-            nofollow_ok = settings.follow_internal_nofollow if internal else settings.follow_external_nofollow
-            if kind.follow and (not link.nofollow or nofollow_ok):
-                follow.append(link.url)
-        page.onpage |= counts
-        if settings.max_links_per_page is not None:
-            follow = follow[: settings.max_links_per_page]
-
-        extra = [  # (target, kind, collect option): redirects are always followed and kept with the site's links
-            (page.redirect_url, "redirect", collect.internal_links),
-            (page.refresh_url, "refresh", collect.meta_refresh),
-            (page.onpage.get("canonical_url"), "canonical", collect.canonicals),
-        ]
-        for target, kind, option in extra:
-            if not target or target == page.url:
-                continue
-            if option.store or kind == "redirect":
-                rows.append({"source": page.url, "target": target, "kind": kind, "internal": scope.internal(target)})
-            if option.follow or kind == "redirect":
-                follow.append(target)
-        return follow, rows
+            queue.push(url, check)
 
     @crawler.router.default_handler
     async def handle(ctx: HttpCrawlingContext) -> None:
         response = ctx.http_response
         body = await response.read()
         check = bool(ctx.request.user_data.get("check"))
-        page = parse_page(
-            ctx.request.url,
-            response.status_code,
-            dict(response.headers),
-            b"" if check else body,  # a checked URL is not read: status, headers, redirect target only
-            content_exclude=settings.content_exclude,
-            srcset=collect.images_srcset,
-        )
-        page.bytes = len(body)
-        page.onpage |= {"external": not scope.internal(page.url), "parsed": not check}
+        reading = await parser.read(ctx.request.url, response.status_code, dict(response.headers), body, check=check)
+        page = reading.page
         if settings.robots == "report" and not await robots.allowed(page.url):
             page.blocked = "robots_txt"  # fetched anyway, flagged as disallowed
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
-        if check:
-            writer.add(page, depth=depth)
-            progress()
-            return
-
-        follow, rows = links_to_follow(page)
-        check, resource_rows = resources_to_check(page)
-        writer.add(page, depth=depth, body=body)
-        writer.add_links(rows + resource_rows)
-        requests = await admit(follow, depth + 1) + await admit(check, depth + 1, resources=True)
-        if requests:
-            await ctx.add_requests(requests)
+        writer.add(page, depth=depth, body=None if check else body)
+        writer.add_links(reading.links)
+        await admit(reading.follow, depth + 1)
+        await admit(reading.check, depth + 1, resources=True)
         progress()
 
     @crawler.failed_request_handler
@@ -361,13 +289,15 @@ async def _run(
 
     try:
         if resume and resume.seen:  # continue: the queue is whatever wasn't done
-            start_requests = [request(url, check) for url, _, check in resume.pending]
+            for url, _, check in resume.pending:
+                queue.push(url, check)
         else:
-            start_requests = await admit([start_url], 0, start=True)
+            await admit([start_url], 0, start=True)
         writer.flush()  # the start URL (and a robots verdict on it) is on disk before any fetching
-        if start_requests:
-            await crawler.run(start_requests)
+        if not await queue.is_empty():
+            await crawler.run()
     finally:
+        parser.close()
         await queue.drop()
 
 
@@ -403,9 +333,7 @@ def run_crawl(
         status = "interrupted"
         raise
     finally:
-        writer.flush()
-        if writer.html_engine is not None:
-            writer.html_engine.dispose()
+        writer.close()
         pages = storage.finish_crawl(engine, crawl_id, status)
         issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
     return CrawlResult(crawl_id, row.project, row.start_url, status, pages, round(time.monotonic() - started, 1))

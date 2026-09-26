@@ -98,6 +98,16 @@ class CrawlSettings(BaseModel):
         None, gt=0, description="Не больше стольких запросов в секунду; не задано — без ограничения.", examples=[5]
     )
     timeout_s: float = Field(20, gt=0, description="Сколько секунд ждать ответа, прежде чем считать URL неответившим.")
+    parse_workers: int | None = Field(
+        None,
+        ge=0,
+        le=64,
+        description=(
+            "Сколько отдельных процессов разбирают HTML на больших обходах; 0 — всё в основном процессе; "
+            "не задано — по числу ядер, не больше 4."
+        ),
+        examples=[2],
+    )
     # --- as whom
     user_agent: str | None = Field(
         None,
