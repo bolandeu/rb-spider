@@ -286,6 +286,44 @@ HREFLANG_HEADER = (
     '<{base}/hl/header>; rel="alternate"; hreflang="en", <{base}/hl/header>; rel="alternate"; hreflang="x-default"'
 )
 
+
+def _pg(
+    slug: str,
+    *anchors: str,
+    rel: tuple[tuple[str, str], ...] = (),
+    head_extra: str = "",
+    title: str | None = None,
+    body: str | None = None,
+) -> str:
+    """A page of a rel next/prev series: `rel` — (next|prev, path) <link> elements, `anchors` — its <a> links."""
+    links = "".join(f'<link rel="{r}" href="{{base}}{path}">' for r, path in rel)
+    return _html(slug, *anchors, head=_head(slug, title=title, extra=links + head_extra), body=body)
+
+
+# Pagination (#28): /pg/1–3 is a clean series; the rest are one check's trap each.
+_SAME = "Одинаковый заголовок страниц списка pg-dup"
+PAGINATION_TRAPS: dict[str, str] = {
+    "/pg/1": _pg("pg-1", "/pg/2", rel=(("next", "/pg/2"),)),
+    "/pg/2": _pg("pg-2", "/pg/1", "/pg/3", rel=(("prev", "/pg/1"), ("next", "/pg/3"))),
+    "/pg/3": _pg("pg-3", "/pg/2", rel=(("prev", "/pg/2"),)),
+    "/pg-na/1": _pg("pg-na-1", "/", rel=(("next", "/pg-na/2"),)),  # no <a href="/pg-na/2"> here
+    "/pg-na/2": _pg("pg-na-2", "/pg-na/1", rel=(("prev", "/pg-na/1"),)),
+    "/pg-bad": _pg("pg-bad", "/missing", rel=(("next", "/missing"),)),
+    "/pg-un/1": _pg("pg-un-1", "/", rel=(("next", "/pg-un/2"),)),  # /pg-un/2 is linked from nowhere
+    "/pg-un/2": _pg("pg-un-2", "/pg-un/1", rel=(("prev", "/pg-un/1"),)),
+    "/pg-multi": _pg("pg-multi", "/a", "/b", rel=(("next", "/a"), ("next", "/b"))),
+    "/pg-loop/1": _pg("pg-loop-1", "/pg-loop/2", rel=(("next", "/pg-loop/2"), ("prev", "/pg-loop/2"))),
+    "/pg-loop/2": _pg("pg-loop-2", "/pg-loop/1", rel=(("next", "/pg-loop/1"), ("prev", "/pg-loop/1"))),
+    "/pg-seq/1": _pg("pg-seq-1", "/pg-seq/2", rel=(("next", "/pg-seq/2"),)),
+    "/pg-seq/2": _pg("pg-seq-2", "/pg/1", rel=(("prev", "/pg/1"),)),  # prev should be /pg-seq/1
+    "/pg-ni/1": _pg("pg-ni-1", "/pg-ni/2", rel=(("next", "/pg-ni/2"),)),
+    "/pg-ni/2": _pg("pg-ni-2", "/pg-ni/1", rel=(("prev", "/pg-ni/1"),), head_extra=_robots("noindex")),
+    # page 2 repeats page 1's title and headings: not a duplicate while ignore_paginated_duplicates is on
+    "/pg-dup/1": _pg("pg-dup", "/pg-dup/2", rel=(("next", "/pg-dup/2"),), title=_SAME),
+    "/pg-dup/2": _pg("pg-dup", "/pg-dup/1", rel=(("prev", "/pg-dup/1"),), title=_SAME),
+}  # fmt: skip
+PAGINATION_LINKED = [p for p in PAGINATION_TRAPS if p != "/pg-un/2"]
+
 NO_CANONICAL = {"/c-missing"}
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -321,6 +359,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             *URL_TRAPS,
             *HREFLANG_LINKED,
             "/hl/header",
+            *PAGINATION_LINKED,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -361,6 +400,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path.partition("?")[0]: (200, {}, html) for path, html in URL_TRAPS.items()},
     **{path: (200, {}, html) for path, html in HREFLANG_TRAPS.items()},
     "/hl/header": (200, {"Link": HREFLANG_HEADER}, _html("hl-header")),
+    **{path: (200, {}, html) for path, html in PAGINATION_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -397,6 +437,7 @@ REACHABLE = {
     *URL_TRAPS,
     *HREFLANG_TRAPS,
     "/hl/header",
+    *PAGINATION_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -471,7 +512,7 @@ EXPECTED_ISSUES = {
     # Directives
     "directives_outside_head": {"/r-outside"},
     "directives_noimageindex": {"/r-noimageindex"},
-    "directives_noindex": {"/r-noindex", "/r-noindex-header", "/l-noindex-hub"},
+    "directives_noindex": {"/r-noindex", "/r-noindex-header", "/l-noindex-hub", "/pg-ni/2"},
     "directives_nofollow": {"/r-nofollow"},
     "directives_none": {"/r-none"},
     "directives_unavailable_after": {"/r-unavailable"},
@@ -534,6 +575,14 @@ EXPECTED_ISSUES = {
     "hreflang_unlinked": {"/hl/unl-fr"},
     "hreflang_missing_self_reference": {"/hl/noself"},
     "hreflang_missing_x_default": {"/hl/noself", "/hl/nox"},
+    # Pagination
+    "pagination_not_in_anchor": {"/pg-na/1", "/pg-un/1"},
+    "pagination_non_200": {"/pg-bad"},
+    "pagination_unlinked": {"/pg-un/2"},
+    "pagination_multiple": {"/pg-multi"},
+    "pagination_loop": {"/pg-loop/1", "/pg-loop/2"},
+    "pagination_sequence_error": {"/pg-multi", "/pg-seq/1", "/pg-seq/2"},
+    "pagination_non_indexable": {"/pg-ni/2"},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent

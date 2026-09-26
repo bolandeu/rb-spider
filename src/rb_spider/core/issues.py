@@ -19,6 +19,7 @@ import sqlalchemy as sa
 from pydantic import ValidationError
 
 from . import hreflang as hreflang_module
+from . import pagination as pagination_module
 from . import settings as settings_module
 from . import storage
 from .errors import InvalidArguments
@@ -129,13 +130,19 @@ def _sql(where: str, detail: str = "NULL", *, external: bool = False) -> RuleFin
     )
 
 
-def _duplicate(column: str, among: str = INDEXABLE_HTML) -> RuleFinder:
-    """Pages whose `column` value is shared with another page (one pass: a window count per value)."""
+def _duplicate(column: str, among: str = INDEXABLE_HTML, *, skip_paginated: bool = True) -> RuleFinder:
+    """Pages whose `column` value is shared with another page (one pass: a window count per value).
+
+    `skip_paginated` — pages 2+ of a rel next/prev series are left out when thresholds.ignore_paginated_duplicates
+    says so: a list's pages share their title and headings by design.
+    """
+    paginated = " AND NOT (:ignore_paginated_duplicates AND coalesce(pagination, '') = 'paginated')"
     return _run_sql(
         sa.text(
             f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column and filter
             f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM pages"
             f"  WHERE crawl_id = :crawl_id AND {among} AND trim(coalesce({column}, '')) <> ''"
+            f"{paginated if skip_paginated else ''}"
             ") WHERE n > 1 ORDER BY value, url"
         )
     )
@@ -422,7 +429,7 @@ def _content_rules() -> list[Rule]:
     return [
         r("content_exact_duplicates", "Exact Duplicates", "issue", "high",
           "Страница побайтно совпадает с другой (одинаковый md5 HTML): дубль под разными URL.",
-          _duplicate("content_md5", among=HTML_OK)),
+          _duplicate("content_md5", among=HTML_OK, skip_paginated=False)),
         r("content_lorem_ipsum", "Lorem Ipsum Placeholder", "warning", "high",
           "На странице остался текст-заглушка «Lorem ipsum».", _sql(f"{HTML_OK} AND lorem_ipsum")),
         r("content_low_content", "Low Content Pages", "opportunity", "medium",
@@ -692,12 +699,12 @@ def _hreflang_codes(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSe
     ).scalars()
     invalid = sorted(code for code in codes if not hreflang_module.valid_code(code))
     if not invalid:
-        return
+        return []
     query = sa.text(
         "SELECT s.url, group_concat(DISTINCT l.hreflang) FROM link_rows l JOIN urls s ON s.id = l.source_id"
         " WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND l.hreflang IN :codes GROUP BY s.url ORDER BY s.url"
     ).bindparams(sa.bindparam("codes", expanding=True))
-    yield from conn.execute(query, {"crawl_id": crawl_id, "codes": invalid}).tuples()
+    return [(url, used) for url, used in conn.execute(query, {"crawl_id": crawl_id, "codes": invalid})]
 
 
 _ANNOTATING = "SELECT DISTINCT source_id FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"
@@ -778,6 +785,63 @@ def _hreflang_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+# --- Pagination: rel next / prev link rows (kinds "next" / "prev") and pages.pagination.
+STORE_PAGINATION = "collect.pagination.store"
+FOLLOW_PAGINATION = "collect.pagination.follow"
+
+
+def _pagination_by(filter_name: str, detail: str, report_target: bool = False) -> RuleFinder:
+    """rel next / prev links passing one of the report's filters, one finding per page."""
+    page = "t.url" if report_target else "s.url"
+    return _links_sql(
+        f"SELECT {page}, group_concat({detail}, '; ') FROM link_rows l"  # noqa: S608 — fixed rule text
+        " JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
+        " LEFT JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        f" WHERE l.crawl_id = :crawl_id AND l.kind IN ('next', 'prev') AND ({pagination_module.FILTERS[filter_name]})"
+        f" GROUP BY {page} ORDER BY {page}"
+    )
+
+
+def _pagination_loops(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> Iterable[Finding]:
+    found: dict[str, str] = {}
+    for url, detail in pagination_module.looping(conn, crawl_id):
+        found.setdefault(url, detail)  # a page on both a next and a prev loop: reported once
+    return sorted(found.items())
+
+
+def _pagination_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, find, requires=(STORE_PAGINATION,)) -> Rule:
+        return Rule(code, "Pagination", f"Pagination: {name}", kind, priority, description, find, requires)
+
+    return [
+        r("pagination_not_in_anchor", "Pagination URL Not In Anchor Tag", "issue", "high",
+          "URL из rel=next / prev не стоит обычной ссылкой <a> на самой странице: поисковик может не пойти по нему.",
+          _pagination_by("not_in_anchor", "l.kind || ' ' || t.url"), (STORE_PAGINATION, STORE_INTERNAL)),
+        r("pagination_non_200", "Non-200 Pagination URLs", "issue", "high",
+          "URL из rel=next / prev отвечает не 200: редирект, ошибка, запрет robots.txt.",
+          _pagination_by("non_200", "l.kind || ' ' || t.url || ' — ' || coalesce(p.blocked, CAST(p.status_code AS TEXT))"),
+          (STORE_PAGINATION, FOLLOW_PAGINATION)),
+        r("pagination_unlinked", "Unlinked Pagination URLs", "issue", "medium",
+          "На URL из rel=next / prev нет обычных ссылок по сайту: страница находится только через пагинацию.",
+          _pagination_by("unlinked", "s.url", report_target=True), (STORE_PAGINATION, STORE_INTERNAL)),
+        r("pagination_multiple", "Multiple Pagination URLs", "issue", "low",
+          "Несколько разных rel=next или rel=prev на странице: поисковик не поймёт, какая следующая.",
+          _links_sql("SELECT s.url, group_concat(g.kind || ' ×' || g.n, ', ') FROM (SELECT source_id, kind,"
+                     " count(DISTINCT target_id) AS n FROM link_rows l WHERE crawl_id = :crawl_id"
+                     " AND l.kind IN ('next', 'prev') GROUP BY source_id, kind HAVING n > 1) g"
+                     " JOIN urls s ON s.id = g.source_id GROUP BY s.url ORDER BY s.url")),
+        r("pagination_loop", "Pagination Loop", "issue", "low",
+          "Цепочка rel=next (или rel=prev) возвращается на уже пройденную страницу.", _pagination_loops),
+        r("pagination_sequence_error", "Sequence Error", "issue", "low",
+          "Пары next / prev не сходятся: страница A ведёт next на B, а B не ведёт prev на A (или наоборот).",
+          _pagination_by("sequence_error", "l.kind || ' ' || t.url"), (STORE_PAGINATION, FOLLOW_PAGINATION)),
+        r("pagination_non_indexable", "Non-Indexable", "warning", "high",
+          "Страница серии пагинации неиндексируемая (часто canonical страниц 2+ на первую): товары с этих "
+          "страниц поисковик может не найти.", _sql("pagination IS NOT NULL AND NOT indexable", "indexability_status"),
+          ()),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -836,6 +900,7 @@ RULES += _link_rules()
 RULES += _image_rules()
 RULES += _url_rules()
 RULES += _hreflang_rules()
+RULES += _pagination_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

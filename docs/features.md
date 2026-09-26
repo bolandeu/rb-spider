@@ -172,13 +172,13 @@
 
 ### Pagination — пагинация (rel next/prev)
 
-- [ ] `v2` **Pagination URL Not In Anchor Tag** — URL из `rel="next"`/`"prev"` не встречается обычной ссылкой `<a>` на странице _(SF: Issue, High)_
-- [ ] `v2` **Non-200 Pagination URLs** — URL из next/prev отвечает не 200 _(SF: Issue, High)_
-- [ ] `v2` **Unlinked Pagination URLs** — на URL из next/prev нет ссылок по сайту _(SF: Issue, Medium)_
-- [ ] `v2` **Multiple Pagination URLs** — несколько `rel="next"` или `rel="prev"` на странице _(SF: Issue, Low)_
-- [ ] `v2` **Pagination Loop** — next/prev зацикливаются на уже пройденный URL _(SF: Issue, Low)_
-- [ ] `v2` **Sequence Error** — ошибка в последовательности next/prev (цепочка не сходится) _(SF: Issue, Low)_
-- [ ] `v2` **Non-Indexable** — страница пагинации неиндексируемая _(SF: Warning, High)_
+- [x] `v2` **Pagination URL Not In Anchor Tag** — URL из `rel="next"`/`"prev"` не встречается обычной ссылкой `<a>` на странице _(SF: Issue, High)_
+- [x] `v2` **Non-200 Pagination URLs** — URL из next/prev отвечает не 200 _(SF: Issue, High)_
+- [x] `v2` **Unlinked Pagination URLs** — на URL из next/prev нет ссылок по сайту _(SF: Issue, Medium)_
+- [x] `v2` **Multiple Pagination URLs** — несколько `rel="next"` или `rel="prev"` на странице _(SF: Issue, Low)_
+- [x] `v2` **Pagination Loop** — next/prev зацикливаются на уже пройденный URL _(SF: Issue, Low)_
+- [x] `v2` **Sequence Error** — ошибка в последовательности next/prev (цепочка не сходится) _(SF: Issue, Low)_
+- [x] `v2` **Non-Indexable** — страница пагинации неиндексируемая _(SF: Warning, High)_
 
 ### Directives — директивы (meta robots, X-Robots-Tag)
 
@@ -464,7 +464,7 @@
 - [ ] `v2` **Security: HTTPS URLs** — список URL по HTTPS
 - [ ] `v2` **Meta Keywords** — сбор meta keywords и фильтры Missing / Duplicate / Multiple
 - [x] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
-- [ ] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev
+- [x] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev (`spider overview`, колонка `pages.pagination`)
 - [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
 - [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
 - [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML и HTTP-заголовка (`spider overview`, `spider hreflang --only missing`); из sitemap — с #32
@@ -541,7 +541,7 @@
 - [x] `MVP` **Canonicals** (использовать для обнаружения URL) → `collect.canonicals.follow` / `.store`
 - [x] `MVP` **Meta Refresh** → `collect.meta_refresh.follow` / `.store`
 - [x] `MVP` **iframes** → `collect.iframes.follow` / `.store`
-- [ ] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
+- [x] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [x] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
 - [ ] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
 - [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
@@ -589,7 +589,7 @@
 - [ ] `v2` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
 - [x] `MVP` **Extract Images From IMG SRCSET Attribute** → `collect.images.srcset`
 - [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
-- [ ] `v2` **Ignore Paginated URLs for Duplicate Filters** → `duplicates.ignore_paginated`
+- [x] `v2` **Ignore Paginated URLs for Duplicate Filters** → `thresholds.ignore_paginated_duplicates` (параметр проверок, меняется через `spider analyze`)
 - [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
 - [ ] `v2` **Respect HSTS Policy** → `http.respect_hsts`
 - [ ] `v2` **Crawl Fragment Identifiers** — считать `#fragment` отдельными URL → `scope.keep_fragments`
@@ -734,7 +734,7 @@
 - [x] `MVP` **Redirects: Redirects to Errors** — редиректы на заблокированные, неотвечающие, 4xx, 5xx
 - [ ] `v2` **Redirects: Redirect & Canonical Chains** — цепочки с учётом canonical
 - [ ] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals**
-- [ ] `v2` **Pagination: Non-200, Unlinked**
+- [x] `v2` **Pagination: Non-200, Unlinked** → `spider pagination --only …`
 - [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
 - [ ] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами
 - [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях

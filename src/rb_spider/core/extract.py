@@ -56,6 +56,7 @@ class Page:
     error: str | None = None  # no response: why (status_code is 0)
     blocked: str | None = None  # not fetched on purpose: "robots_txt" (status_code is 0)
     hreflang: list[tuple[str, str]] = field(default_factory=list)  # (code as written, absolute URL): HTML + Link
+    pagination: list[tuple[str, str]] = field(default_factory=list)  # ("next" | "prev", absolute URL): HTML + Link
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -109,11 +110,17 @@ def _directive_tokens(value: str) -> list[str]:
     return tokens
 
 
+_REL_PARAM = re.compile(r'rel\s*=\s*"?([^";,]*)"?', re.IGNORECASE)
+
+
 def _header_links(headers: dict[str, str], rel: str) -> list[tuple[str, str]]:
-    """`Link: <url>; rel="alternate"; hreflang="en"` entries with this rel: (target, params)."""
-    wanted = re.compile(rf'rel\s*=\s*"?{rel}"?', re.IGNORECASE)
-    return [(target.strip(), params) for target, params in _LINK_HEADER.findall(headers.get("link", ""))
-            if wanted.search(params)]  # fmt: skip
+    """`Link: <url>; rel="alternate"; hreflang="en"` entries whose rel (a space-separated list) has `rel`."""
+    found = []
+    for target, params in _LINK_HEADER.findall(headers.get("link", "")):
+        value = _REL_PARAM.search(params)
+        if value and rel in value.group(1).lower().split():
+            found.append((target.strip(), params))
+    return found
 
 
 def _header_canonicals(headers: dict[str, str]) -> list[str]:
@@ -142,6 +149,27 @@ def _hreflang(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) 
                 found.append((code, absolute))
                 outside += link.mem_id not in head_ids
     return found, outside
+
+
+_PAGINATION_RELS = {"next": "next", "prev": "prev", "previous": "prev"}
+
+
+def _pagination(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) -> list[tuple[str, str]]:
+    """rel="next" / "prev" of <link> elements and the Link header, in page order: ("next" | "prev", URL)."""
+    found: list[tuple[str, str]] = []
+    for rel in ("next", "prev", "previous"):
+        for target, _ in _header_links(headers, rel):
+            if absolute := _absolute(url, target):
+                found.append((_PAGINATION_RELS[rel], absolute))
+    if tree is not None:
+        for link in tree.css("link[rel]"):
+            rels = [
+                _PAGINATION_RELS[r] for r in (link.attributes.get("rel") or "").lower().split() if r in _PAGINATION_RELS
+            ]
+            absolute = _absolute(url, link.attributes.get("href") or "")
+            if rels and absolute:
+                found.append((rels[0], absolute))
+    return found
 
 
 def _directives_and_canonical(url: str, headers: dict[str, str], tree: LexborHTMLParser | None) -> dict:
@@ -365,6 +393,9 @@ def parse_page(
     tree = LexborHTMLParser(body) if is_html else None
     page.onpage = _directives_and_canonical(url, headers, tree)
     page.hreflang, page.onpage["hreflang_outside_head"] = _hreflang(url, headers, tree)
+    page.pagination = _pagination(url, headers, tree)
+    rels = {rel for rel, _ in page.pagination}
+    page.onpage["pagination"] = "paginated" if "prev" in rels else "first" if rels else None
 
     if 300 <= status_code < 400:
         location = headers.get("location")

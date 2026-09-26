@@ -234,6 +234,10 @@ class CollectSettings(BaseModel):
         default_factory=FollowStore,
         description="Hreflang (<link rel=alternate hreflang>, заголовок Link): follow — обходить альтернативные URL.",
     )
+    pagination: FollowStore = Field(
+        default_factory=FollowStore,
+        description="Пагинация <link rel=next / prev> (и заголовок Link): follow — обходить соседние страницы.",
+    )
     images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
     css: FollowStore = Field(default_factory=FollowStore, description="Стили <link rel=stylesheet>.")
     js: FollowStore = Field(default_factory=FollowStore, description="Скрипты <script src>.")
@@ -312,6 +316,13 @@ class ThresholdSettings(BaseModel):
         description="Анкоры, ничего не говорящие о цели (без учёта регистра) — «Links: Non-Descriptive Anchor Text».",
     )  # fmt: skip
     url_max_chars: int = Field(115, ge=1, description="URL длиннее — «URL: Over … Characters».")
+    ignore_paginated_duplicates: bool = Field(
+        True,
+        description=(
+            "Не считать дублями title / description / H1 / H2 страниц пагинации 2+ (с rel=prev): у страниц "
+            "одного списка они обычно одинаковы."
+        ),
+    )
     internal_search: list[str] = Field(
         [r"[?&](q|s|query|search|text|keyword|keywords)=", r"/(search|poisk|find)(/|$|\?)"],
         description=(

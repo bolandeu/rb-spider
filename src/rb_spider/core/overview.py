@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 
-from . import hreflang
+from . import hreflang, pagination
 from .extract import DIRECTIVES
 
 # What a URL is, from its Content-Type — Screaming Frog's Internal / External filters.
@@ -81,5 +81,6 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
             "directives": directives,
             "depth": _counts(conn, crawl_id, "depth", html_ok),
             "hreflang": hreflang.counts(conn, crawl_id),
+            "pagination": pagination.counts(conn, crawl_id),
         }
     return data

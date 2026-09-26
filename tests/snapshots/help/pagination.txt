@@ -1,0 +1,33 @@
+                                                                                                    
+ Usage: spider pagination [OPTIONS] [crawl_id]                                                      
+                                                                                                    
+ Отчёт Pagination: ссылки rel=next / prev каждой страницы и состояние их целей.                     
+                                                                                                    
+ Ссылки берутся из `<link rel="next|prev">` и заголовка Link; их сбор и обход целей —               
+ `collect.pagination.store` / `.follow`. Проблемы (нет ссылки <a>, петли, несходящиеся              
+ пары, неиндексируемые страницы серии) — `spider issues`, группа Pagination; сколько                
+ страниц в сериях — `spider overview`. Считается по сохранённому обходу.                            
+                                                                                                    
+ Примеры:                                                                                           
+   spider pagination                                                                                
+   spider pagination --only non_200                                                                 
+   spider --json pagination 12 --only unlinked --limit 1000                                         
+                                                                                                    
+ JSON: `{crawl_id, only, total, links: [{source, rel, target, target_status, target_blocked,        
+ target_indexability}]}`; `rel` — next | prev; `target_status` null — цель не скачивалась.          
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --only         <all|non_200|unlinked>  all — все rel=next / prev; non_200 — цель отвечает не     │
+│                                        200; unlinked — на цель нет обычных ссылок.               │
+│                                        [default: all]                                            │
+│ --limit        <int range> [x>=1]      Сколько строк показать (всего — в поле total).            │
+│                                        [default: 100]                                            │
+│ --json                                 Вывод в JSON для агентов и скриптов (одна строка-конверт  │
+│                                        `{ok, ...}`).                                             │
+│ --quiet                                Печатать только основной результат, без пояснений.        │
+│ --help                                 Show this message and exit.                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

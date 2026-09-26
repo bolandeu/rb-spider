@@ -38,10 +38,11 @@ def test_links_out_and_in(base_url: str) -> None:
     code, inbound = _invoke_json("links", f"{base_url}/missing", "--in")
     assert code == 0
     sources = {link["source"].removeprefix(base_url): link for link in inbound["links"]}
-    assert set(sources) == {"/", "/to-missing", "/hl/non200"}  # "who links to this 404": redirects, hreflang too
+    # "who links to this 404": redirects, hreflang and rel=next too
+    assert set(sources) == {"/", "/to-missing", "/hl/non200", "/pg-bad"}
     assert (sources["/"]["kind"], sources["/"]["status_code"]) == ("hyperlink", 200)
     assert (sources["/to-missing"]["kind"], sources["/to-missing"]["status_code"]) == ("redirect", 301)
-    assert sources["/hl/non200"]["kind"] == "hreflang"
+    assert (sources["/hl/non200"]["kind"], sources["/pg-bad"]["kind"]) == ("hreflang", "next")
 
     code, canon = _invoke_json("links", f"{base_url}/c-unlinked", "--in")
     assert [link["kind"] for link in canon["links"]] == ["canonical"]

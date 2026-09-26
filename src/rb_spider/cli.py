@@ -18,6 +18,7 @@ from .commands import (
     init,
     issues,
     links,
+    pagination,
     profiles,
     projects,
     redirects,
@@ -54,6 +55,7 @@ app.command(name="urls")(issues.urls)
 app.command(name="analyze")(issues.analyze)
 app.command(name="redirects")(redirects.redirects)
 app.command(name="hreflang")(hreflang.hreflang)
+app.command(name="pagination")(pagination.pagination)
 app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="overview")(export.overview)

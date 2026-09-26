@@ -143,6 +143,19 @@ def hreflang_list(data: dict) -> None:
     console.print(table)
 
 
+def pagination_list(data: dict) -> None:
+    shown, total = len(data["links"]), data["total"]
+    head = f"[bold]Pagination ({data['only']})[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    table = Table(box=None, pad_edge=False)
+    for column in ("страница", "rel", "цель", "ответ цели"):
+        table.add_column(column)
+    for row in data["links"]:
+        status = row["target_blocked"] or row["target_status"]
+        table.add_row(row["source"], row["rel"], row["target"], "—" if status is None else str(status))
+    console.print(table)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -347,6 +360,7 @@ _OVERVIEW_LABELS = {
     "totals": "Итого", "content_types": "Типы (сайт)", "external_content_types": "Типы (чужие сайты)",
     "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
     "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)", "hreflang": "Hreflang (HTML 200)",
+    "pagination": "Пагинация",
 }  # fmt: skip
 
 

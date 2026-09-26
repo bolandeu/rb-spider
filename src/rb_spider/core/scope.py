@@ -138,7 +138,7 @@ class PageReader:
         self.listed = crawl.mode == "list"  # only the listed URLs and their redirects: no links, no resources
         kinds = {"internal_links": collect.internal_links, "external_links": collect.external_links,
                  "canonical": collect.canonicals, "refresh": collect.meta_refresh, "image": collect.images,
-                 "hreflang": collect.hreflang, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
+                 "hreflang": collect.hreflang, "pagination": collect.pagination, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
         self.kinds = {name: _Kind(option.follow, option.store) for name, option in kinds.items()}
 
     def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
@@ -164,6 +164,7 @@ class PageReader:
         for item in (*page.links, *page.resources):
             item.url = rewrite(item.url)
         page.hreflang = [(code, rewrite(target)) for code, target in page.hreflang]
+        page.pagination = [(rel, rewrite(target)) for rel, target in page.pagination]
         page.redirect_url = rewrite(page.redirect_url) if page.redirect_url else None
         page.refresh_url = rewrite(page.refresh_url) if page.refresh_url else None
         if page.onpage.get("canonical_url"):
@@ -214,7 +215,14 @@ class PageReader:
                              None, code))  # fmt: skip
             if hreflang.follow and not self.listed and target != page.url:
                 follow.append(target)
-        page.hreflang = []
+        pagination = self.kinds["pagination"]
+        for rel, target in page.pagination:
+            if pagination.store:
+                rows.append((page.url, target, rel, internal_of(target), None, None, None, False, None, None,
+                             None, None))  # fmt: skip
+            if pagination.follow and not self.listed and target != page.url:
+                follow.append(target)
+        page.hreflang, page.pagination = [], []
         return follow, rows
 
     def _resources_to_check(self, page: Page) -> tuple[list[str], list[tuple]]:

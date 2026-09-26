@@ -123,6 +123,7 @@ pages = sa.Table(
     # computed after the crawl (issues.analyze): the URL checks the address fails, ",uppercase,parameters,"
     sa.Column("url_issues", sa.String),
     sa.Column("hreflang_outside_head", sa.Integer),  # <link rel=alternate hreflang> elements outside <head>
+    sa.Column("pagination", sa.String),  # the page's own rel next/prev: "first" (next only) | "paginated" (has prev)
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
@@ -156,7 +157,7 @@ link_rows = sa.Table(
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
     sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
-    # hyperlink | canonical | redirect | refresh | hreflang | image | css | js | media | iframe (resources the page loads)
+    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | image | css | js | media | iframe (resources the page loads)
     sa.Column("kind", sa.String, nullable=False),
     sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
     sa.Column("anchor", sa.String),
@@ -174,6 +175,8 @@ link_rows = sa.Table(
     # hreflang annotations: the Hreflang rules and report walk them both ways without scanning every link
     sa.Index("link_rows_hreflang_by_source", "crawl_id", "source_id", sqlite_where=sa.text("kind = 'hreflang'")),
     sa.Index("link_rows_hreflang_by_target", "crawl_id", "target_id", sqlite_where=sa.text("kind = 'hreflang'")),
+    # rel next / prev: queries say `kind IN ('next', 'prev')` so SQLite can use it
+    sa.Index("link_rows_pagination", "crawl_id", "source_id", sqlite_where=sa.text("kind IN ('next', 'prev')")),
 )
 # `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
 # `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
