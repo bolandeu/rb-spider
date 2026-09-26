@@ -122,3 +122,18 @@ class RenderUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class HttpClientUnavailable(CliError):
+    """`crawl.http_client = "curl"` without the `curl` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "HTTP_CLIENT_UNAVAILABLE",
+            "The curl HTTP client needs curl-cffi, which is not installed.",
+            action=(
+                f'Install it: uv tool install --reinstall "{DIST_NAME}[curl] @ git+https://github.com/bolandeu/spider.git" '
+                "(in a checkout: uv sync --extra curl), or keep the default: --set crawl.http_client=impit."
+            ),
+            exit_code=1,
+        )

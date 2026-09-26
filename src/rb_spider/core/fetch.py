@@ -88,13 +88,14 @@ class Fetcher:
     """One HTTP client (and, with `render`, one browser) shared by every URL of a run."""
 
     def __init__(self, settings: CrawlSettings, *, render: bool, include: set[str], proxies: list[str]) -> None:
-        from crawlee.http_clients import ImpitHttpClient
-        from crawlee.proxy_configuration import ProxyConfiguration
+        from crawlee.proxy_configuration import ProxyConfiguration  # Crawlee is slow to import
+
+        from .crawl import http_client
 
         self.settings, self.include = settings, include
         user_agent = settings.resolved_user_agent
         self.headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
-        self.client = ImpitHttpClient(follow_redirects=False)
+        self.client = http_client(settings)
         self.proxies = ProxyConfiguration(proxy_urls=list(proxies)) if proxies else None
         self.timeout = timedelta(seconds=settings.timeout_s)
         self.renderer = None

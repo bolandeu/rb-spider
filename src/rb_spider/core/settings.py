@@ -108,6 +108,13 @@ class CrawlSettings(BaseModel):
         None, gt=0, description="Не больше стольких запросов в секунду; не задано — без ограничения.", examples=[5]
     )
     timeout_s: float = Field(20, gt=0, description="Сколько секунд ждать ответа, прежде чем считать URL неответившим.")
+    http_client: Literal["impit", "curl"] = Field(
+        "impit",
+        description=(
+            "HTTP-клиент: impit — по умолчанию, самый быстрый; curl — запасной (curl-impersonate, "
+            "`rb-spider[curl]`), если сайт плохо отвечает impit."
+        ),
+    )
     render: Literal["never", "always"] = Field(
         "never",
         description=(

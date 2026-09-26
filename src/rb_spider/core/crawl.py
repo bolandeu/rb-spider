@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import functools
+import importlib.util
 import logging
 import os
 import subprocess
@@ -44,7 +45,7 @@ from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
 from . import issues, render, storage
-from .errors import AuthRequired, InvalidArguments
+from .errors import AuthRequired, HttpClientUnavailable, InvalidArguments
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
 from .render import Renderer
@@ -168,6 +169,17 @@ def proxy_urls(settings: CrawlSettings) -> list[str]:
     return [url.replace("{password}", password) for url in settings.proxy_urls]
 
 
+def http_client(settings: CrawlSettings) -> HttpClient:
+    """`crawl.http_client`, never following redirects itself: every step is a page of its own."""
+    if settings.http_client == "curl":
+        if importlib.util.find_spec("curl_cffi") is None:
+            raise HttpClientUnavailable
+        from crawlee.http_clients import CurlImpersonateHttpClient
+
+        return CurlImpersonateHttpClient(allow_redirects=False)
+    return ImpitHttpClient(follow_redirects=False)
+
+
 def requests_per_minute(settings: CrawlSettings, crawl_delay: int | None) -> float:
     """The request-rate cap: `max_rps` and robots.txt Crawl-delay, whichever is stricter; inf — none."""
     caps = [float("inf")]
@@ -193,8 +205,8 @@ async def _run(
     hosts = {urlsplit(url).netloc for url, depth in resume.seen.items() if depth == 0} if listed and resume else None
     scope = Scope(start_url, settings, hosts)
     proxies = proxy_urls(settings)
-    http_client = ImpitHttpClient(follow_redirects=False)
-    robots = RobotsGate(http_client, settings.robots_user_agent or user_agent or "*")
+    client = http_client(settings)
+    robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*")
     crawl_delay = await robots.crawl_delay(start_url) if settings.robots == "respect" else None
 
     config = Configuration(log_level="WARNING")
@@ -213,7 +225,7 @@ async def _run(
     # a handler may first wait for a free browser tab: every tab busy with pages ahead of it
     render_wait_s = (settings.timeout_s + settings.render_wait_ms / 1000) * -(-concurrency // settings.render_tabs)
     crawler = HttpCrawler(
-        http_client=http_client,
+        http_client=client,
         storage_client=storage_client,
         request_manager=queue,
         configuration=config,
@@ -236,19 +248,18 @@ async def _run(
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
     parser = Parser(PageReader(scope, settings, collect), settings.parse_workers)
-    sent_at: dict[str, float] = {}  # requests in flight -> when they were sent (response time)
-    response_ms: dict[str, int] = {}
+    response_ms: dict[str, int] = {}  # answered requests -> response time, until their handler stores it
     redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
+    # Response time around the client's own request: Crawlee's navigation hooks cost ~15% of a big crawl.
+    client_crawl = client.crawl
 
-    @crawler.pre_navigation_hook
-    async def sending(ctx) -> None:
-        sent_at[ctx.request.url] = time.monotonic()
+    async def timed_crawl(request, *args, **kwargs):
+        sent = time.monotonic()
+        result = await client_crawl(request, *args, **kwargs)
+        response_ms[request.url] = round((time.monotonic() - sent) * 1000)
+        return result
 
-    @crawler.post_navigation_hook
-    async def answered(ctx) -> None:
-        if (sent := sent_at.pop(ctx.request.url, None)) is not None:
-            response_ms[ctx.request.url] = round((time.monotonic() - sent) * 1000)
-
+    client.crawl = timed_crawl  # ty: ignore[invalid-assignment]
     last_progress = time.monotonic()
 
     def progress() -> None:
@@ -323,7 +334,6 @@ async def _run(
     async def failed(ctx, error: Exception) -> None:
         # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
         url = ctx.request.url
-        sent_at.pop(url, None)
         response_ms.pop(url, None)
         redirect_hops.pop(url, None)
         page = Page.no_response(url, f"{type(error).__name__}: {error}"[:500])
@@ -367,6 +377,7 @@ def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Se
 def _ready(settings: Settings) -> None:
     """What a crawl needs, checked before it is registered: the proxy password, the browser for rendering."""
     proxy_urls(settings.crawl)
+    http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
     if settings.crawl.render == "always":
         render.ensure_available()
 

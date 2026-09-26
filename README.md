@@ -46,6 +46,8 @@ uv tool install "rb-spider[render] @ git+https://github.com/bolandeu/spider.git"
 
 Браузер отдельно ставить не нужно, если уже есть любой Chromium в кэше Playwright (`ms-playwright`) или Google Chrome — spider найдёт его сам; другой — `--set crawl.render_browser=<путь>`. Если нет ничего: `playwright install --only-shell chromium`.
 
+Запасной HTTP-клиент на curl (`--set crawl.http_client=curl`) — extra `curl`: `uv tool install "rb-spider[curl] @ git+…"`; оба extra вместе — `rb-spider[render,curl]`.
+
 Отказ с ошибкой авторизации при установке — один раз `gh auth login` (или `gh auth setup-git`), либо ссылка вида `git+ssh://git@github.com/bolandeu/spider.git`.
 
 У каждой команды `--help` — это и есть документация. `--json` — вывод для агентов; `spider --ai` печатает инструкцию для ИИ-агентов, `spider skill install` ставит её в Claude Code.

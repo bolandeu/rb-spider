@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 
 import pytest
@@ -147,3 +148,27 @@ def test_doctor_asks_for_the_proxy_password_only_when_needed(tmp_path, monkeypat
     )
     [check] = [c for c in doctor()["checks"] if c["name"] == "credential:proxy"]
     assert check["ok"] is False
+
+
+@pytest.mark.skipif(importlib.util.find_spec("curl_cffi") is None, reason="the `curl` extra is not installed")
+def test_curl_http_client_crawls_with_every_redirect_step(base_url: str) -> None:
+    from rb_spider.fetch import fetch
+
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(http_client="curl")))
+        with engine.connect() as conn:
+            rows = dict(conn.execute(sa.select(storage.pages.c.url, storage.pages.c.status_code)
+                                     .where(storage.pages.c.crawl_id == result.crawl_id)).all())  # fmt: skip
+    assert rows[f"{base_url}/chain1"] == 301 and rows[f"{base_url}/chain2"] == 302 and rows[f"{base_url}/a"] == 200
+    page = fetch(f"{base_url}/old", CrawlSettings(http_client="curl"))
+    assert page.final_url == f"{base_url}/a" and page.redirects[0]["status"] == 301
+
+
+def test_curl_http_client_without_its_extra(monkeypatch) -> None:
+    from rb_spider.core.crawl import http_client
+    from rb_spider.core.errors import HttpClientUnavailable
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "curl_cffi" else real(name, *a))
+    with pytest.raises(HttpClientUnavailable):
+        http_client(CrawlSettings(http_client="curl"))

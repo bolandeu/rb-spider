@@ -55,6 +55,7 @@ concurrency = 10
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
 | `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
+| `crawl.http_client` | `Literal['impit', 'curl']` | `"impit"` | HTTP-клиент: impit — по умолчанию, самый быстрый; curl — запасной (curl-impersonate, `rb-spider[curl]`), если сайт плохо отвечает impit. |
 | `crawl.render` | `Literal['never', 'always']` | `"never"` | JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS. |
 | `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при render = always. |
 | `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always. |

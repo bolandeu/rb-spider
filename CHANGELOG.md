@@ -48,6 +48,7 @@
 - У каждого URL хранятся время ответа (`response_ms`), заголовки ответа и Last-Modified; `spider url` показывает их и заголовки запроса обхода. `crawl.max_redirects` (по умолчанию 20) — сколько шагов одной цепочки редиректов проходить.
 - `spider overview` — сводка обхода (как Crawl Overview): найдено / заблокировано / не ответило / индексируется, типы содержимого сайта и чужих URL, коды ответа, индексируемость с причинами, canonical (нет / на себя / на другой URL), директивы, глубина.
 - Колонки ссылок у каждой страницы: `inlinks`, `unique_inlinks`, `unique_outlinks` (считаются в `analyze` одним проходом); `spider export pages --type html|js|css|image|pdf|other|unknown` и колонка `content_kind`; в `spider issues` — доля URL сайта (`percent`).
+- `crawl.http_client = "curl"` — запасной HTTP-клиент (curl-impersonate, extra `rb-spider[curl]`) для обхода и `spider fetch`; без extra — ошибка `HTTP_CLIENT_UNAVAILABLE` до начала обхода.
 - Справка всех команд на русском с примерами и формой `--json`; тесты: у каждой команды есть docstring, у каждой опции `help=`, снимки `--help` каждой команды.
 
 ### Changed
