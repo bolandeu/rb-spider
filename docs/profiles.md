@@ -84,6 +84,7 @@ concurrency = 10
 | `collect.pagination.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.pagination.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
+| `collect.structured_data` | `list[Literal['json-ld', 'microdata', 'rdfa']]` | `[]` | Какую микроразметку извлекать и проверять (Schema.org, расширенные результаты Google): json-ld, microdata, rdfa; пусто — не извлекать. Microdata и RDFa — extra `rb-spider[structured]`. |
 | `collect.near_duplicates` | `bool` | `false` | Считать подписи MinHash текста страниц — для проверки «Content: Near Duplicates» (extra `rb-spider[near]`; ~0,7 КБ на страницу). |
 | `collect.css.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.css.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |

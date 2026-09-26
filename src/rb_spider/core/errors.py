@@ -152,3 +152,18 @@ class NearDuplicatesUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class StructuredDataUnavailable(CliError):
+    """Microdata / RDFa in `collect.structured_data` without the `structured` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "STRUCTURED_DATA_UNAVAILABLE",
+            "Microdata and RDFa need extruct, which is not installed (JSON-LD works without it).",
+            action=(
+                f'Install it: uv tool install --reinstall "{DIST_NAME}[structured] @ git+https://github.com/bolandeu/spider.git" '
+                '(in a checkout: uv sync --extra structured), or keep JSON-LD only: --set collect.structured_data=["json-ld"].'
+            ),
+            exit_code=1,
+        )

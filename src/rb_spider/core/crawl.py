@@ -45,7 +45,13 @@ from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
 from . import issues, render, storage
-from .errors import AuthRequired, HttpClientUnavailable, InvalidArguments, NearDuplicatesUnavailable
+from .errors import (
+    AuthRequired,
+    HttpClientUnavailable,
+    InvalidArguments,
+    NearDuplicatesUnavailable,
+    StructuredDataUnavailable,
+)
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
 from .render import Renderer
@@ -407,6 +413,8 @@ def _ready(settings: Settings) -> None:
         render.ensure_available()
     if settings.collect.near_duplicates and importlib.util.find_spec("datasketch") is None:
         raise NearDuplicatesUnavailable
+    if {"microdata", "rdfa"} & set(settings.collect.structured_data) and importlib.util.find_spec("extruct") is None:
+        raise StructuredDataUnavailable
 
 
 def read_url_list(text: str) -> list[str]:

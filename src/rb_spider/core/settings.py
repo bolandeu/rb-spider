@@ -252,6 +252,14 @@ class CollectSettings(BaseModel):
         description="Пагинация <link rel=next / prev> (и заголовок Link): follow — обходить соседние страницы.",
     )
     images_srcset: bool = Field(False, description="Брать картинки и из атрибута srcset, а не только src.")
+    structured_data: list[Literal["json-ld", "microdata", "rdfa"]] = Field(
+        [],
+        description=(
+            "Какую микроразметку извлекать и проверять (Schema.org, расширенные результаты Google): json-ld, "
+            "microdata, rdfa; пусто — не извлекать. Microdata и RDFa — extra `rb-spider[structured]`."
+        ),
+        examples=[["json-ld", "microdata"]],
+    )
     near_duplicates: bool = Field(
         False,
         description=(

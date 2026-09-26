@@ -21,7 +21,7 @@ from typing import IO, Any
 import sqlalchemy as sa
 from pydantic import ValidationError
 
-from . import enrich, issues, storage
+from . import enrich, issues, storage, structured
 from .errors import InvalidArguments
 from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings
@@ -206,6 +206,8 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
             raise InvalidArguments(f"No {url} in crawl #{crawl_id} — see 'spider urls' or 'spider query'.")
         page = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "crawl_id"}
         page["headers"] = json.loads(page["headers"]) if page.get("headers") else None
+        for column in ("sd_messages", "sd_features"):
+            page[column] = json.loads(page[column]) if page.get(column) else None
         found = conn.execute(
             sa.select(storage.issues.c.code, storage.issues.c.detail)
             .where(storage.issues.c.crawl_id == crawl_id, storage.issues.c.url == url)
@@ -250,7 +252,23 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
         )
     return {"crawl_id": crawl_id, "page": page, "request_headers": _request_headers(engine, crawl_id),
             "issues": issue_rows, **counts, "resources": resource_rows,
-            "metrics": enrich.metrics_of(engine, crawl_id, url)}  # fmt: skip
+            "metrics": enrich.metrics_of(engine, crawl_id, url),
+            "structured_data": _structured_items(engine, crawl_id, url)}  # fmt: skip
+
+
+def _structured_items(engine: sa.Engine, crawl_id: int, url: str) -> list[dict] | None:
+    """Structured Data Details: the page's items, re-read from its stored HTML (`--store-html`), None without it."""
+    body = storage.get_html(crawl_id, url)
+    _, snapshot = storage.get_crawl(engine, crawl_id)
+    try:
+        formats = tuple(Settings.model_validate(snapshot or {}).collect.structured_data)
+    except ValidationError:
+        formats = ()
+    if body is None or not formats:
+        return None
+    from selectolax.lexbor import LexborHTMLParser
+
+    return structured.extract(LexborHTMLParser(body), body, url, formats, keep_items=True).items
 
 
 def _request_headers(engine: sa.Engine, crawl_id: int) -> dict[str, str]:

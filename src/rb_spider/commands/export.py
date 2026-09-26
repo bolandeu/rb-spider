@@ -63,9 +63,11 @@ def url(
     indexable, indexability_status, title, …все колонки страницы}, request_headers,
     issues: [{code, name, type, priority, detail}], inlinks,
     outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}],
-    metrics: [{source, name, value, text}]}`; `inlinks` / `outlinks` — число обычных
-    ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`). URL нет
-    в обходе — выход 2.
+    metrics: [{source, name, value, text}], structured_data}`; `inlinks` / `outlinks` —
+    число обычных ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`).
+    Микроразметка (обход с `collect.structured_data`): в page — `sd_types`, счётчики и
+    `sd_messages` ([важность, где, тип, свойство, текст]); `structured_data` — сами объекты
+    разметки, если обход шёл с `--store-html`, иначе null. URL нет в обходе — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)

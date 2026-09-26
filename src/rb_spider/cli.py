@@ -26,6 +26,7 @@ from .commands import (
     redirects,
     skill,
     status,
+    structured,
 )
 from .commands import config as config_cmd
 from .core.version import CLI_NAME, DEV_VERSION, installed_version, package_summary
@@ -60,6 +61,7 @@ app.command(name="hreflang")(hreflang.hreflang)
 app.command(name="pagination")(pagination.pagination)
 app.command(name="insecure")(insecure.insecure)
 app.command(name="duplicates")(duplicates.duplicates)
+app.command(name="structured")(structured.structured)
 app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="overview")(export.overview)

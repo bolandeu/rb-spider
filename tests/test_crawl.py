@@ -289,3 +289,14 @@ def test_link_fragments_and_page_anchor_ids() -> None:
 def test_url_issue_flags(url: str, flags: str | None) -> None:
     search = [re.compile(p, re.IGNORECASE) for p in ThresholdSettings().internal_search]
     assert issues.url_issue_flags(url, search) == flags
+
+
+def test_parser_workers_stay_light() -> None:
+    """The worker processes import `scope` (and through it extract, content, structured): no SQLAlchemy, pydantic,
+    Crawlee or numpy there — each would cost every worker tens of megabytes on a big crawl."""
+    import subprocess
+    import sys
+
+    code = "import sys, rb_spider.core.scope; print(sorted(m for m in ('sqlalchemy', 'pydantic', 'crawlee', 'numpy') if m in sys.modules))"
+    loaded = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603
+    assert loaded == "[]"

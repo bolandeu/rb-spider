@@ -265,12 +265,12 @@
 
 ### Structured Data — микроразметка (extruct)
 
-- [ ] `v2` **Validation Errors** — ошибки валидации по словарю Schema.org _(SF: Issue, High)_
-- [ ] `v2` **Rich Result Validation Errors** — ошибки для расширенных результатов Google (нет обязательных свойств) _(SF: Issue, High)_
-- [ ] `v2` **Parse Errors** — микроразметка не разбирается (битый JSON-LD и т.п.) _(SF: Issue, High)_
-- [ ] `v2` **Missing** — на странице нет микроразметки _(SF: Opportunity, Low)_
-- [ ] `v2` **Validation Warnings** — предупреждения валидации (например, устаревший data-vocabulary.org) _(SF: Opportunity, Low)_
-- [ ] `v2` **Rich Result Validation Warnings** — нет рекомендуемых свойств для расширенных результатов _(SF: Opportunity, Low)_
+- [x] `v2` **Validation Errors** — ошибки валидации по словарю Schema.org _(SF: Issue, High)_
+- [x] `v2` **Rich Result Validation Errors** — ошибки для расширенных результатов Google (нет обязательных свойств) _(SF: Issue, High)_
+- [x] `v2` **Parse Errors** — микроразметка не разбирается (битый JSON-LD и т.п.) _(SF: Issue, High)_
+- [x] `v2` **Missing** — на странице нет микроразметки _(SF: Opportunity, Low)_
+- [x] `v2` **Validation Warnings** — предупреждения валидации (например, устаревший data-vocabulary.org) _(SF: Opportunity, Low)_
+- [x] `v2` **Rich Result Validation Warnings** — нет рекомендуемых свойств для расширенных результатов _(SF: Opportunity, Low)_
 
 ### Sitemaps — анализ XML sitemap (через rb-sitemap-xml)
 
@@ -468,7 +468,7 @@
 - [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
 - [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
 - [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML и HTTP-заголовка (`spider overview`, `spider hreflang --only missing`); из sitemap — с #32
-- [ ] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки
+- [x] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки (`spider overview`, колонки `pages.sd_*`; сбор — `collect.structured_data`)
 - [ ] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap
 - [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
 - [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
@@ -505,7 +505,7 @@
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
-- [ ] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации
+- [x] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации → `spider url` (объекты — при `--store-html`)
 - [ ] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
 - [ ] `v3` **Lighthouse Details** — метрики PSI по URL
 - [ ] `backlog` **Accessibility Details**, **Spelling & Grammar Details**
@@ -739,7 +739,7 @@
 - [x] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами → `spider insecure`
 - [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях
 - [ ] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже)
-- [ ] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)**
+- [x] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)** → `spider structured [--report validation|features]`
 - [ ] `v2` **JavaScript: Chrome Console Log Summary**
 - [ ] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL
 - [ ] `v2` **Crawl Path Report** — кратчайший путь обнаружения URL

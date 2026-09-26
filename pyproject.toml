@@ -28,6 +28,8 @@ render = ["crawlee[playwright]>=1.10,<1.11"]
 curl = ["crawlee[curl-impersonate]>=1.10,<1.11"]
 # near duplicates (`collect.near_duplicates`): MinHash signatures of page text
 near = ["datasketch>=2.0"]
+# Microdata and RDFa (`collect.structured_data`): extruct; JSON-LD needs nothing extra
+structured = ["extruct>=0.18"]
 
 [project.scripts]
 spider = "rb_spider.cli:main"

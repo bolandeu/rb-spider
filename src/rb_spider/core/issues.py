@@ -934,6 +934,32 @@ def _security_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _structured_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, column) -> Rule:
+        return Rule(code, "Structured Data", f"Structured Data: {name}", kind, priority, description,
+                    _sql(f"{HTML_OK} AND {column} > 0", f"{column} || ' шт., типы ' || coalesce(sd_types, '—')"),
+                    ("collect.structured_data",))  # fmt: skip
+
+    return [
+        r("structured_data_validation_errors", "Validation Errors", "issue", "high",
+          "Ошибки по словарю Schema.org: несуществующий тип или свойство, свойство не того типа. Список — "
+          "`spider url` и `spider structured`.", "sd_errors"),
+        r("structured_data_rich_result_errors", "Rich Result Validation Errors", "issue", "high",
+          "Для расширенного результата Google не хватает обязательных свойств (Product, Recipe, Event…).",
+          "sd_rich_errors"),
+        r("structured_data_parse_errors", "Parse Errors", "issue", "high",
+          "Микроразметка не разбирается: битый JSON-LD, ошибка Microdata / RDFa.", "sd_parse_errors"),
+        Rule("structured_data_missing", "Structured Data", "Structured Data: Missing", "opportunity", "low",
+             "На странице нет микроразметки выбранных форматов (collect.structured_data).",
+             _sql(f"{HTML_OK} AND sd_formats = ''"), ("collect.structured_data",)),
+        r("structured_data_validation_warnings", "Validation Warnings", "opportunity", "low",
+          "Предупреждения Schema.org: устаревший data-vocabulary.org, устаревшие (superseded) типы и свойства.",
+          "sd_warnings"),
+        r("structured_data_rich_result_warnings", "Rich Result Validation Warnings", "opportunity", "low",
+          "Для расширенного результата Google нет рекомендуемых свойств.", "sd_rich_warnings"),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -994,6 +1020,7 @@ RULES += _url_rules()
 RULES += _hreflang_rules()
 RULES += _pagination_rules()
 RULES += _security_rules()
+RULES += _structured_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

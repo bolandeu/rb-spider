@@ -15,7 +15,7 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 from selectolax.lexbor import LexborHTMLParser
 
-from . import content
+from . import content, structured
 
 _FOLLOWABLE_SCHEMES = {"http", "https"}
 # `<meta http-equiv="refresh">` content and the `Refresh` header share a format: "5; url=/next".
@@ -482,6 +482,7 @@ def parse_page(
     content_exclude: Sequence[str] = DEFAULT_CONTENT_EXCLUDE,
     srcset: bool = False,
     minhash: bool = False,
+    structured_data: tuple[str, ...] = (),
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -507,6 +508,8 @@ def parse_page(
     title = tree.css_first("title")
     page.title = _text(title) if title else None
     page.onpage |= _onpage(tree)
+    if structured_data:
+        page.onpage |= structured.extract(tree, body, url, structured_data).columns()
     if page.refresh_url is None:
         for meta in tree.css("meta[http-equiv]"):
             if (meta.attributes.get("http-equiv") or "").lower() == "refresh":

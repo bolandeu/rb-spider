@@ -407,6 +407,65 @@ HTTPS_EXPECTED = {
     "security_missing_hsts": {"/nohsts"},
 }
 
+
+def _ld(data: dict) -> str:
+    import json as _json
+
+    return f'<script type="application/ld+json">{_json.dumps(data, ensure_ascii=False)}</script>'
+
+
+_OFFER = {
+    "@type": "Offer",
+    "price": "10.00",
+    "priceCurrency": "RUB",
+    "availability": "https://schema.org/InStock",
+    "url": "{base}/sd/ok",
+}
+_PRODUCT = {"@context": "https://schema.org", "@type": "Product", "name": "Товар", "image": "{base}/logo.png",
+            "description": "Описание товара", "sku": "A-1", "brand": {"@type": "Brand", "name": "Марка"},
+            "offers": _OFFER,
+            "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.5", "ratingCount": "10",
+                                "bestRating": "5", "worstRating": "1"},
+            "review": {"@type": "Review", "author": {"@type": "Person", "name": "Иван"}, "datePublished": "2026-01-01",
+                       "reviewRating": {"@type": "Rating", "ratingValue": "5"}}}  # fmt: skip
+_MICRO_ORG = ('<div itemscope itemtype="https://schema.org/Organization"><span itemprop="name">Полигон</span>'
+              '<link itemprop="url" href="{base}/"><link itemprop="logo" href="{base}/logo.png"></div>')  # fmt: skip
+# Structured data (#31) under /sd/: a crawl with collect.structured_data starts at /sd/ and stays in the folder.
+STRUCTURED_TRAPS: dict[str, str] = {
+    "/sd/": _html("sd", *(f"/sd/{name}" for name in ("ok", "invalid", "rich-error", "parse", "warning", "rich-warning",
+                                                      "rdfa"))),
+    "/sd/ok": _html("sd-ok", head=_head("sd-ok", extra=_ld(_PRODUCT))),
+    "/sd/invalid": _html("sd-invalid", head=_head("sd-invalid", extra=_ld(
+        {"@context": "https://schema.org", "@type": "Organization", "name": "Фирма", "url": "{base}/", "logo": "{base}/logo.png",
+         "colour": "красный", "department": {"@type": "Departmentt", "name": "Отдел"}}))),
+    "/sd/rich-error": _html("sd-rich-error", head=_head("sd-rich-error", extra=_ld(
+        {"@context": "https://schema.org", "@type": "Event", "name": "Событие"}))),
+    "/sd/parse": _html("sd-parse", head=_head("sd-parse", extra='<script type="application/ld+json">{"@type": </script>'),
+                       body=_BODY.format(h1=H1.format("sd-parse"), h2=H2.format("sd-parse")) + _MICRO_ORG),
+    # the retired data-vocabulary.org and a superseded Schema.org property
+    "/sd/warning": _html("sd-warning", head=_head("sd-warning", extra=_ld(
+        {"@context": "https://schema.org", "@type": "Organization", "name": "Фирма", "url": "{base}/",
+         "logo": "{base}/logo.png", "branchOf": {"@type": "Organization", "name": "Головная", "url": "{base}/",
+                                                 "logo": "{base}/logo.png"}})),
+        body=_BODY.format(h1=H1.format("sd-warning"), h2=H2.format("sd-warning"))
+        + '<div itemscope itemtype="http://data-vocabulary.org/Breadcrumb"><span itemprop="title">Главная</span></div>'),
+    "/sd/rich-warning": _html("sd-rich-warning", head=_head("sd-rich-warning", extra=_ld(
+        {"@context": "https://schema.org", "@type": "Product", "name": "Товар", "offers": _OFFER}))),
+    "/sd/rdfa": _html("sd-rdfa", body=_BODY.format(h1=H1.format("sd-rdfa"), h2=H2.format("sd-rdfa"))
+                      + '<div vocab="https://schema.org/" typeof="Organization"><span property="name">Полигон</span>'
+                      '<a property="url" href="{base}/">сайт</a><img property="logo" src="{base}/logo.png" alt="Логотип" '
+                      'width="10" height="10"></div>'),
+}  # fmt: skip
+# structured data rules on a crawl of /sd/ with every format on
+STRUCTURED_EXPECTED = {
+    "structured_data_validation_errors": {"/sd/invalid"},
+    "structured_data_rich_result_errors": {"/sd/rich-error"},
+    "structured_data_parse_errors": {"/sd/parse"},
+    "structured_data_missing": {"/sd/"},
+    "structured_data_validation_warnings": {"/sd/warning"},
+    "structured_data_rich_result_warnings": {"/sd/rich-error", "/sd/rich-warning"},
+}
+
 NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -444,6 +503,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/hl/header",
             *PAGINATION_LINKED,
             *SECURITY_TRAPS,
+            "/sd/",
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -486,6 +546,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/hl/header": (200, {"Link": HREFLANG_HEADER}, _html("hl-header")),
     **{path: (200, {}, html) for path, html in PAGINATION_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in SECURITY_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in STRUCTURED_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -524,6 +585,7 @@ REACHABLE = {
     "/hl/header",
     *PAGINATION_TRAPS,
     *SECURITY_TRAPS,
+    *STRUCTURED_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -690,6 +752,8 @@ EXPECTED_ISSUES = {
     "security_missing_x_frame_options": {"/s-no-xfo"},
     "security_missing_referrer_policy": {"/s-bad-referrer"},
     "security_bad_content_type": {"/s-badtype"},
+    # Structured Data: collect.structured_data is off in this crawl — see STRUCTURED_EXPECTED
+    **{code: set() for code in STRUCTURED_EXPECTED},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent

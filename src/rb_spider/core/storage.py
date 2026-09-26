@@ -138,6 +138,18 @@ pages = sa.Table(
     sa.Column("words_per_sentence", sa.Float),
     sa.Column("text_ratio", sa.Float),
     sa.Column("minhash", sa.String),
+    # structured data (collect.structured_data; NULL — not collected): formats found (",json-ld,"; "" — none),
+    # types, counts of Schema.org validation errors / warnings, Google rich result errors / warnings, unparsable
+    # blocks; the first messages ([severity, scope, type, property, text]) and each rich result feature's status
+    sa.Column("sd_formats", sa.String),
+    sa.Column("sd_types", sa.String),
+    sa.Column("sd_parse_errors", sa.Integer),
+    sa.Column("sd_errors", sa.Integer),
+    sa.Column("sd_warnings", sa.Integer),
+    sa.Column("sd_rich_errors", sa.Integer),
+    sa.Column("sd_rich_warnings", sa.Integer),
+    sa.Column("sd_messages", sa.String),
+    sa.Column("sd_features", sa.String),
     sa.Index("pages_by_md5", "crawl_id", "content_md5"),
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,

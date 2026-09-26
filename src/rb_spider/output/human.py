@@ -182,6 +182,22 @@ def duplicates_list(data: dict) -> None:
             console.print("  (HTML не сохранялся — нужен обход с --store-html)")
 
 
+def structured_list(data: dict) -> None:
+    console.print(f"[bold]Микроразметка ({data['report']})[/bold] — обход #{data['crawl_id']}")
+    table = Table(box=None, pad_edge=False)
+    if data["report"] == "features":
+        for column in ("функция", "URL", "с ошибками", "с предупреждениями"):
+            table.add_column(column)
+        for row in data["rows"]:
+            table.add_row(row["feature"], str(row["urls"]), str(row["with_errors"]), str(row["with_warnings"]))
+    else:
+        for column in ("", "где", "сообщение", "URL", "например"):
+            table.add_column(column)
+        for row in data["rows"]:
+            table.add_row(row["severity"], row["scope"], row["message"], str(row["urls"]), row["example"])
+    console.print(table)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -330,6 +346,10 @@ def url_details(data: dict) -> None:
         console.print("[bold]Заголовки запроса[/bold]")
         for name, value in data["request_headers"].items():
             console.print(f"  {escape(name)}: {escape(str(value))}")
+    if page.get("sd_messages") or page.get("sd_types"):
+        console.print(f"[bold]Микроразметка[/bold]: {escape((page.get('sd_types') or '').strip(','))}")
+        for severity, scope, *_, text in page.get("sd_messages") or []:
+            console.print(f"  {severity} ({scope}) {escape(text)}")
     if data.get("metrics"):
         console.print("[bold]Метрики[/bold]")
         for m in data["metrics"]:
@@ -387,6 +407,7 @@ _OVERVIEW_LABELS = {
     "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
     "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)", "hreflang": "Hreflang (HTML 200)",
     "pagination": "Пагинация", "security": "Протокол (сайт)",
+    "structured_data": "Микроразметка",
 }  # fmt: skip
 
 
