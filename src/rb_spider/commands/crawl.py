@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from enum import StrEnum
 from pathlib import Path
 
@@ -129,7 +128,7 @@ def crawl(
     )
     if (url is None) == (url_list is None):
         raise InvalidArguments("Give either a start URL or --list <file>, not both.")
-    urls = crawl_service.read_url_list(_read_list(url_list)) if url_list is not None else None
+    urls = crawl_service.read_url_list(options.read_url_source(url_list)) if url_list is not None else None
     start_url = urls[0] if urls else url
     root = services.find_project_root(Path(ctx.obj.get("project") or Path.cwd()))
     project = services.load_config(root).name if root else crawl_service.project_for(start_url or "")
@@ -155,12 +154,3 @@ def crawl(
 class Render(StrEnum):
     never = "never"
     always = "always"
-
-
-def _read_list(source: str) -> str:
-    if source == "-":
-        return sys.stdin.read()
-    path = Path(source)
-    if not path.is_file():
-        raise InvalidArguments(f"No such URL list file: {source}")
-    return path.read_text(encoding="utf-8-sig")

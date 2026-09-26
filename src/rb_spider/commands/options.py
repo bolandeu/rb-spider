@@ -1,13 +1,15 @@
-"""Options shared by every command that resolves crawl settings (`crawl`, `config show`)."""
+"""Options shared by every command that resolves crawl settings (`crawl`, `fetch`, `config show`)."""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
 import typer
 
 from ..core import services, settings
+from ..core.errors import InvalidArguments
 
 ProfileOption = typer.Option(
     None, "--profile", help="Профиль настроек: встроенный (`spider profiles list`) или из `.spider/profiles/`."
@@ -35,3 +37,13 @@ def resolve(
         flags=flags,
         assignments=assignments,
     )
+
+
+def read_url_source(source: str) -> str:
+    """The text of a `--list` URL file, or of stdin for `-`."""
+    if source == "-":
+        return sys.stdin.read()
+    path = Path(source)
+    if not path.is_file():
+        raise InvalidArguments(f"No such URL list file: {source}")
+    return path.read_text(encoding="utf-8-sig")
