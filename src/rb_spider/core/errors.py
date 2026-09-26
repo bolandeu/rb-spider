@@ -177,9 +177,9 @@ class SitemapsUnavailable(CliError):
             "SITEMAPS_UNAVAILABLE",
             "XML sitemaps need rb-sitemap-xml, which is not installed.",
             action=(
-                "Install it next to spider: uv tool install --reinstall --with-editable ../sitemap-xml "
-                f'"{DIST_NAME}[sitemaps] @ git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra '
-                "sitemaps), or turn it off: --set sitemaps.crawl=false."
+                "Install spider with it beside: uv tool install --reinstall --with-editable <path to sitemap-xml> "
+                f'"{DIST_NAME} @ git+https://github.com/bolandeu/spider.git" (in a checkout next to ../sitemap-xml: '
+                "uv sync --extra sitemaps), or turn it off: --set sitemaps.crawl=false."
             ),
             exit_code=1,
         )
