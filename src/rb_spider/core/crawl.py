@@ -186,7 +186,10 @@ async def _run(
     settings, collect = all_settings.crawl, all_settings.collect
     user_agent = settings.resolved_user_agent
     headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
-    scope = Scope(start_url, settings)
+    # list mode: the site is whatever the list is on; the listed URLs are the frontier's depth-0 entries
+    listed = settings.mode == "list"
+    hosts = {urlsplit(url).netloc for url, depth in resume.seen.items() if depth == 0} if listed and resume else None
+    scope = Scope(start_url, settings, hosts)
     proxies = proxy_urls(settings)
     http_client = ImpitHttpClient(follow_redirects=False)
     robots = RobotsGate(http_client, settings.robots_user_agent or user_agent or "*")
@@ -235,7 +238,8 @@ async def _run(
     async def admit(urls: list[str], depth: int, *, start: bool = False, resources: bool = False) -> None:
         """Enqueue the URLs that pass scope, limits and robots.txt; disallowed ones go to the report.
 
-        The start URL is always crawled — it's what the user asked for. URLs to check (other sites,
+        The start URL is always crawled — it's what the user asked for; so is, in list mode, every step of
+        a listed URL's redirects (to whatever host they lead). URLs to check (other sites,
         outside the start folder, and every resource: images, CSS, JS…) carry `user_data["check"]`:
         status and size only. robots.txt applies to all of them — a disallowed resource is what
         Screaming Frog calls a Blocked Resource.
@@ -274,7 +278,7 @@ async def _run(
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
         writer.add(page, depth=depth, body=None if check else body)
         writer.add_links(reading.links)
-        await admit(reading.follow, depth + 1)
+        await admit(reading.follow, depth + 1, start=listed)
         await admit(reading.check, depth + 1, resources=True)
         progress()
 
@@ -288,8 +292,11 @@ async def _run(
         progress()
 
     try:
-        if resume and resume.seen:  # continue: the queue is whatever wasn't done
-            for url, _, check in resume.pending:
+        if resume and resume.seen:  # continue (or a list crawl's first run): the queue is whatever isn't done
+            for url, depth, check in resume.pending:
+                if settings.robots == "respect" and not await robots.allowed(url):  # a listed URL wasn't checked yet
+                    writer.add(Page.blocked_by_robots(url), depth=depth)
+                    continue
                 queue.push(url, check)
         else:
             await admit([start_url], 0, start=True)
@@ -307,6 +314,41 @@ def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Se
     start_url = _validate_start_url(start_url)
     proxy_urls(settings.crawl)  # a missing proxy password fails before a crawl is registered
     return storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
+
+
+def read_url_list(text: str) -> list[str]:
+    """URLs of a list file: one per line, blank lines and `#` comments skipped, duplicates dropped."""
+    urls: dict[str, None] = {}
+    bad: list[str] = []
+    for number, line in enumerate(text.removeprefix("\ufeff").splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            urls[_validate_start_url(line)] = None
+        except InvalidArguments:
+            bad.append(f"{number}: {line[:100]}")
+    if bad:
+        raise InvalidArguments(f"Not absolute http(s) URLs in the list (line: text): {'; '.join(bad[:5])}"
+                               + (f" and {len(bad) - 5} more" if len(bad) > 5 else ""))  # fmt: skip
+    if not urls:
+        raise InvalidArguments("The URL list is empty.")
+    return list(urls)
+
+
+def register_list_crawl(engine: sa.Engine, urls: list[str], project: str, settings: Settings | None = None) -> int:
+    """Record a list-mode crawl: the listed URLs go straight into its queue (depth 0).
+
+    From then on it is an ordinary crawl — `run_crawl`, `--detach` and resume take the queue from the
+    database. Its "start URL" is the first listed one.
+    """
+    settings = (settings or Settings()).model_copy(deep=True)
+    settings.crawl.mode = "list"
+    urls = [_validate_start_url(url) for url in urls]
+    proxy_urls(settings.crawl)
+    crawl_id = storage.start_crawl(engine, project, urls[0], settings.model_dump(mode="json"))
+    storage.enqueue(engine, crawl_id, urls)
+    return crawl_id
 
 
 def run_crawl(

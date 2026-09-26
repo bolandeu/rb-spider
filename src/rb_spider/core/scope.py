@@ -25,8 +25,10 @@ LINK_FIELDS = ("source", "target", "kind", "internal", "anchor", "alt", "rel", "
 class Scope:
     """Which URLs belong to the crawl: the site (host or subdomains), the start folder, include/exclude, length."""
 
-    def __init__(self, start_url: str, settings: CrawlSettings) -> None:
+    def __init__(self, start_url: str, settings: CrawlSettings, hosts: set[str] | None = None) -> None:
+        """`hosts` — the site is these hosts (list mode: the hosts of the listed URLs), not the start URL's."""
         start = urlsplit(start_url)
+        self.hosts = hosts
         self.host = start.netloc
         self.domain = start.hostname.removeprefix("www.") if start.hostname else self.host
         self.all_subdomains = settings.all_subdomains
@@ -41,6 +43,8 @@ class Scope:
 
     def internal(self, url: str) -> bool:
         """Part of the site (the start host, or any subdomain with `all_subdomains`)."""
+        if self.hosts is not None:
+            return urlsplit(url).netloc in self.hosts
         if self.all_subdomains:
             hostname = urlsplit(url).hostname or ""
             return hostname == self.domain or hostname.endswith(f".{self.domain}")
@@ -94,6 +98,7 @@ class PageReader:
         self.follow_internal_nofollow = crawl.follow_internal_nofollow
         self.follow_external_nofollow = crawl.follow_external_nofollow
         self.max_links_per_page = crawl.max_links_per_page
+        self.listed = crawl.mode == "list"  # only the listed URLs and their redirects: no links, no resources
         kinds = {"internal_links": collect.internal_links, "external_links": collect.external_links,
                  "canonical": collect.canonicals, "refresh": collect.meta_refresh, "image": collect.images,
                  "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
@@ -129,7 +134,7 @@ class PageReader:
                 rows.append((page.url, link.url, "hyperlink", internal, link.anchor, link.alt, link.rel,
                              link.nofollow, None, None))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
-            if kind.follow and (not link.nofollow or nofollow_ok):
+            if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)
         page.onpage |= counts
         if self.max_links_per_page is not None:
@@ -145,7 +150,8 @@ class PageReader:
                 continue
             if option.store or kind == "redirect":
                 rows.append((page.url, target, kind, internal_of(target), None, None, None, False, None, None))
-            if option.follow or kind == "redirect":
+            always = ("redirect", "refresh") if self.listed else ("redirect",)
+            if kind in always or (option.follow and not self.listed):
                 follow.append(target)
         return follow, rows
 
@@ -158,7 +164,7 @@ class PageReader:
             if option.store:
                 rows.append((page.url, resource.url, resource.kind, self.scope.internal(resource.url), None,
                              resource.alt, None, False, resource.alt_attr, resource.sized))  # fmt: skip
-            if option.follow:
+            if option.follow and not self.listed:
                 check.append(resource.url)
         return check, rows
 

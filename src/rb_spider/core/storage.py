@@ -386,6 +386,14 @@ class PageWriter:
                 conn.exec_driver_sql(_MARK_DONE, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
 
 
+def enqueue(engine: sa.Engine, crawl_id: int, urls: list[str], depth: int = 0) -> None:
+    """Put URLs into a crawl's queue before it runs (list mode)."""
+    rows = [(crawl_id, url, depth, False) for url in urls]
+    with engine.begin() as conn:
+        for chunk in range(0, len(rows), _JSON_CHUNK):
+            conn.exec_driver_sql(_INSERT_QUEUED, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
+
+
 def crawl_pid(engine: sa.Engine, crawl_id: int) -> int | None:
     with engine.connect() as conn:
         return conn.execute(sa.select(crawls.c.pid).where(crawls.c.id == crawl_id)).scalar()

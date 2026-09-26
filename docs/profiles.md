@@ -38,6 +38,7 @@ concurrency = 10
 <!-- keys:begin (generated from the settings schema) -->
 | Ключ | Тип | По умолчанию | Описание |
 | --- | --- | --- | --- |
+| `crawl.mode` | `Literal['spider', 'list']` | `"spider"` | spider — обход по ссылкам от стартового URL; list — только URL из списка (`spider crawl --list`) и шаги их редиректов, без перехода по ссылкам. |
 | `crawl.max_urls` | `int \| None` | — | Остановиться после стольких URL; не задано — обойти весь сайт. |
 | `crawl.max_depth` | `int \| None` | — | Не идти глубже стольких кликов от стартового URL; не задано — без ограничения. |
 | `crawl.max_links_per_page` | `int \| None` | `10000` | Брать с одной страницы не больше стольких ссылок; не задано — все. |

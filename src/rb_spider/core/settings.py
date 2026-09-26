@@ -52,6 +52,13 @@ USER_AGENT_PRESETS = {
 class CrawlSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    mode: Literal["spider", "list"] = Field(
+        "spider",
+        description=(
+            "spider — обход по ссылкам от стартового URL; list — только URL из списка (`spider crawl --list`) "
+            "и шаги их редиректов, без перехода по ссылкам."
+        ),
+    )
     # --- how much
     max_urls: int | None = Field(
         None, ge=1, description="Остановиться после стольких URL; не задано — обойти весь сайт.", examples=[50000]

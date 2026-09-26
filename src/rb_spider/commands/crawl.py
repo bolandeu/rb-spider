@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import typer
@@ -7,13 +8,22 @@ import typer
 from .. import output
 from ..core import crawl as crawl_service
 from ..core import services, storage
+from ..core.errors import InvalidArguments
 from . import options
 
 
 @output.guard
 def crawl(
     ctx: typer.Context,
-    url: str = typer.Argument(..., help="Стартовый URL, например https://example.com/. Обходится только его хост."),
+    url: str | None = typer.Argument(
+        None, help="Стартовый URL, например https://example.com/. Обходится только его хост. Не нужен с --list."
+    ),
+    url_list: str | None = typer.Option(
+        None,
+        "--list",
+        help="Режим списка: файл с URL (по одному в строке, # — комментарий) или - для stdin; "
+        "обходятся только они и их редиректы (ключ crawl.mode = list).",
+    ),
     profile: str | None = options.ProfileOption,
     config_file: Path | None = options.ConfigFileOption,
     assignments: list[str] | None = options.SetOption,
@@ -44,7 +54,7 @@ def crawl(
     quiet: bool = output.QuietOption,
     verbose: bool = output.VerboseOption,
 ) -> None:
-    """Обойти сайт по ссылкам и сохранить каждую страницу в базу обходов.
+    """Обойти сайт по ссылкам (или список URL) и сохранить каждую страницу в базу обходов.
 
     Обход в ширину от стартового URL, только внутри его хоста. Редиректы не
     проходятся автоматически: каждый шаг цепочки сохраняется как отдельная
@@ -69,6 +79,14 @@ def crawl(
       spider crawl https://example.com/ --set 'crawl.exclude=["\\?sort="]' --set crawl.max_rps=5
       spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
       spider --json crawl https://example.com/
+      spider crawl --list old-urls.txt              # аудит списка, например после миграции
+      cat urls.txt | spider crawl --list - --detach
+
+    Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL
+    без перехода по ссылкам, например перед миграцией или после неё: каждый URL
+    скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до
+    конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из
+    списка. Результат — обычный обход: issues, urls, redirects, links работают.
 
     Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
@@ -76,7 +94,8 @@ def crawl(
     Человеку — прогресс в stderr каждые 5 с и итог. JSON:
     `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
     finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
-    detached, pid, log}`. Неверный URL или настройка — код выхода 2.
+    detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код
+    выхода 2.
     """
     resolved = options.resolve(
         ctx,
@@ -92,15 +111,22 @@ def crawl(
             "crawl.store_html": store_html,
         },
     )
+    if (url is None) == (url_list is None):
+        raise InvalidArguments("Give either a start URL or --list <file>, not both.")
+    urls = crawl_service.read_url_list(_read_list(url_list)) if url_list is not None else None
+    start_url = urls[0] if urls else url
     root = services.find_project_root(Path(ctx.obj.get("project") or Path.cwd()))
-    project = services.load_config(root).name if root else crawl_service.project_for(url)
+    project = services.load_config(root).name if root else crawl_service.project_for(start_url or "")
 
     def progress(pages: int) -> None:
         if not (ctx.obj.get("json") or json_output or ctx.obj.get("quiet") or quiet):
             output.human.err_console.print(f"… {pages} URL")
 
     with storage.database() as engine:
-        crawl_id = crawl_service.register_crawl(engine, url, project, resolved.settings)
+        if urls:
+            crawl_id = crawl_service.register_list_crawl(engine, urls, project, resolved.settings)
+        else:
+            crawl_id = crawl_service.register_crawl(engine, url or "", project, resolved.settings)
         if detach:
             pid, log = crawl_service.detach(crawl_id)
             data = {"crawl_id": crawl_id, "project": project, "detached": True, "pid": pid, "log": str(log)}
@@ -108,3 +134,12 @@ def crawl(
             return
         result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
+
+
+def _read_list(source: str) -> str:
+    if source == "-":
+        return sys.stdin.read()
+    path = Path(source)
+    if not path.is_file():
+        raise InvalidArguments(f"No such URL list file: {source}")
+    return path.read_text(encoding="utf-8-sig")

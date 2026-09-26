@@ -1,7 +1,7 @@
                                                                                                     
- Usage: spider crawl [OPTIONS] {url}                                                                
+ Usage: spider crawl [OPTIONS] [url]                                                                
                                                                                                     
- Обойти сайт по ссылкам и сохранить каждую страницу в базу обходов.                                 
+ Обойти сайт по ссылкам (или список URL) и сохранить каждую страницу в базу обходов.                
                                                                                                     
  Обход в ширину от стартового URL, только внутри его хоста. Редиректы не                            
  проходятся автоматически: каждый шаг цепочки сохраняется как отдельная                             
@@ -26,6 +26,14 @@
    spider crawl https://example.com/ --set 'crawl.exclude=["\?sort="]' --set crawl.max_rps=5        
    spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой     
    spider --json crawl https://example.com/                                                         
+   spider crawl --list old-urls.txt              # аудит списка, например после миграции            
+   cat urls.txt | spider crawl --list - --detach                                                    
+                                                                                                    
+ Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL                       
+ без перехода по ссылкам, например перед миграцией или после неё: каждый URL                        
+ скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до                        
+ конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из                           
+ списка. Результат — обычный обход: issues, urls, redirects, links работают.                        
                                                                                                     
  Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:                               
  `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.             
@@ -33,13 +41,17 @@
  Человеку — прогресс в stderr каждые 5 с и итог. JSON:                                              
  `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —                             
  finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,                         
- detached, pid, log}`. Неверный URL или настройка — код выхода 2.                                   
+ detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код                       
+ выхода 2.                                                                                          
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
-│ *    url      <str>  Стартовый URL, например https://example.com/. Обходится только его хост.    │
-│                      [required]                                                                  │
+│   url      <str>  Стартовый URL, например https://example.com/. Обходится только его хост. Не    │
+│                   нужен с --list.                                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --list                 <str>               Режим списка: файл с URL (по одному в строке, # —     │
+│                                            комментарий) или - для stdin; обходятся только они и  │
+│                                            их редиректы (ключ crawl.mode = list).                │
 │ --profile              <str>               Профиль настроек: встроенный (`spider profiles list`) │
 │                                            или из `.spider/profiles/`.                           │
 │ --config               <path>              TOML-файл настроек поверх профиля (формат как у       │
