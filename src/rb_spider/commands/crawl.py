@@ -21,8 +21,8 @@ def crawl(
     url_list: str | None = typer.Option(
         None,
         "--list",
-        help="Режим списка: файл с URL (по одному в строке, # — комментарий) или - для stdin; "
-        "обходятся только они и их редиректы (ключ crawl.mode = list).",
+        help="Режим списка: файл с URL (по одному в строке, # — комментарий; CSV с колонкой url / address / loc; "
+        "XML sitemap) или - для stdin; обходятся только они и их редиректы (ключ crawl.mode = list).",
     ),
     profile: str | None = options.ProfileOption,
     config_file: Path | None = options.ConfigFileOption,
@@ -87,12 +87,19 @@ def crawl(
       spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000
       spider crawl --list old-urls.txt              # аудит списка, например после миграции
       cat urls.txt | spider crawl --list - --detach
+      spider crawl https://example.com/ --set sitemaps.crawl=true   # и сравнить с sitemap
 
     Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL
     без перехода по ссылкам, например перед миграцией или после неё: каждый URL
     скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до
     конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из
-    списка. Результат — обычный обход: issues, urls, redirects, links работают.
+    списка. Список — URL построчно, CSV с колонкой url / address / loc (выгрузка
+    Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —
+    обычный обход: issues, urls, redirects, links работают.
+
+    XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider[sitemaps]`) читается в
+    начале обхода: его URL тоже обходятся, а проверки группы Sitemaps сравнивают
+    его с найденным по ссылкам — `spider sitemaps show`.
 
     JS-сайт (контент, ссылки или title появляются только после скриптов) —
     `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и

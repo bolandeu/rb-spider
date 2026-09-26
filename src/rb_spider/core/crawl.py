@@ -44,7 +44,7 @@ from crawlee.proxy_configuration import ProxyConfiguration
 from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
-from . import issues, render, storage
+from . import issues, render, sitemaps, storage
 from .errors import (
     AuthRequired,
     HttpClientUnavailable,
@@ -374,6 +374,10 @@ async def _run(
                 queue.push(url, check)
         else:
             await admit([start_url], 0, start=True)
+            if all_settings.sitemaps.crawl and not listed:  # a fresh crawl: sitemaps first, their URLs one click away
+                async for found in sitemaps.read(start_url, all_settings.sitemaps, settings, writer, scope):
+                    if all_settings.sitemaps.follow:
+                        await admit(found, 1)
         writer.flush()  # the start URL (and a robots verdict on it) is on disk before any fetching
         if not await queue.is_empty():
             async with renderer or contextlib.nullcontext():
@@ -415,13 +419,49 @@ def _ready(settings: Settings) -> None:
         raise NearDuplicatesUnavailable
     if {"microdata", "rdfa"} & set(settings.collect.structured_data) and importlib.util.find_spec("extruct") is None:
         raise StructuredDataUnavailable
+    if settings.sitemaps.crawl:
+        sitemaps.ensure_available()
+
+
+_URL_COLUMNS = ("url", "address", "loc", "адрес")
+
+
+def _list_lines(text: str) -> list[str]:
+    """The URL candidates of a list file, whatever its shape: an XML sitemap (urlset), CSV whose header names
+    the URL column (url / address / loc — Screaming Frog's exports say Address), or one URL per line."""
+    stripped = text.lstrip()
+    if stripped.startswith("<"):
+        from xml.etree import ElementTree as ET  # a local file the user chose: the stdlib parser is enough
+
+        try:
+            root = ET.fromstring(stripped)  # noqa: S314
+        except ET.ParseError as exc:
+            raise InvalidArguments(f"The list looks like XML but doesn't parse: {exc}.") from exc
+        tag = root.tag.rsplit("}", 1)[-1]
+        if tag == "sitemapindex":
+            raise InvalidArguments(
+                "The list is a sitemap index: give a sitemap with URLs (<urlset>), or crawl the site with "
+                "--set sitemaps.crawl=true --set 'sitemaps.urls=[\"<index URL>\"]'."
+            )
+        return [(el.text or "").strip() for el in root.iter() if el.tag.rsplit("}", 1)[-1] == "loc"]
+    lines = stripped.splitlines()
+    header = next((line for line in lines if line.strip()), "")
+    delimiter = next((d for d in (",", ";", "\t") if d in header), None)
+    names = [cell.strip().strip('"').lower() for cell in header.split(delimiter)] if delimiter else []
+    column = next((names.index(n) for n in _URL_COLUMNS if n in names), None)
+    if column is None:  # no header naming a URL column: one URL per line (a URL may have commas in it)
+        return lines
+    import csv
+
+    return [row[column] for row in list(csv.reader(lines, delimiter=delimiter or ","))[1:] if len(row) > column]
 
 
 def read_url_list(text: str) -> list[str]:
-    """URLs of a list file: one per line, blank lines and `#` comments skipped, duplicates dropped."""
+    """URLs of a list file — one per line (blank lines and `#` comments skipped), a CSV with a URL column, or an
+    XML sitemap — duplicates dropped."""
     urls: dict[str, None] = {}
     bad: list[str] = []
-    for number, line in enumerate(text.removeprefix("\ufeff").splitlines(), 1):
+    for number, line in enumerate(_list_lines(text.removeprefix("\ufeff")), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue

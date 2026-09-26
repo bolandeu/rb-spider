@@ -198,6 +198,27 @@ def structured_list(data: dict) -> None:
     console.print(table)
 
 
+def sitemaps_rows(data: dict) -> None:
+    shown, total = len(data["rows"]), data["total"]
+    head = f"[bold]Sitemap ({data['only']})[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    if not data["rows"]:
+        return
+    table = Table(box=None, pad_edge=False)
+    columns = list(data["rows"][0])
+    for column in columns:
+        table.add_column(column)
+    for row in data["rows"]:
+        table.add_row(*("—" if row[c] is None else str(row[c]) for c in columns))
+    console.print(table)
+
+
+def sitemaps_built(data: dict) -> None:
+    console.print(
+        f"Обход #{data['crawl_id']}: {data['urls']} URL в {len(data['files'])} файл(ах): {', '.join(data['files'])}"
+    )
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
@@ -407,7 +428,7 @@ _OVERVIEW_LABELS = {
     "status": "Коды ответа", "indexability": "Индексируемость", "canonicals": "Canonical (HTML 200)",
     "directives": "Директивы (HTML 200)", "depth": "Глубина (HTML 200)", "hreflang": "Hreflang (HTML 200)",
     "pagination": "Пагинация", "security": "Протокол (сайт)",
-    "structured_data": "Микроразметка",
+    "structured_data": "Микроразметка", "sitemaps": "Sitemap",
 }  # fmt: skip
 
 

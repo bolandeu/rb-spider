@@ -466,6 +466,49 @@ STRUCTURED_EXPECTED = {
     "structured_data_rich_result_warnings": {"/sd/rich-error", "/sd/rich-warning"},
 }
 
+
+def _urlset(*paths: str, alternates: dict[str, tuple[str, str]] | None = None) -> str:
+    alternates = alternates or {}
+    urls = "".join(
+        f"<url><loc>{{base}}{path}</loc>"
+        + (f'<xhtml:link rel="alternate" hreflang="{alternates[path][0]}" href="{{base}}{alternates[path][1]}"/>'
+           if path in alternates else "")
+        + "</url>"
+        for path in paths
+    )  # fmt: skip
+    return ('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+            f' xmlns:xhtml="http://www.w3.org/1999/xhtml">{urls}</urlset>')  # fmt: skip
+
+
+# Sitemaps (#32) under /sm/, linked from nowhere: a crawl with sitemaps.crawl starts at /sm/ and stays in the
+# folder. robots.txt names the index; pages.xml has 5 URLs (the big one for a small thresholds.sitemap_max_urls).
+SITEMAP_FILES: dict[str, str] = {
+    "/sm/sitemap.xml": '<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    + "".join(f"<sitemap><loc>{{base}}/sm/{name}.xml</loc></sitemap>" for name in ("pages", "more", "gone"))
+    + "</sitemapindex>",
+    "/sm/pages.xml": _urlset(
+        "/sm/", "/sm/a", "/sm/orphan", "/sm/noindex", "/sm/twice", alternates={"/sm/a": ("ru", "/sm/a")}
+    ),
+    "/sm/more.xml": _urlset("/sm/twice"),
+}
+SITEMAP_TRAPS: dict[str, str] = {
+    "/sm/": _html("sm", "/sm/a", "/sm/b", "/sm/noindex", "/sm/twice"),
+    "/sm/a": _html("sm-a", "/sm/"),
+    "/sm/b": _html("sm-b", "/sm/"),  # linked, not in any sitemap
+    "/sm/orphan": _html("sm-orphan", "/sm/"),  # in the sitemap, linked from nowhere
+    "/sm/noindex": _html("sm-noindex", "/sm/", head=_head("sm-noindex", extra=_robots("noindex"))),
+    "/sm/twice": _html("sm-twice", "/sm/"),  # in both sitemap files
+}
+# sitemap rules on a crawl of /sm/ with sitemaps.crawl; the size / count ones with small thresholds (see the test)
+SITEMAP_EXPECTED = {
+    "sitemaps_over_max_urls": {"/sm/pages.xml"},
+    "sitemaps_over_max_mb": {"/sm/pages.xml"},
+    "sitemaps_urls_not_in_sitemap": {"/sm/b"},
+    "sitemaps_orphan_urls": {"/sm/orphan"},
+    "sitemaps_non_indexable": {"/sm/noindex"},
+    "sitemaps_multiple": {"/sm/twice"},
+}
+
 NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -516,7 +559,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/robots.txt": (
         200,
         {"Content-Type": "text/plain"},
-        "User-agent: *\nDisallow: /private/\n\nUser-agent: Googlebot\nDisallow: /private/\nDisallow: /g-blocked\n",
+        "User-agent: *\nDisallow: /private/\n\nUser-agent: Googlebot\nDisallow: /private/\nDisallow: /g-blocked\n"
+        "\nSitemap: {base}/sm/sitemap.xml\n",
     ),
     "/g-blocked": (200, {}, _html("g-blocked")),
     "/shop/": (200, {}, _html("shop", "/shop/item", "/a")),  # the start folder for stay_in_start_folder
@@ -547,6 +591,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in PAGINATION_TRAPS.items()},
     **{path: (200, headers, html) for path, (headers, html) in SECURITY_TRAPS.items()},
     **{path: (200, {}, html) for path, html in STRUCTURED_TRAPS.items()},
+    **{path: (200, {"Content-Type": "application/xml"}, xml) for path, xml in SITEMAP_FILES.items()},
+    **{path: (200, {}, html) for path, html in SITEMAP_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
     "/dated": (200, {"Last-Modified": "Wed, 01 Jan 2025 10:00:00 GMT"}, _html("dated", dead_end=True)),
 }
@@ -754,6 +800,8 @@ EXPECTED_ISSUES = {
     "security_bad_content_type": {"/s-badtype"},
     # Structured Data: collect.structured_data is off in this crawl — see STRUCTURED_EXPECTED
     **{code: set() for code in STRUCTURED_EXPECTED},
+    # Sitemaps: sitemaps.crawl is off in this crawl — see SITEMAP_EXPECTED
+    **{code: set() for code in SITEMAP_EXPECTED},
 }
 
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent

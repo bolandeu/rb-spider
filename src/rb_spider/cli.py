@@ -24,6 +24,7 @@ from .commands import (
     profiles,
     projects,
     redirects,
+    sitemaps,
     skill,
     status,
     structured,
@@ -48,6 +49,7 @@ app.add_typer(crawls.app, name="crawls")
 app.add_typer(profiles.app, name="profiles")
 app.add_typer(projects.app, name="projects")
 app.add_typer(db.app, name="db")
+app.add_typer(sitemaps.app, name="sitemaps")
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

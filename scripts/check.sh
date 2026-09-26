@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 uv lock --check
-uv sync --quiet --extra render --extra curl --extra near --extra structured
+uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -19,7 +19,7 @@ for flag in "$@"; do
   case "$flag" in
     --py312)
       env312="$(mktemp -d)"
-      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured pytest -q -p no:cacheprovider
+      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps pytest -q -p no:cacheprovider
       rm -rf "$env312"
       ;;
     --linux)
@@ -28,10 +28,13 @@ for flag in "$@"; do
       # uv's cache and its Pythons live in a Docker volume, so runs after the first are quick.
       for python in 3.12 3.14; do
         echo "--- Linux, Python $python"
-        git ls-files -co --exclude-standard | COPYFILE_DISABLE=1 tar --no-mac-metadata -cf - -T - | docker run --rm -i \
+        # rb-sitemap-xml is a path source (../sitemap-xml): it goes into the container beside the project
+        { git ls-files -co --exclude-standard | sed 's|^|spider/|'
+          git -C ../sitemap-xml ls-files -co --exclude-standard | sed 's|^|sitemap-xml/|'; } \
+          | COPYFILE_DISABLE=1 tar --no-mac-metadata -C .. -cf - -T - 2>/dev/null | docker run --rm -i \
           -v spider-check-uv:/root/.cache/uv -e UV_PYTHON="$python" -e UV_LINK_MODE=copy \
           ghcr.io/astral-sh/uv:bookworm-slim \
-          sh -c 'mkdir /src && cd /src && tar -xf - && uv sync --quiet --frozen && uv run pytest -q -p no:cacheprovider'
+          sh -c 'mkdir /work && cd /work && tar -xf - 2>/dev/null && cd spider && uv sync --quiet --frozen && uv run pytest -q -p no:cacheprovider'
       done
       ;;
     *)

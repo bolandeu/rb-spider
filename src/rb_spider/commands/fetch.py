@@ -18,7 +18,9 @@ def fetch(
     ctx: typer.Context,
     urls: list[str] | None = typer.Argument(None, help="URL страниц, например https://example.com/page."),
     url_list: str | None = typer.Option(
-        None, "--list", help="Файл с URL (по одному в строке, # — комментарий) или - для stdin."
+        None,
+        "--list",
+        help="Файл с URL (по одному в строке, # — комментарий; CSV с колонкой url; XML sitemap) или - для stdin.",
     ),
     render: bool = typer.Option(False, "--render", help="Открыть HTML-страницы в браузере (JS), как crawl.render."),
     include: str = typer.Option(
@@ -47,6 +49,7 @@ def fetch(
     браузерный отпечаток, User-Agent, прокси с паролем из хранилища ключей
     (`--set crawl.proxy_urls=…`, `--profile`), `--render` — через браузер (нужен
     `rb-spider[render]`). robots.txt не читается: URL названы вами, как у curl.
+    `--list` — URL построчно, CSV с колонкой url / address / loc или XML sitemap.
     Обойти сайт целиком — `spider crawl`. Из Python — `rb_spider.fetch`.
 
     Примеры:

@@ -30,6 +30,8 @@ curl = ["crawlee[curl-impersonate]>=1.10,<1.11"]
 near = ["datasketch>=2.0"]
 # Microdata and RDFa (`collect.structured_data`): extruct; JSON-LD needs nothing extra
 structured = ["extruct>=0.18"]
+# XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
+sitemaps = ["rb-sitemap-xml"]
 
 [project.scripts]
 spider = "rb_spider.cli:main"
@@ -40,6 +42,10 @@ Repository = "https://github.com/bolandeu/spider"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# rb-sitemap-xml is developed next door (docs/spec.md, section 5); outside this checkout install it on its own
+[tool.uv.sources]
+rb-sitemap-xml = { path = "../sitemap-xml", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rb_spider"]

@@ -167,3 +167,19 @@ class StructuredDataUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class SitemapsUnavailable(CliError):
+    """`sitemaps.crawl` / `spider sitemaps build` without the `sitemaps` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "SITEMAPS_UNAVAILABLE",
+            "XML sitemaps need rb-sitemap-xml, which is not installed.",
+            action=(
+                "Install it next to spider: uv tool install --reinstall --with-editable ../sitemap-xml "
+                f'"{DIST_NAME}[sitemaps] @ git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra '
+                "sitemaps), or turn it off: --set sitemaps.crawl=false."
+            ),
+            exit_code=1,
+        )

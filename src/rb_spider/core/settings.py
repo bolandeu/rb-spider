@@ -308,6 +308,31 @@ class RewriteSettings(BaseModel):
         return rules
 
 
+class SitemapSettings(BaseModel):
+    """XML sitemaps: Screaming Frog's Crawl Linked XML Sitemaps (Spider > Crawl), through rb-sitemap-xml."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    crawl: bool = Field(
+        False,
+        description=(
+            "Читать XML sitemap сайта (extra `rb-spider[sitemaps]`): проверки Sitemaps, `spider sitemaps`. "
+            "Файлы качаются без прокси, с User-Agent и timeout обхода."
+        ),
+    )
+    discover: bool = Field(
+        True, description="Искать sitemap сам: строки Sitemap: в robots.txt, затем /sitemap.xml и т.п."
+    )
+    urls: list[str] = Field(
+        [],
+        description="Адреса sitemap (или индексов) вдобавок к найденным.",
+        examples=[["https://example.com/sitemap.xml"]],
+    )
+    follow: bool = Field(
+        True, description="Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать)."
+    )
+
+
 class ThresholdSettings(BaseModel):
     """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
 
@@ -367,6 +392,12 @@ class ThresholdSettings(BaseModel):
             "«Content: Soft 404 Pages»."
         ),
     )  # fmt: skip
+    sitemap_max_urls: int = Field(
+        50000, ge=1, description="Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs»."
+    )
+    sitemap_max_mb: float = Field(
+        50, gt=0, description="Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb»."
+    )
     ignore_paginated_duplicates: bool = Field(
         True,
         description=(
@@ -402,6 +433,7 @@ class Settings(BaseModel):
     collect: CollectSettings = Field(
         default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
     )
+    sitemaps: SitemapSettings = Field(default_factory=SitemapSettings, description="XML sitemap: чтение и проверки.")
     rewrite: RewriteSettings = Field(
         default_factory=RewriteSettings, description="Переписывание найденных URL: параметры, замены, регистр."
     )

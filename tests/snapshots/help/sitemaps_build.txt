@@ -1,0 +1,42 @@
+                                                                                                    
+ Usage: spider sitemaps build [OPTIONS] [crawl_id]                                                  
+                                                                                                    
+ Сгенерировать XML sitemap (или Image Sitemap) по обходу — через rb-sitemap-xml.                    
+                                                                                                    
+ В sitemap идут индексируемые HTML-страницы сайта с кодом 200 (без страниц                          
+ пагинации 2+); `--include` добавляет noindex, canonicalised, пагинацию, PDF. Больше                
+ 49 999 URL — файлы sitemap-N.xml и индекс sitemap.xml. Нужен extra                                 
+ `rb-spider`. Пишет только в каталог `--out`.                                                       
+                                                                                                    
+ Примеры:                                                                                           
+   spider sitemaps build -o public/                                                                 
+   spider sitemaps build 12 -o out/ --lastmod --include pdf                                         
+   spider sitemaps build -o out/ --images                                                           
+   spider sitemaps build -o out/ --priority depth --changefreq weekly                               
+                                                                                                    
+ JSON: `{crawl_id, files: [путь…], urls}`; индекс — первым. Неизвестное значение                    
+ `--include` / `--changefreq`, неверный `--priority` — выход 2; нет extra —                         
+ SITEMAPS_UNAVAILABLE, выход 1.                                                                     
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --out         -o      <path>  Каталог, куда записать sitemap.xml (и sitemap-N.xml).           │
+│                                  [required]                                                      │
+│    --base-url            <str>   Где файлы будут лежать на сайте (для индекса); по умолчанию —   │
+│                                  корень стартового URL.                                          │
+│    --include             <str>   Добавить и такие страницы: noindex, canonicalised, paginated    │
+│                                  (2+), pdf. Можно несколько раз.                                 │
+│    --lastmod                     Проставить lastmod из заголовка Last-Modified ответа.           │
+│    --images                      Image Sitemap: страницы с картинками (картинки с кодом 200).    │
+│    --changefreq          <str>   changefreq всех URL: always, hourly, daily, weekly, monthly,    │
+│                                  yearly, never.                                                  │
+│    --priority            <str>   priority: число 0.0–1.0 для всех URL или depth — 1.0 у          │
+│                                  стартовой, на 0.1 меньше за клик.                               │
+│    --json                        Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok,  │
+│                                  ...}`).                                                         │
+│    --quiet                       Печатать только основной результат, без пояснений.              │
+│    --help                        Show this message and exit.                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

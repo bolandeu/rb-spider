@@ -196,13 +196,15 @@ def overview(
 
     JSON: `{crawl_id, totals: {stored, internal, external, blocked_by_robots,
     no_response, indexable, queued_ever, still_queued}, content_types,
-    external_content_types, status, indexability, canonicals, directives, depth, hreflang, pagination, security}`;
+    external_content_types, status, indexability, canonicals, directives, depth, hreflang, pagination, security, structured_data, sitemaps}`;
     разделы — `{значение: число URL}`: status — 2xx…5xx, blocked, no_response;
     canonicals — missing / self_referencing / canonicalised; directives, depth и hreflang
     (contains / missing, пусто — hreflang на сайте нет; списки — `spider hreflang`) — среди
     HTML-страниц сайта с кодом 200; pagination — contains / first_page / paginated (страницы
     2+) по rel next/prev, пусто — пагинации нет; security — URL сайта по https / http
-    (список — `spider export pages --scheme http`). Нет обхода — выход 2.
+    (список — `spider export pages --scheme http`); structured_data — contains / missing и по
+    форматам; sitemaps — files, urls, not_in_sitemap, orphans (списки — `spider sitemaps show`).
+    Пустой раздел — данные не собирались. Нет обхода — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)

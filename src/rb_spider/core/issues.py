@@ -23,6 +23,7 @@ from . import hreflang as hreflang_module
 from . import pagination as pagination_module
 from . import security as security_module
 from . import settings as settings_module
+from . import sitemaps as sitemaps_module
 from . import storage
 from .errors import InvalidArguments
 from .extract import anchor_hash
@@ -960,6 +961,38 @@ def _structured_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _sitemap_rules() -> list[Rule]:
+    def r(code, name, kind, priority, description, query, requires=("sitemaps.crawl",)) -> Rule:
+        return Rule(code, "Sitemaps", f"Sitemaps: {name}", kind, priority, description, _links_sql(query), requires)
+
+    by_file = "SELECT url, {detail} FROM sitemap_files WHERE crawl_id = :crawl_id AND {where} ORDER BY url"
+    return [
+        r("sitemaps_over_max_urls", "XML Sitemap With Over 50k URLs", "issue", "high",
+          "В одном файле sitemap больше thresholds.sitemap_max_urls (50 000) URL: поисковик прочитает не всё.",
+          by_file.format(detail="urls || ' URL'", where="urls > :sitemap_max_urls")),
+        r("sitemaps_over_max_mb", "XML Sitemap Over 50mb", "issue", "high",
+          "Файл sitemap больше thresholds.sitemap_max_mb (50) МБ без сжатия: поисковик его не дочитает.",
+          by_file.format(detail="round(bytes / 1048576.0, 1) || ' МБ'", where="bytes > :sitemap_max_mb * 1048576")),
+        r("sitemaps_urls_not_in_sitemap", "URLs Not In Sitemap", "issue", "medium",
+          "Индексируемая страница сайта не указана ни в одном sitemap.",
+          f"SELECT url, NULL FROM ({sitemaps_module.QUERIES['not_in_sitemap']}) ORDER BY url"),  # noqa: S608
+        r("sitemaps_orphan_urls", "Orphan URLs", "issue", "medium",
+          "URL есть в sitemap, но обычных ссылок на него на сайте нет («сирота»): поисковик найдёт его только "
+          "через sitemap.", f"SELECT url, source FROM ({sitemaps_module.QUERIES['orphans']}) ORDER BY url",  # noqa: S608
+          ("sitemaps.crawl", STORE_INTERNAL)),
+        r("sitemaps_non_indexable", "Non-Indexable URLs In Sitemap", "issue", "medium",
+          "В sitemap неиндексируемый URL (редирект, ошибка, noindex, canonical на другой): sitemap должен "
+          "перечислять только то, что стоит индексировать.",
+          "SELECT s.url, min(p.indexability_status) FROM sitemap_urls s JOIN pages p ON p.crawl_id = s.crawl_id"
+          " AND p.url = s.url WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, 0) AND NOT p.indexable"
+          " GROUP BY s.url ORDER BY s.url"),
+        r("sitemaps_multiple", "URLs In Multiple Sitemaps", "warning", "low",
+          "URL указан в нескольких файлах sitemap.",
+          "SELECT url, count(DISTINCT source) || ' файл(ов)' FROM sitemap_urls WHERE crawl_id = :crawl_id"
+          " GROUP BY url HAVING count(DISTINCT source) > 1 ORDER BY url"),
+    ]  # fmt: skip
+
+
 RESOURCE_KINDS = "('image', 'css', 'js', 'media', 'iframe')"
 
 
@@ -1021,6 +1054,7 @@ RULES += _hreflang_rules()
 RULES += _pagination_rules()
 RULES += _security_rules()
 RULES += _structured_rules()
+RULES += _sitemap_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 

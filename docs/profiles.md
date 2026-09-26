@@ -94,6 +94,10 @@ concurrency = 10
 | `collect.media.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.iframes.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.iframes.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `sitemaps.crawl` | `bool` | `false` | Читать XML sitemap сайта (extra `rb-spider[sitemaps]`): проверки Sitemaps, `spider sitemaps`. Файлы качаются без прокси, с User-Agent и timeout обхода. |
+| `sitemaps.discover` | `bool` | `true` | Искать sitemap сам: строки Sitemap: в robots.txt, затем /sitemap.xml и т.п. |
+| `sitemaps.urls` | `list[str]` | `[]` | Адреса sitemap (или индексов) вдобавок к найденным. |
+| `sitemaps.follow` | `bool` | `true` | Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать). |
 | `rewrite.remove_params` | `list[str]` | `[]` | Удалять из найденных URL эти GET-параметры (точное имя, с учётом регистра). |
 | `rewrite.regex` | `list[tuple[str, str]]` | `[]` | Замены по регулярным выражениям, по порядку: пары [выражение, замена]; группы в замене — \1, \2. |
 | `rewrite.lowercase` | `bool` | `false` | Переводить найденные URL в нижний регистр целиком. |
@@ -119,6 +123,8 @@ concurrency = 10
 | `thresholds.readability_very_difficult` | `float` | `30` | Индекс Флеша ниже — «Content: Readability Very Difficult». |
 | `thresholds.readability_min_words` | `int` | `100` | Читаемость оценивается у страниц хотя бы со стольких слов текста. |
 | `thresholds.soft_404_patterns` | `list[str]` | `["\\b404\\b", "not found", "page (does not|doesn't|no longer) exist", "не найден", "не существует", "нет такой страницы", "страница удалена"]` | Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — «Content: Soft 404 Pages». |
+| `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
+| `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |
 | `thresholds.ignore_paginated_duplicates` | `bool` | `true` | Не считать дублями title / description / H1 / H2 страниц пагинации 2+ (с rel=prev): у страниц одного списка они обычно одинаковы. |
 | `thresholds.internal_search` | `list[str]` | `["[?&](q|s|query|search|text|keyword|keywords)=", "/(search|poisk|find)(/|$|\\?)"]` | Регулярные выражения (без учёта регистра) по пути и параметрам URL: совпало — страница внутреннего поиска, «URL: Internal Search». |
 <!-- keys:end -->

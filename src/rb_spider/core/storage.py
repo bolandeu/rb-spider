@@ -234,6 +234,27 @@ url_metrics = sa.Table(
     sa.Column("value", sa.Float),
     sa.Column("text", sa.String),
 )
+# XML sitemaps a crawl read (sitemaps.crawl): every file, and every URL entry with the file it came from.
+sitemap_files = sa.Table(
+    "sitemap_files",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("kind", sa.String),  # urlset | sitemapindex; NULL — not fetched or not parsed (see error)
+    sa.Column("bytes", sa.Integer),  # uncompressed: the protocol's limit is 50 MB
+    sa.Column("urls", sa.Integer),
+    sa.Column("sitemaps", sa.Integer),  # child sitemaps of an index
+    sa.Column("error", sa.String),
+)
+sitemap_urls = sa.Table(
+    "sitemap_urls",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("source", sa.String, nullable=False),  # the sitemap file
+    sa.Column("lastmod", sa.String),
+    sa.Index("sitemap_urls_by_url", "crawl_id", "url"),
+)
 # Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
 near_duplicates = sa.Table(
     "near_duplicates",
@@ -380,6 +401,7 @@ _INSERT_LINK_ROWS = (
     "JOIN urls s ON s.url = r.source AND s.crawl_id = r.crawl_id "
     "JOIN urls t ON t.url = r.target AND t.crawl_id = r.crawl_id"
 )
+_INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
 _MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
 
@@ -391,6 +413,8 @@ def _timestamp() -> str:
 
 @dataclass
 class _Batch:
+    sitemap_files: list[dict] = field(default_factory=list)
+    sitemap_urls: list[tuple] = field(default_factory=list)
     pages: list[tuple] = field(default_factory=list)
     links: list[tuple] = field(default_factory=list)
     queued: list[tuple] = field(default_factory=list)
@@ -473,12 +497,17 @@ class PageWriter:
         crawl_id = (self.crawl_id,)
         self._batch.links.extend(crawl_id + row for row in rows)
 
+    def sitemap(self, file: dict, entries: list[tuple[str, str | None]]) -> None:
+        """A sitemap file (sitemap_files columns) and its entries (url, lastmod), written with the next batch."""
+        self._batch.sitemap_files.append({"crawl_id": self.crawl_id, **file})
+        self._batch.sitemap_urls.extend((self.crawl_id, url, file["url"], lastmod) for url, lastmod in entries)
+
     def flush(self, *, wait: bool = True) -> None:
         """Hand the buffered rows to the writer thread; `wait` — return once everything is on disk."""
         self._last_flush = time.monotonic()
         batch, self._batch = self._batch, _Batch()
         self._wait()
-        if batch.pages or batch.links or batch.queued or batch.html:
+        if batch.pages or batch.links or batch.queued or batch.html or batch.sitemap_files:
             self._writing = self._thread.submit(self._write, batch)
         if wait:
             self._wait()
@@ -511,6 +540,11 @@ class PageWriter:
                     data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
                     for sql in statements:
                         conn.exec_driver_sql(sql, (data,))
+            if batch.sitemap_files:
+                conn.execute(sa.insert(sitemap_files), batch.sitemap_files)
+            for chunk in range(0, len(batch.sitemap_urls), _JSON_CHUNK):
+                data = json.dumps(batch.sitemap_urls[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
+                conn.exec_driver_sql(_INSERT_SITEMAP_URLS, (data,))
             if batch.done:
                 conn.exec_driver_sql(_MARK_DONE, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
 

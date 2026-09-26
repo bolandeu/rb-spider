@@ -34,11 +34,11 @@
 | A. Проверки (issues) | 78 | 93 | 32 | 113 | 4 | 320 |
 | B. Сбор данных и вкладки | 15 | 22 | 7 | 8 | 1 | 53 |
 | C. Настройки обхода | 44 | 44 | 2 | 10 | 5 | 105 |
-| D. Режимы | 6 | 3 | 2 | 4 | 1 | 16 |
+| D. Режимы | 6 | 4 | 2 | 4 | 1 | 17 |
 | E. Экспорт и отчёты | 11 | 24 | 8 | 11 | 2 | 56 |
 | F. Интеграции | 1 | 0 | 5 | 1 | 4 | 11 |
 | G. Наше, чего нет в SF | 22 | 4 | 0 | 0 | 0 | 26 |
-| **Итого** | **177** | **190** | **56** | **147** | **17** | **587** |
+| **Итого** | **177** | **191** | **56** | **147** | **17** | **588** |
 
 В разделе A 320 проверок SF, из них 92 — Accessibility (все `backlog`).
 
@@ -274,12 +274,12 @@
 
 ### Sitemaps — анализ XML sitemap (через rb-sitemap-xml)
 
-- [ ] `v2` **XML Sitemap With Over 50k URLs** — в одном sitemap больше 50 000 URL _(SF: Issue, High)_
-- [ ] `v2` **XML Sitemap Over 50mb** — файл sitemap больше 50 МБ _(SF: Issue, High)_
-- [ ] `v2` **URLs Not In Sitemap** — URL найден обходом, но его нет в sitemap _(SF: Issue, Medium)_
-- [ ] `v2` **Orphan URLs** — URL есть в sitemap, но обходом по ссылкам не найден («сирота») _(SF: Issue, Medium)_
-- [ ] `v2` **Non-Indexable URLs In Sitemap** — в sitemap неиндексируемые URL _(SF: Issue, Medium)_
-- [ ] `v2` **URLs In Multiple Sitemaps** — URL указан в нескольких sitemap _(SF: Warning, Low)_
+- [x] `v2` **XML Sitemap With Over 50k URLs** — в одном sitemap больше 50 000 URL _(SF: Issue, High)_
+- [x] `v2` **XML Sitemap Over 50mb** — файл sitemap больше 50 МБ _(SF: Issue, High)_
+- [x] `v2` **URLs Not In Sitemap** — URL найден обходом, но его нет в sitemap _(SF: Issue, Medium)_
+- [x] `v2` **Orphan URLs** — URL есть в sitemap, но обходом по ссылкам не найден («сирота») _(SF: Issue, Medium)_
+- [x] `v2` **Non-Indexable URLs In Sitemap** — в sitemap неиндексируемые URL _(SF: Issue, Medium)_
+- [x] `v2` **URLs In Multiple Sitemaps** — URL указан в нескольких sitemap _(SF: Warning, Low)_
 
 ### PageSpeed — скорость (PageSpeed Insights / Lighthouse)
 
@@ -467,9 +467,9 @@
 - [x] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev (`spider overview`, колонка `pages.pagination`)
 - [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
 - [x] `MVP` **Indexability + Indexability Status** — индексируемость и причина (noindex, canonicalised, redirect, blocked…) у каждого URL
-- [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML и HTTP-заголовка (`spider overview`, `spider hreflang --only missing`); из sitemap — с #32
+- [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML, HTTP-заголовка и sitemap (`xhtml:link`, при `sitemaps.crawl`) (`spider overview`, `spider hreflang --only missing`)
 - [x] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки (`spider overview`, колонки `pages.sd_*`; сбор — `collect.structured_data`)
-- [ ] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap
+- [x] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap → `spider sitemaps show --only urls`, `spider overview`
 - [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
 - [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
 - [ ] `v3` **Links: Link Score** — внутренний «PageRank» 0–100
@@ -552,7 +552,7 @@
 - [x] `MVP` **Crawl All Subdomains** — считать поддомены внутренними → `scope.all_subdomains`
 - [x] `MVP` **Follow Internal / External "nofollow"** → `follow_nofollow.internal` / `follow_nofollow.external`
 - [ ] `v2` **Crawl Invalid Links** — пробовать синтаксически битые href → `scope.crawl_invalid_links`
-- [ ] `v2` **Crawl Linked XML Sitemaps** — найти sitemap через robots.txt или по списку → `sitemaps.discover`, `sitemaps.urls`
+- [x] `v2` **Crawl Linked XML Sitemaps** — найти sitemap через robots.txt или по списку → `sitemaps.crawl`, `sitemaps.discover`, `sitemaps.urls`, `sitemaps.follow`
 
 ### Лимиты (Spider > Limits)
 
@@ -677,7 +677,8 @@
 
 - [x] `MVP` **Spider** — обход сайта от стартового URL по ссылкам → `spider crawl <url>`
 - [x] `MVP` **List** — обход списка URL из файла (глубина 0; для миграций вместе с Always Follow Redirects) → `spider crawl --list urls.txt`
-- [ ] `v2` **List: загрузка из XML sitemap, CSV, Excel** — извлечь URL из файла любого из этих форматов
+- [x] `v2` **List: загрузка из XML sitemap, CSV** — извлечь URL из файла (`<urlset>`; CSV с колонкой url / address / loc) → `spider crawl --list`
+- [ ] `v2` **List: загрузка из Excel** — вместе с XLSX-экспортом (#38): та же зависимость
 - [ ] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`
 - [ ] `v3` **APIs** — только загрузить данные API (GSC, PSI…) по списку URL, без обхода
 - [ ] `backlog` **SERP** — посчитать длины и ширину в пикселях для загруженных title/description без обхода
@@ -738,7 +739,7 @@
 - [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
 - [x] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами → `spider insecure`
 - [ ] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях
-- [ ] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже)
+- [x] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже) → `spider sitemaps show --only orphans`
 - [x] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)** → `spider structured [--report validation|features]`
 - [ ] `v2` **JavaScript: Chrome Console Log Summary**
 - [ ] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL
@@ -750,8 +751,8 @@
 
 ### Генерация sitemap (через rb-sitemap-xml)
 
-- [ ] `v2` **XML Sitemap** — индексируемые 200-страницы; опционально noindex / canonicalised / пагинация / PDF; lastmod, priority, changefreq; разбиение по 49 999 URL + индексный sitemap → spider отдаёт список URL, генерирует `sitemap-xml build`
-- [ ] `v2` **Image Sitemap** — страницы с картинками, картинки с кодом 200
+- [x] `v2` **XML Sitemap** — индексируемые 200-страницы; опционально noindex / canonicalised / пагинация / PDF; lastmod, priority, changefreq; разбиение по 49 999 URL + индексный sitemap → `spider sitemaps build` (генерирует `write_sitemaps` из rb-sitemap-xml)
+- [x] `v2` **Image Sitemap** — страницы с картинками, картинки с кодом 200 → `spider sitemaps build --images`
 - [ ] `backlog` **Sitemap по сегментам**
 
 ### Визуализации
@@ -831,6 +832,6 @@
 
 ### Доработки rb-sitemap-xml
 
-- [ ] `v2` **Метаданные URL** — отдавать `lastmod`, `changefreq`, `priority`, файл-источник
-- [ ] `v2` **Async API**
-- [ ] `v2` **Команда `sitemap-xml build`** — генерация sitemap по списку индексируемых URL от spider
+- [x] `v2` **Метаданные URL** — отдавать `lastmod`, `changefreq`, `priority`, файл-источник (+ картинки, hreflang, `SitemapFile` — размер и число URL файла)
+- [x] `v2` **Async API** — `SitemapClient.iter_files()`: файлы по одному
+- [x] `v2` **Команда `sitemap-xml build`** — генерация sitemap по списку индексируемых URL от spider
