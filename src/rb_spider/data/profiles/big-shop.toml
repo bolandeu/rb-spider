@@ -1,0 +1,12 @@
+description = "Большой магазин: без сортировок, фильтров и utm-меток, без проверки тысяч картинок товаров"
+extends = "default"
+
+[crawl]
+exclude = ["[?&](sort|order|dir|filter|limit|view|page_size)=", "[?&]utm_[a-z]+="]
+max_links_per_page = 1000
+
+[collect.images]
+follow = false
+
+[collect.external_links]
+store = false

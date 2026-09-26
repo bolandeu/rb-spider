@@ -1,0 +1,8 @@
+description = "Сайт на JavaScript (SPA): страницы рендерятся браузером, данные — из готового DOM (нужен rb-spider[render])"
+extends = "default"
+
+[crawl]
+render = "always"
+render_tabs = 4
+render_wait_ms = 1000
+concurrency = 10

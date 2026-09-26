@@ -130,6 +130,38 @@ def test_profiles_md_reference_matches_schema() -> None:
     assert f"{BEGIN}{generated}{END}" in text, "docs/profiles.md key table is stale"
 
 
+PROFILES_BEGIN, PROFILES_END = (
+    "<!-- profiles:begin (generated from the built-in profiles) -->\n",
+    "<!-- profiles:end -->",
+)
+
+
+def test_profiles_md_lists_the_builtin_profiles() -> None:
+    """docs/profiles.md's built-in profiles are generated; refresh: SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest."""
+    import os
+
+    text = DOCS.read_text(encoding="utf-8")
+    generated = settings.profiles_markdown()
+    head, _, rest = text.partition(PROFILES_BEGIN)
+    _, _, tail = rest.partition(PROFILES_END)
+    if os.environ.get("SPIDER_UPDATE_SNAPSHOTS"):
+        DOCS.write_text(f"{head}{PROFILES_BEGIN}{generated}{PROFILES_END}{tail}", encoding="utf-8")
+        text = DOCS.read_text(encoding="utf-8")
+    assert f"{PROFILES_BEGIN}{generated}{PROFILES_END}" in text, "docs/profiles.md built-in profiles are stale"
+
+
+def test_every_recipe_in_profiles_md_is_valid(tmp_path: Path) -> None:
+    """Each TOML block after «## Рецепты» — hand-written or generated — passes `spider config validate`."""
+    recipes = DOCS.read_text(encoding="utf-8").partition("## Рецепты")[2]
+    blocks = re.findall(r"```toml\n(.*?)```", recipes, re.DOTALL)
+    assert len(blocks) >= 7  # proxy + the built-in profiles
+    for i, block in enumerate(blocks):
+        path = tmp_path / f"recipe{i}.toml"
+        path.write_text(block, encoding="utf-8")
+        result = CliRunner().invoke(app, ["--json", "config", "validate", str(path)])
+        assert result.exit_code == 0, f"{block}\n{result.stdout}"
+
+
 # --- CLI ---------------------------------------------------------------------------
 
 

@@ -1,0 +1,17 @@
+description = "Быстрый первый взгляд на сайт: до 1000 URL, без проверки внешних ссылок и ресурсов"
+extends = "default"
+
+[crawl]
+max_urls = 1000
+
+[collect.external_links]
+follow = false
+
+[collect.images]
+follow = false
+
+[collect.css]
+follow = false
+
+[collect.js]
+follow = false

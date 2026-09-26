@@ -99,3 +99,13 @@ def test_cli_crawl_needs_exactly_one_source(args: list[str]) -> None:
     result = CliRunner().invoke(app, ["--json", *args])
     assert result.exit_code == 2
     assert json.loads(result.stdout)["error"]["code"] == "INVALID_ARGUMENTS"
+
+
+def test_list_mode_profile_with_a_single_url(base_url: str, engine) -> None:
+    from rb_spider.core.crawl import crawl_site
+    from rb_spider.core.settings import CrawlSettings, Settings
+
+    result = crawl_site(engine, f"{base_url}/old", "polygon", Settings(crawl=CrawlSettings(mode="list")))
+    pages = _pages(engine, result.crawl_id)
+    assert set(pages) == {f"{base_url}/old", f"{base_url}/a"}  # the URL and its redirect, no links followed
+    assert not any(page["external"] for page in pages.values())

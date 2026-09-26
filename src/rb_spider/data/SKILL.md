@@ -1,6 +1,6 @@
 ---
 name: spider
-description: Conventions for driving the spider CLI from an agent — install, JSON output, exit codes, credentials, destructive-command gating. Invoke when a task involves this project's operations.
+description: Conventions for driving the spider SEO crawler from an agent — install, JSON output, choosing a crawl profile, the order of analysis commands (drill-down), exit codes, credentials, destructive-command gating. Invoke when a task involves crawling or auditing a website with spider.
 ---
 
 # spider
@@ -30,6 +30,51 @@ without any of that:
 uv tool install "git+ssh://git@github.com/bolandeu/spider.git"
 ```
 
+## Crawl: pick a profile, don't hand-tune flags
+
+A profile is a named set of crawl settings. `spider profiles list --json`
+shows the built-in ones with a one-line purpose; pick by the task:
+
+| Task | Profile |
+| --- | --- |
+| first look at an unknown site | `quick-audit` |
+| full audit of the user's own site | `default` (or `fast` — 50 parallel requests, own sites only) |
+| how Google / Yandex see it | `googlebot` / `yandexbot` |
+| site renders content with JavaScript (empty HTML, SPA) | `js-site` (needs the `render` extra; exit 1 `RENDER_UNAVAILABLE` says how to install) |
+| only broken links and resources | `broken-links` |
+| big shop (sorting / filter / utm URLs) | `big-shop`, run with `--detach` |
+| migration: check a list of old URLs | `migration` with `spider crawl --list urls.txt` |
+
+- One-off change: `--set section.key=value` (any key, repeatable). Before
+  a long crawl, `spider config show --profile X --set … --json` prints the
+  final settings and which layer each came from.
+- Reusable change: `spider profiles init NAME --from <profile>` writes
+  `.spider/profiles/NAME.toml` with every key commented and explained; set
+  `extends`, keep only what differs, check with `spider config validate`.
+  `spider config schema` is the machine-readable key list.
+- Be polite to sites that aren't the user's: keep `crawl.concurrency` low
+  and/or set `crawl.max_rps`; robots.txt is respected by default.
+- Big crawls: `--detach`, then poll `spider status --json` (pages stored,
+  queue left, process alive). An interrupted crawl continues without loss:
+  `spider crawls resume`.
+
+## Analysis: drill down, never dump everything
+
+1. `spider issues --json` — which checks fired and on how many URLs, most
+   urgent first. `not_checked` lists checks whose data wasn't collected —
+   never report those as passed.
+2. `spider urls --issue <code> --json` — the URLs of one check (`--limit`;
+   `total` tells how many there are).
+3. `spider url <url> --json` — everything about one page;
+   `spider links <url> --in|--out` — who links to it / where it links;
+   `spider redirects` — redirect paths and chains.
+4. Only then bulk data: `spider export …` (CSV/JSON, streamed; `-o file`)
+   or `spider query "SELECT …"` (read-only SQL) for questions no command
+   answers. Report findings as counts plus a few examples, not full lists.
+
+After changing thresholds, `spider analyze` recomputes the checks without
+crawling again.
+
 ## Conventions
 
 - **`--json` on every command.** Parse stdout; never scrape human output.
@@ -44,9 +89,10 @@ uv tool install "git+ssh://git@github.com/bolandeu/spider.git"
   config. Check `auth status --json`; log in with `auth login`; never ask
   the user to paste a secret into a command line.
 - **Destructive commands** are the ones whose `--help` shows `--dry-run`
-  and `--confirm`. Always: run with `--dry-run`, show the user, get
-  explicit sign-off, then `--confirm --non-interactive`. Never chain
-  straight to `--confirm` without a human having seen the dry-run.
+  and `--yes` (alias `--confirm`): deleting crawls, projects, pruning.
+  Always: run with `--dry-run`, show the user, get explicit sign-off, then
+  `--yes --non-interactive`. Never chain straight to `--yes` without a
+  human having seen the dry-run.
 - **`doctor --json`** first when something looks off — it reports
   project, config, version compatibility and credential readiness.
 

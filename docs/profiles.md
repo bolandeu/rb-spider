@@ -101,4 +101,174 @@ concurrency = 10
 
 ## Рецепты
 
-Появятся вместе с настройками, на которые они опираются (#20).
+Рецепт — готовый профиль под типичную задачу. Все, кроме прокси, встроены: `spider crawl <url> --profile <имя>`. Свой вариант на основе рецепта — `spider profiles init my --from <имя>`: в файле будут все ключи с описаниями. Итог настроек до обхода — `spider config show --profile <имя>`.
+
+| Задача | Как запустить | Что смотреть после |
+| --- | --- | --- |
+| Быстрый первый взгляд | `spider crawl <url> --profile quick-audit` | `spider issues` |
+| Миграция: старые URL → новые | `spider crawl --list old-urls.txt --profile migration` | `spider redirects --only errors`, `spider urls --issue internal_client_error` |
+| Сайт на JavaScript | `spider crawl <url> --profile js-site` (нужен `rb-spider[render]`) | `spider issues`; `pages.rendered = 0` в `spider query` — где рендер не удался |
+| Только битые ссылки | `spider crawl <url> --profile broken-links` | `spider export links --status 4xx`, `spider export links --status 5xx` |
+| Большой интернет-магазин | `spider crawl <url> --profile big-shop --detach` | `spider status`, затем `spider issues` |
+| Обход через прокси | свой профиль, пример ниже | как обычно |
+
+### Обход через прокси
+
+Адрес прокси у каждого свой, поэтому это не встроенный профиль, а пример своего `.spider/profiles/proxy.toml`. Пароль в файл не пишется: `{password}` подставляется из системного хранилища ключей — один раз `spider auth login --provider proxy`.
+
+```toml
+description = "Обход через прокси: запросы чередуются между адресами"
+extends = "default"
+
+[crawl]
+proxy_urls = ["http://user:{password}@proxy1.example:8000", "http://user:{password}@proxy2.example:8000"]
+concurrency = 10
+```
+
+## Встроенные профили
+
+Генерируется из файлов профилей в пакете (тест сверяет с кодом, каждый блок проходит `spider config validate`).
+
+<!-- profiles:begin (generated from the built-in profiles) -->
+### `default`
+
+Значения по умолчанию: браузерный User-Agent, соблюдать robots.txt, 20 запросов одновременно
+
+```toml
+description = "Значения по умолчанию: браузерный User-Agent, соблюдать robots.txt, 20 запросов одновременно"
+```
+
+### `big-shop`
+
+Большой магазин: без сортировок, фильтров и utm-меток, без проверки тысяч картинок товаров
+
+```toml
+description = "Большой магазин: без сортировок, фильтров и utm-меток, без проверки тысяч картинок товаров"
+extends = "default"
+
+[crawl]
+exclude = ["[?&](sort|order|dir|filter|limit|view|page_size)=", "[?&]utm_[a-z]+="]
+max_links_per_page = 1000
+
+[collect.images]
+follow = false
+
+[collect.external_links]
+store = false
+```
+
+### `broken-links`
+
+Поиск битых ссылок и ресурсов: проверить все ссылки, картинки, CSS и JS, в том числе на чужие сайты
+
+```toml
+description = "Поиск битых ссылок и ресурсов: проверить все ссылки, картинки, CSS и JS, в том числе на чужие сайты"
+extends = "default"
+
+[crawl]
+concurrency = 30
+follow_external_nofollow = true
+
+[collect.canonicals]
+follow = false
+```
+
+### `fast`
+
+Быстрый аудит своего сайта: 50 запросов одновременно (на чужих сайтах — осторожно)
+
+```toml
+description = "Быстрый аудит своего сайта: 50 запросов одновременно (на чужих сайтах — осторожно)"
+extends = "default"
+
+[crawl]
+concurrency = 50
+```
+
+### `googlebot`
+
+Обход глазами Googlebot для смартфонов (как Google индексирует сайт в mobile-first)
+
+```toml
+description = "Обход глазами Googlebot для смартфонов (как Google индексирует сайт в mobile-first)"
+extends = "default"
+
+[crawl]
+user_agent = "googlebot-smartphone"
+```
+
+### `js-site`
+
+Сайт на JavaScript (SPA): страницы рендерятся браузером, данные — из готового DOM (нужен rb-spider[render])
+
+```toml
+description = "Сайт на JavaScript (SPA): страницы рендерятся браузером, данные — из готового DOM (нужен rb-spider[render])"
+extends = "default"
+
+[crawl]
+render = "always"
+render_tabs = 4
+render_wait_ms = 1000
+concurrency = 10
+```
+
+### `migration`
+
+Миграция: только URL из списка (spider crawl --list old.txt) и их редиректы до конца
+
+```toml
+description = "Миграция: только URL из списка (spider crawl --list old.txt) и их редиректы до конца"
+extends = "default"
+
+[crawl]
+mode = "list"
+
+[collect.canonicals]
+follow = false
+
+[collect.images]
+follow = false
+
+[collect.css]
+follow = false
+
+[collect.js]
+follow = false
+```
+
+### `quick-audit`
+
+Быстрый первый взгляд на сайт: до 1000 URL, без проверки внешних ссылок и ресурсов
+
+```toml
+description = "Быстрый первый взгляд на сайт: до 1000 URL, без проверки внешних ссылок и ресурсов"
+extends = "default"
+
+[crawl]
+max_urls = 1000
+
+[collect.external_links]
+follow = false
+
+[collect.images]
+follow = false
+
+[collect.css]
+follow = false
+
+[collect.js]
+follow = false
+```
+
+### `yandexbot`
+
+Обход глазами основного робота Яндекса
+
+```toml
+description = "Обход глазами основного робота Яндекса"
+extends = "default"
+
+[crawl]
+user_agent = "yandexbot"
+```
+<!-- profiles:end -->

@@ -1,0 +1,17 @@
+description = "Миграция: только URL из списка (spider crawl --list old.txt) и их редиректы до конца"
+extends = "default"
+
+[crawl]
+mode = "list"
+
+[collect.canonicals]
+follow = false
+
+[collect.images]
+follow = false
+
+[collect.css]
+follow = false
+
+[collect.js]
+follow = false

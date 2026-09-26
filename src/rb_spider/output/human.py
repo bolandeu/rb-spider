@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 # Data goes to stdout; errors and diagnostics go to stderr, so
@@ -92,7 +93,7 @@ def profiles_table(data: dict) -> None:
     for column in ("профиль", "где", "наследует", "описание"):
         table.add_column(column)
     for p in data["profiles"]:
-        table.add_row(p["name"], p["where"], p["extends"] or "", p["description"] or "")
+        table.add_row(p["name"], p["where"], p["extends"] or "", escape(p["description"] or ""))
     console.print(table)
 
 

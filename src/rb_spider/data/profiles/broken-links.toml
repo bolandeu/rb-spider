@@ -1,0 +1,9 @@
+description = "Поиск битых ссылок и ресурсов: проверить все ссылки, картинки, CSS и JS, в том числе на чужие сайты"
+extends = "default"
+
+[crawl]
+concurrency = 30
+follow_external_nofollow = true
+
+[collect.canonicals]
+follow = false

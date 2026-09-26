@@ -335,6 +335,8 @@ def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Se
     """Record a new crawl with its settings; `run_crawl` does the work (now, or in a detached process)."""
     settings = settings or Settings()
     start_url = _validate_start_url(start_url)
+    if settings.crawl.mode == "list":  # a profile in list mode with one URL: a list of one
+        return register_list_crawl(engine, [start_url], project, settings)
     _ready(settings)
     return storage.start_crawl(engine, project, start_url, settings.model_dump(mode="json"))
 

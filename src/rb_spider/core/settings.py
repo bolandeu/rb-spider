@@ -535,3 +535,14 @@ def reference_markdown() -> str:
         default = "—" if field.default is None else f"`{_toml_literal(field.default)}`"
         lines.append(f"| `{dotted}` | `{kind}` | {default} | {field.description} |")
     return "\n".join(lines) + "\n"
+
+
+def profiles_markdown() -> str:
+    """The built-in profiles (recipes included) for docs/profiles.md: each one's description and file."""
+    names = sorted(builtin_profiles(), key=lambda name: (name != "default", name))
+    blocks = []
+    for name in names:
+        text = builtin_profiles()[name].read_text(encoding="utf-8").strip()
+        profile = ProfileFile.model_validate(tomllib.loads(text))
+        blocks.append(f"### `{name}`\n\n{profile.description}\n\n```toml\n{text}\n```\n")
+    return "\n".join(blocks)
