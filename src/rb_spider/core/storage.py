@@ -339,7 +339,9 @@ render_events = sa.Table(
     sa.Index("render_events_by_url", "crawl_id", "url"),
 )
 # `spider lighthouse`: every audit of every page Lighthouse measured (and spider's own mobile measures, `spider-*`),
-# per strategy. Items — up to 20 of the audit's resources as JSON (URL, wasted bytes / ms), for the reports.
+# per strategy. Items — up to 20 of the audit's resources as JSON (URL, wasted bytes / ms), for the reports. From
+# PageSpeed Insights also the CrUX field data: `crux:<metric>` / `crux-origin:<metric>` (score 1 / 0.5 / 0 — FAST /
+# AVERAGE / SLOW; value — the 75th percentile, ms or CLS).
 lighthouse_audits = sa.Table(
     "lighthouse_audits",
     metadata,
@@ -351,6 +353,7 @@ lighthouse_audits = sa.Table(
     sa.Column("value", sa.Float),  # numericValue (ms, bytes, CLS…)
     sa.Column("display", sa.String),  # displayValue as Lighthouse words it
     sa.Column("items", sa.String),
+    sa.Column("source", sa.String),  # local | psi; NULL — measured before 0032 (local)
     sa.Index("lighthouse_audits_by_url", "crawl_id", "url"),
 )
 # Images as a rendered page laid them out (crawl.render_images): real size against the size shown (Incorrectly Sized

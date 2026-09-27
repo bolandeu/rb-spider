@@ -139,6 +139,8 @@ concurrency = 10
 | `rewrite.regex` | `list[tuple[str, str]]` | `[]` | Замены по регулярным выражениям, по порядку: пары [выражение, замена]; группы в замене — \1, \2. |
 | `rewrite.lowercase` | `bool` | `false` | Переводить найденные URL в нижний регистр целиком. |
 | `rewrite.percent_encoding` | `Literal['keep', 'upper', 'lower']` | `"keep"` | Регистр шестнадцатеричных цифр в %-кодировании (%D0 или %d0): keep — как на странице. |
+| `lighthouse.source` | `Literal['local', 'psi']` | `"local"` | Кто замеряет: local — Lighthouse на этой машине (работает и за авторизацией, и на локальном сайте); psi — PageSpeed Insights API: те же аудиты с серверов Google плюс данные реальных пользователей (CrUX), только для публичных страниц; нужен extra `gsc` и ключ `gsc auth login --provider pagespeed`. |
+| `lighthouse.psi_concurrency` | `int` | `4` | Сколько страниц PageSpeed Insights замеряет одновременно (source = psi). |
 | `lighthouse.command` | `str` | `"lighthouse"` | Как запускать Lighthouse: команда из PATH (`npm install -g lighthouse`) или, например, "npx --yes lighthouse" — без установки. |
 | `lighthouse.strategy` | `Literal['mobile', 'desktop']` | `"mobile"` | Мобильный (как Googlebot Smartphone) или десктопный замер; mobile — ещё и замеры Mobile. |
 | `lighthouse.per_template` | `int` | `1` | Сколько страниц брать на шаблон, когда URL не заданы: шаблон — папка и глубина пути (все /catalog/x/y — один), страницы — с наибольшим числом входящих ссылок; главная — всегда. |

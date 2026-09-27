@@ -27,8 +27,8 @@
 │              сайта.                                                                              │
 │ source       View Source: HTML страницы — как его отдал сервер, после JavaScript или разница     │
 │              между ними.                                                                         │
-│ lighthouse   Скорость и мобильные проверки страниц: Lighthouse на этой машине (как PageSpeed     │
-│              Insights, без ключа API).                                                           │
+│ lighthouse   Скорость и мобильные проверки страниц: Lighthouse на этой машине или PageSpeed      │
+│              Insights.                                                                           │
 │ init         Создать проект spider в каталоге: файл `.spider/config.toml`.                       │
 │ status       Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли     │
 │              процесс.                                                                            │

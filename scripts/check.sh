@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 uv lock --check
-uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres
+uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres --extra gsc
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -20,7 +20,7 @@ for flag in "$@"; do
   case "$flag" in
     --py312)
       env312="$(mktemp -d)"
-      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres pytest -q -p no:cacheprovider
+      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres --extra gsc pytest -q -p no:cacheprovider
       rm -rf "$env312"
       ;;
     --linux)
@@ -29,9 +29,11 @@ for flag in "$@"; do
       # uv's cache and its Pythons live in a Docker volume, so runs after the first are quick.
       for python in 3.12 3.14; do
         echo "--- Linux, Python $python"
-        # rb-sitemap-xml is a path source (../sitemap-xml): it goes into the container beside the project
+        # rb-sitemap-xml and gsc are path sources (../sitemap-xml, ../google-search-console): they go into the
+        # container beside the project
         { git ls-files -co --exclude-standard | sed 's|^|spider/|'
-          git -C ../sitemap-xml ls-files -co --exclude-standard | sed 's|^|sitemap-xml/|'; } \
+          git -C ../sitemap-xml ls-files -co --exclude-standard | sed 's|^|sitemap-xml/|'
+          git -C ../google-search-console ls-files -co --exclude-standard | sed 's|^|google-search-console/|'; } \
           | COPYFILE_DISABLE=1 tar --no-mac-metadata -C .. -cf - -T - 2>/dev/null | docker run --rm -i \
           -v spider-check-uv:/root/.cache/uv -e UV_PYTHON="$python" -e UV_LINK_MODE=copy \
           ghcr.io/astral-sh/uv:bookworm-slim \

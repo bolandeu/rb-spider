@@ -539,8 +539,14 @@ def url_details(data: dict) -> None:
         score = found["categories"].get("performance")
         metrics = ", ".join(f"{k} {round(v) if k != 'cls' else round(v, 3)}" for k, v in found["metrics"].items()
                             if v is not None)  # fmt: skip
-        console.print(f"[bold]Lighthouse ({strategy})[/bold]: {round(100 * score) if score is not None else '—'}"
+        source = " — PageSpeed Insights" if found.get("source") == "psi" else ""
+        console.print(f"[bold]Lighthouse ({strategy}{source})[/bold]: {round(100 * score) if score is not None else '—'}"
                       f"{' · ' + metrics if metrics else ''}")  # fmt: skip
+        for where, label in (("url", "страница"), ("origin", "сайт")):
+            crux = (found.get("crux") or {}).get(where)
+            if crux:
+                shown = ", ".join(f"{name} {m['category'] or '—'}" for name, m in crux.items() if name != "overall")
+                console.print(f"  CrUX, {label}: {(crux.get('overall') or {}).get('category') or '—'} · {shown}")
         for audit in found["failed"]:
             console.print(f"  {audit['audit']}: {audit['display'] or audit['score']}")
 
@@ -620,8 +626,12 @@ def page_source(data: dict) -> None:
         print(data["html"])
 
 
+def _lh_source(data: dict) -> str:
+    return f"{data['strategy']}, PageSpeed Insights" if data.get("source") == "psi" else data["strategy"]
+
+
 def lighthouse_plan(data: dict) -> None:
-    console.print(f"Lighthouse ({data['strategy']}) замерит {len(data['urls'])} стр. обхода #{data['crawl_id']}:")
+    console.print(f"Lighthouse ({_lh_source(data)}) замерит {len(data['urls'])} стр. обхода #{data['crawl_id']}:")
     for url in data["urls"]:
         console.print(f"  {url}")
 
@@ -639,5 +649,5 @@ def lighthouse_progress(page: dict) -> None:
 
 def lighthouse_done(data: dict) -> None:
     ok = sum(p["ok"] for p in data["pages"])
-    console.print(f"Lighthouse ({data['strategy']}), обход #{data['crawl_id']}: замерено {ok} из {len(data['pages'])}"
+    console.print(f"Lighthouse ({_lh_source(data)}), обход #{data['crawl_id']}: замерено {ok} из {len(data['pages'])}"
                   f" стр., находок PageSpeed / Mobile: {data['findings']} — `spider issues`")  # fmt: skip

@@ -27,8 +27,9 @@
  `crawl.render_images`), origin `css background` — фоновая картинка. В page —                       
  `link_score` (после `spider link-score`) и `screenshot` — путь к скриншоту (с                      
  `crawl.render_screenshots`). `lighthouse` — замеры `spider lighthouse` по стратегиям:              
- `{mobile: {categories, metrics, failed: [{audit, score, display}]}}`, null — не                    
- замерялась. URL нет в обходе — выход 2.                                                            
+ `{mobile: {source, categories, metrics, crux: {url, origin}, failed: [{audit, score,               
+ display}]}}` (crux — данные реальных пользователей, только из PageSpeed Insights:                  
+ `{lcp: {value, category}, …}`), null — не замерялась. URL нет в обходе — выход 2.                  
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    URL      <str>  URL из обхода, например https://example.com/catalog/. [required]            │

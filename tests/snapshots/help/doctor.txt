@@ -10,7 +10,8 @@
  настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,                   
  если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта               
  при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse                             
- (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет).                
+ (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при          
+ `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights.            
                                                                                                     
  Примеры:                                                                                           
    spider doctor                                                                                    

@@ -767,10 +767,22 @@ class ThresholdSettings(BaseModel):
 
 
 class LighthouseSettings(BaseModel):
-    """`spider lighthouse`: page speed and mobile audits by Lighthouse run on this machine (Node.js + npm lighthouse)."""
+    """`spider lighthouse`: page speed and mobile audits by Lighthouse — run on this machine (Node.js + npm
+    lighthouse) or by PageSpeed Insights (the `gsc` extra)."""
 
     model_config = ConfigDict(extra="forbid")
 
+    source: Literal["local", "psi"] = Field(
+        "local",
+        description=(
+            "Кто замеряет: local — Lighthouse на этой машине (работает и за авторизацией, и на локальном сайте); "
+            "psi — PageSpeed Insights API: те же аудиты с серверов Google плюс данные реальных пользователей (CrUX), "
+            "только для публичных страниц; нужен extra `gsc` и ключ `gsc auth login --provider pagespeed`."
+        ),
+    )
+    psi_concurrency: int = Field(
+        4, ge=1, le=16, description="Сколько страниц PageSpeed Insights замеряет одновременно (source = psi)."
+    )
     command: str = Field(
         "lighthouse",
         description=(

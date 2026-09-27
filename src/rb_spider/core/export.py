@@ -222,7 +222,8 @@ _EXTRA = {
     "source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False),
     "text": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=True),
     "lighthouse": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url, strategy, audit, score, value, display, items FROM lighthouse_audits WHERE crawl_id = :crawl_id"
+        "SELECT url, strategy, audit, score, value, display, items, coalesce(source, 'local') AS source"
+        " FROM lighthouse_audits WHERE crawl_id = :crawl_id"
         " ORDER BY url, strategy, audit"),
     "rendered-source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False, rendered=True),
     "screenshots": lambda conn, crawl_id: _sql_table(conn, crawl_id,
@@ -483,21 +484,27 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
 
 
 def lighthouse_of(engine: sa.Engine, crawl_id: int, url: str) -> dict | None:
-    """Lighthouse Details of a page (`spider lighthouse`): per strategy the category scores, the metrics and the
-    audits that failed; None — not measured."""
+    """Lighthouse Details of a page (`spider lighthouse`): per strategy who measured it, the category scores, the
+    metrics, the audits that failed and — from PageSpeed Insights — the CrUX field data; None — not measured."""
     table = storage.lighthouse_audits
     metrics = {"largest-contentful-paint": "lcp_ms", "first-contentful-paint": "fcp_ms", "cumulative-layout-shift": "cls",
                "total-blocking-time": "tbt_ms", "speed-index": "speed_index_ms"}  # fmt: skip
     with engine.connect() as conn:
-        rows = conn.execute(sa.select(table.c.strategy, table.c.audit, table.c.score, table.c.value, table.c.display)
-                            .where(table.c.crawl_id == crawl_id, table.c.url == url)).all()  # fmt: skip
+        rows = conn.execute(sa.select(table.c.strategy, table.c.audit, table.c.score, table.c.value, table.c.display,
+                                      table.c.source).where(table.c.crawl_id == crawl_id, table.c.url == url)).all()  # fmt: skip
     if not rows:
         return None
     found: dict[str, dict] = {}
-    for strategy, audit, score, value, display in rows:
-        entry = found.setdefault(strategy, {"categories": {}, "metrics": {}, "failed": []})
+    for strategy, audit, score, value, display, source in rows:
+        entry = found.setdefault(strategy, {"source": source or "local", "categories": {}, "metrics": {},
+                                            "crux": {}, "failed": []})  # fmt: skip
+        scope, _, name = audit.partition(":")
         if audit.startswith("category:"):
             entry["categories"][audit.removeprefix("category:")] = score
+        elif scope in ("crux", "crux-origin"):
+            where = "url" if scope == "crux" else "origin"
+            entry["crux"].setdefault(where, {})[name] = {"value": value, "category": display.split(",")[0]
+                                                         if display else None}  # fmt: skip
         elif audit in metrics:
             entry["metrics"][metrics[audit]] = value
         elif score is not None and score < 0.9 and audit in issues.CHECKED_AUDITS:

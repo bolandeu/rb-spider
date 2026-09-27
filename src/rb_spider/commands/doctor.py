@@ -73,7 +73,8 @@ def doctor(
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
     если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
     при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
-    (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет).
+    (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
+    `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights.
 
     Примеры:
       spider doctor
@@ -142,6 +143,8 @@ def _lighthouse_check(root: Path | None, config: ProjectConfig | None) -> dict:
         lh = settings.resolve(root, project_data=data).settings.lighthouse
     except CliError:  # broken settings are the settings check's to report
         return {"name": "lighthouse", "ok": True, "detail": "не проверялось: настройки не собрались"}
+    if lh.source == "psi":
+        return _pagespeed_check()
     found = lighthouse.available(lh)
     detail = (
         f"{lh.command} → {found}"
@@ -149,3 +152,17 @@ def _lighthouse_check(root: Path | None, config: ProjectConfig | None) -> dict:
         else (f"не найден ({lh.command}) — нужен только для `spider lighthouse`: npm install -g lighthouse")
     )
     return {"name": "lighthouse", "ok": True, "detail": detail}
+
+
+def _pagespeed_check() -> dict:
+    """PageSpeed Insights for `spider lighthouse --source psi`: the gsc package and its key (keychain / env)."""
+    try:
+        import gsc
+    except ImportError:
+        return {"name": "lighthouse", "ok": True, "detail": "source = psi, но gsc не установлен: uv sync --extra gsc"}
+    try:
+        has_key = gsc.auth_status().pagespeed_key
+    except gsc.CliError as exc:
+        return {"name": "lighthouse", "ok": True, "detail": f"source = psi, gsc {gsc.__version__}: {exc.message}"}
+    detail = "ключ есть" if has_key else "ключа нет — gsc auth login --provider pagespeed"
+    return {"name": "lighthouse", "ok": True, "detail": f"source = psi, gsc {gsc.__version__}: {detail}"}

@@ -15,8 +15,8 @@
  незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML                  
  после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты                             
  `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с                      
- index.csv), lighthouse (все аудиты `spider lighthouse` построчно). `--issue` у links — ссылки,     
- из-за которых                                                                                      
+ index.csv), lighthouse (все аудиты `spider lighthouse` построчно, с источником local / psi и       
+ CrUX). `--issue` у links — ссылки, из-за которых                                                   
  сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.                            
                                                                                                     
  Примеры:                                                                                           

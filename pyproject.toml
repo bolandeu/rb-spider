@@ -38,6 +38,8 @@ xpath = ["lxml>=5"]
 sitemaps = ["rb-sitemap-xml"]
 # crawls in PostgreSQL instead of the local SQLite file (`SPIDER_DB_URL`)
 postgres = ["psycopg[binary]>=3.2"]
+# PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
+gsc = ["gsc>=0.3,<0.4"]
 
 [project.scripts]
 spider = "rb_spider.cli:main"
@@ -49,9 +51,10 @@ Repository = "https://github.com/bolandeu/spider"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# rb-sitemap-xml is developed next door (docs/spec.md, section 5); outside this checkout install it on its own
+# rb-sitemap-xml and gsc are developed next door (docs/spec.md, section 5); outside this checkout install it on its own
 [tool.uv.sources]
 rb-sitemap-xml = { path = "../sitemap-xml", editable = true }
+gsc = { path = "../google-search-console", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rb_spider"]

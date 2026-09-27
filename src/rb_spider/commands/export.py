@@ -81,8 +81,9 @@ def url(
     `crawl.render_images`), origin `css background` — фоновая картинка. В page —
     `link_score` (после `spider link-score`) и `screenshot` — путь к скриншоту (с
     `crawl.render_screenshots`). `lighthouse` — замеры `spider lighthouse` по стратегиям:
-    `{mobile: {categories, metrics, failed: [{audit, score, display}]}}`, null — не
-    замерялась. URL нет в обходе — выход 2.
+    `{mobile: {source, categories, metrics, crux: {url, origin}, failed: [{audit, score,
+    display}]}}` (crux — данные реальных пользователей, только из PageSpeed Insights:
+    `{lcp: {value, category}, …}`), null — не замерялась. URL нет в обходе — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
@@ -131,7 +132,7 @@ def export(
     незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML
     после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты
     `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с
-    index.csv), lighthouse (все аудиты `spider lighthouse` построчно). `--issue` у links — ссылки, из-за которых
+    index.csv), lighthouse (все аудиты `spider lighthouse` построчно, с источником local / psi и CrUX). `--issue` у links — ссылки, из-за которых
     сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
 
     Примеры:

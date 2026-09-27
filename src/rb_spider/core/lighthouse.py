@@ -6,6 +6,9 @@ one), the pages with the most inlinks, and the home page; explicit URLs or `--al
 
 Lighthouse is Google's own (the engine of PageSpeed Insights), an npm package run as a command
 (`lighthouse.command`); each page is one run, its JSON report parsed and every audit stored in `lighthouse_audits`.
+`lighthouse.source = "psi"` asks PageSpeed Insights instead (through the sibling package gsc, which holds the key and
+keeps to the API's limits): the same audits, run on Google's servers, plus the field data of real Chrome users
+(CrUX) — stored beside them as `crux:<metric>` (the page) and `crux-origin:<metric>` (the whole site).
 Lighthouse 12+ no longer checks text size or content width on phones: on mobile, spider measures those itself in a
 browser at a phone's viewport, as Lighthouse did (`spider-content-width`, `spider-font-size`). The PageSpeed and
 Mobile rules read the table; `analyze` keeps them, and a new run refreshes them.
@@ -22,6 +25,7 @@ import shutil
 import subprocess
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 import sqlalchemy as sa
@@ -29,6 +33,10 @@ import sqlalchemy as sa
 from . import storage
 from .errors import CliError, InvalidArguments
 from .settings import LighthouseSettings, Settings
+from .version import DIST_NAME
+
+if TYPE_CHECKING:
+    import gsc  # the `gsc` extra: imported where PageSpeed Insights is used
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +76,32 @@ class LighthouseUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class PageSpeedUnavailable(CliError):
+    """`lighthouse.source = "psi"` without the `gsc` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "PAGESPEED_UNAVAILABLE",
+            "PageSpeed Insights needs the gsc package, which is not installed.",
+            action=(
+                "Install spider with it beside: uv tool install --reinstall --with-editable <path to "
+                f'google-search-console> "{DIST_NAME} @ git+https://github.com/bolandeu/spider.git" (in a checkout next '
+                "to ../google-search-console: uv sync --extra gsc), or measure here: --source local."
+            ),
+            exit_code=1,
+        )
+
+
+def pagespeed_client() -> gsc.PageSpeed:
+    """The PageSpeed Insights client of the gsc package (its key: `gsc auth login --provider pagespeed`); tests put
+    a fake here."""
+    try:
+        import gsc
+    except ImportError:
+        raise PageSpeedUnavailable from None
+    return gsc.PageSpeed()
 
 
 def available(settings: LighthouseSettings) -> str | None:
@@ -132,30 +166,76 @@ def _chrome(settings: Settings) -> str | None:
 def run(engine: sa.Engine, crawl_id: int, urls: Iterable[str], settings: Settings) -> Iterator[PageResult]:
     """Measure each URL, replacing what an earlier run stored for it (same strategy); yields a result per page."""
     lh = settings.lighthouse
-    command = shlex.split(lh.command)
-    if not command or shutil.which(command[0]) is None:
-        raise LighthouseUnavailable(lh.command, "the command isn't found")
-    env = dict(os.environ)
-    if chrome := _chrome(settings):
-        env["CHROME_PATH"] = chrome
+    chrome = _chrome(settings)
+    measured = _psi(pagespeed_client(), urls, lh) if lh.source == "psi" else _local(urls, lh, chrome)
     from .issues import CHECKED_AUDITS  # issues imports much of core: only when measuring
 
     checked = set(CHECKED_AUDITS)
     mobile = _MobileMeasure(chrome) if lh.strategy == "mobile" else None
     try:
-        for url in urls:
-            result = _one(command, url, lh, env)
+        for url, result in measured:
             rows = result.pop("rows", [])
             if mobile is not None and result["ok"]:
                 rows += mobile.measure(url)
             page = PageResult(url, **result)
             page.failed = [r["audit"] for r in rows if r["audit"] in checked and r["score"] is not None
                            and r["score"] < 0.9]  # fmt: skip
-            _store(engine, crawl_id, url, lh.strategy, rows)
+            _store(engine, crawl_id, url, lh.strategy, lh.source, rows)
             yield page
     finally:
         if mobile is not None:
             mobile.close()
+
+
+def _local(urls: Iterable[str], lh: LighthouseSettings, chrome: str | None) -> Iterator[tuple[str, dict]]:
+    """Lighthouse on this machine, a page at a time; a missing command fails here, before any page."""
+    command = shlex.split(lh.command)
+    if not command or shutil.which(command[0]) is None:
+        raise LighthouseUnavailable(lh.command, "the command isn't found")
+    env = dict(os.environ)
+    if chrome:
+        env["CHROME_PATH"] = chrome
+    return ((url, _one(command, url, lh, env)) for url in urls)
+
+
+def _psi(client: gsc.PageSpeed, urls: Iterable[str], lh: LighthouseSettings) -> Iterator[tuple[str, dict]]:
+    """PageSpeed Insights, `psi_concurrency` pages at a time; results come as they are ready, not in order."""
+    import gsc
+
+    try:
+        for found in client.analyze_many(urls, lh.strategy, CATEGORIES.split(","), concurrency=lh.psi_concurrency):
+            yield found.url, _from_psi(found)
+    except gsc.CliError as exc:  # no key, a rejected key, the daily quota: stops the run, what was measured stays
+        raise CliError(exc.code, exc.message, action=exc.action, exit_code=exc.exit_code) from exc
+
+
+_CRUX_SCORES = {"FAST": 1.0, "AVERAGE": 0.5, "SLOW": 0.0}  # CrUX's category of a metric: good / needs work / poor
+_CRUX_METRICS = ("lcp", "inp", "cls", "fcp", "ttfb")
+
+
+def _from_psi(found: gsc.PageSpeedResult | gsc.PageSpeedError) -> dict:
+    """A PageSpeed Insights result as the rows a local run stores, plus the CrUX field data."""
+    import gsc
+
+    if isinstance(found, gsc.PageSpeedError):  # this page failed, the others go on
+        return {"ok": False, "error": f"{found.code}: {found.message}"[:300]}
+    if found.runtime_error:
+        return {"ok": False, "error": found.runtime_error[:300]}
+    rows = [_audit_row(a.id, a.score, a.numeric_value, a.display_value, a.details) for a in found.audits]
+    rows += [_category_row(name, score) for name, score in found.scores.items()]
+    for scope, crux in (("crux", found.crux_url), ("crux-origin", found.crux_origin)):
+        if crux is None:
+            continue
+        rows.append({"audit": f"{scope}:overall", "score": _CRUX_SCORES.get(crux.overall_category or ""),
+                     "value": None, "display": crux.overall_category, "items": None})  # fmt: skip
+        for name in _CRUX_METRICS:
+            metric = getattr(crux, name)
+            if metric is None:
+                continue
+            share = f", хорошо у {round(100 * metric.good)} %" if metric.good is not None else ""
+            rows.append({"audit": f"{scope}:{name}", "score": _CRUX_SCORES.get(metric.category or ""),
+                         "value": metric.value, "display": f"{metric.category or '—'}{share}", "items": None})  # fmt: skip
+    return _summary(rows)
 
 
 def _one(command: list[str], url: str, lh: LighthouseSettings, env: dict[str, str]) -> dict:
@@ -180,19 +260,30 @@ def _one(command: list[str], url: str, lh: LighthouseSettings, env: dict[str, st
             "ok": False,
             "error": f"{report['runtimeError']['code']}: {report['runtimeError'].get('message', '')}"[:300],
         }
-    rows = [_row(audit_id, audit) for audit_id, audit in report.get("audits", {}).items()]
-    for name, category in report.get("categories", {}).items():
-        rows.append({"audit": f"category:{name}", "score": category.get("score"), "value": None, "display": None,
-                     "items": None})  # fmt: skip
+    rows = [
+        _audit_row(
+            a_id, a.get("score"), a.get("numericValue"), a.get("displayValue"), (a.get("details") or {}).get("items")
+        )
+        for a_id, a in report.get("audits", {}).items()
+    ]
+    rows += [_category_row(name, category.get("score")) for name, category in report.get("categories", {}).items()]
+    return _summary(rows)
+
+
+def _summary(rows: list[dict]) -> dict:
     audits = {r["audit"]: r for r in rows}
     performance = audits.get("category:performance", {}).get("score")
     metrics = {name: audits.get(audit, {}).get("value") for name, audit in _METRICS.items()}
     return {"ok": True, "rows": rows, "performance": performance, "metrics": metrics}
 
 
-def _row(audit_id: str, audit: dict) -> dict:
+def _category_row(name: str, score: object) -> dict:
+    return {"audit": f"category:{name}", "score": float(score) if isinstance(score, int | float) else None,
+            "value": None, "display": None, "items": None}  # fmt: skip
+
+
+def _audit_row(audit_id: str, score: object, value: object, display: str | None, found: object) -> dict:
     items = []
-    found = (audit.get("details") or {}).get("items")
     for item in (found if isinstance(found, list) else [])[:MAX_ITEMS]:  # a tree (network chains) isn't kept
         if isinstance(item, dict):
             kept = {k: item[k] for k in ("url", "wastedBytes", "wastedMs", "totalBytes", "node") if k in item}
@@ -200,24 +291,24 @@ def _row(audit_id: str, audit: dict) -> dict:
                 kept["node"] = kept["node"].get("selector") or kept["node"].get("snippet")
             if kept:
                 items.append(kept)
-    score = audit.get("score")
     return {
         "audit": audit_id,
         "score": float(score) if isinstance(score, int | float) else None,
-        "value": audit.get("numericValue"),
-        "display": audit.get("displayValue"),
+        "value": float(value) if isinstance(value, int | float) else None,
+        "display": display,
         "items": json.dumps(items, ensure_ascii=False) if items else None,
     }
 
 
-def _store(engine: sa.Engine, crawl_id: int, url: str, strategy: str, rows: list[dict]) -> None:
+def _store(engine: sa.Engine, crawl_id: int, url: str, strategy: str, source: str, rows: list[dict]) -> None:
     table = storage.lighthouse_audits
     with engine.begin() as conn:
         conn.execute(sa.delete(table).where(table.c.crawl_id == crawl_id, table.c.url == url,
                                             table.c.strategy == strategy))  # fmt: skip
         if rows:
             conn.execute(
-                sa.insert(table), [{"crawl_id": crawl_id, "url": url, "strategy": strategy, **r} for r in rows]
+                sa.insert(table),
+                [{"crawl_id": crawl_id, "url": url, "strategy": strategy, "source": source, **r} for r in rows],
             )
 
 

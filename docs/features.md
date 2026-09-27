@@ -508,7 +508,7 @@
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
 - [x] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации → `spider url` (объекты — при `--store-html`)
 - [x] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
-- [x] `v3` **Lighthouse Details** — метрики Lighthouse по URL → `spider url` (поле lighthouse; локальный Lighthouse, PSI — #42)
+- [x] `v3` **Lighthouse Details** — метрики Lighthouse по URL → `spider url` (поле lighthouse: источник, оценки, метрики, CrUX из PSI)
 - [ ] `backlog` **Accessibility Details**, **Spelling & Grammar Details**
 - [ ] `backlog` **N-grams** — частоты фраз из 1–6 слов (нужен сохранённый HTML)
 - [x] `v2` **Crawl Path** — кратчайший путь, которым краулер нашёл URL → `spider report crawl-path`
@@ -784,7 +784,7 @@
 - [x] `MVP` **Интерфейс обогатителей (enrichers)** — плагины через entry points (`rb_spider.enrichers`), пишут в `url_metrics`; `spider enrichers`, `spider enrich`, метрики в `spider url` (реализаций в MVP нет)
 - [ ] `v3` **Google Search Console** — Search Analytics (клики, показы, CTR, позиция), URL Inspection API; на основе пакета `google-search-console`
 - [ ] `v3` **Яндекс.Вебмастер** — аналог GSC для Яндекса; на основе пакета `yandex-webmaster` (в SF нет)
-- [ ] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop
+- [x] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop → `spider lighthouse --source psi` (extra `gsc`)
 - [x] `v3` **Lighthouse локально** — без API, работает за авторизацией → `spider lighthouse` (выборка типовых страниц; Node.js + npm `lighthouse`)
 - [ ] `backlog` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
 - [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги; только через `llmkit` (мост пользователя к LLM-провайдерам: цепочки моделей, кэш, расходы, ключи), своих клиентов провайдеров в spider нет
