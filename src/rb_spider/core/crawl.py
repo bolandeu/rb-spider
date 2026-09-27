@@ -20,6 +20,7 @@ import asyncio
 import base64
 import contextlib
 import functools
+import hashlib
 import importlib.util
 import logging
 import os
@@ -327,6 +328,7 @@ async def _run(
                  viewport=settings.render_viewport, console=settings.render_console,
                  flatten_shadow_dom=settings.render_flatten_shadow_dom,
                  flatten_iframes=settings.render_flatten_iframes, images=settings.render_images,
+                 screenshots=settings.render_screenshots,
                  allowed=robots.allowed if settings.robots == "respect" else None)
         if settings.render != "never" else None
     )  # fmt: skip
@@ -501,6 +503,10 @@ async def _run(
         rendered = raw is not None if attempted else None
         if result is not None:
             _render_events(page, result)
+            if result.screenshot and raw is not None:
+                page.onpage["screenshot"] = await asyncio.to_thread(
+                    _save_screenshot, writer.crawl_id, page.url, result.screenshot
+                )
             if raw is not None:
                 auto.seen(js_changed(page))
         page.bytes = len(body)  # the response's size, not the rendered DOM's
@@ -571,6 +577,15 @@ class AutoRender:
         if changed and not self.needed:
             log.info("render = auto: JavaScript changes pages, rendering the rest of the crawl")
             self.needed = True
+
+
+def _save_screenshot(crawl_id: int, url: str, data: bytes) -> str:
+    """A page's screenshot as a file named after its URL; returns the file's path."""
+    folder = storage.screenshots_dir(crawl_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()[:20]}.jpg"
+    path.write_bytes(data)
+    return str(path)
 
 
 def _render_events(page: Page, result: render.Rendered) -> None:

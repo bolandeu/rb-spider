@@ -96,6 +96,7 @@ class Rendered:
     # loaded <img>: (URL, real width, real height, display width, display height) — crawl.render_images
     images: list[tuple[str, int, int, int, int]] = field(default_factory=list)
     backgrounds: list[str] = field(default_factory=list)  # CSS background-image URLs (computed styles)
+    screenshot: bytes | None = None  # the first screen as JPEG (crawl.render_screenshots)
 
 
 def same_page(a: str, b: str) -> bool:
@@ -191,11 +192,12 @@ class Renderer:
         flatten_shadow_dom: bool = True,
         flatten_iframes: bool = True,
         images: bool = False,
+        screenshots: bool = False,
         allowed: Callable[[str], Awaitable[bool]] | None = None,
     ) -> None:
         self.tabs, self.wait_ms, self.timeout_ms, self.browser = tabs, wait_ms, timeout_s * 1000, browser
         self.console, self.flatten_shadow_dom, self.flatten_iframes = console, flatten_shadow_dom, flatten_iframes
-        self.allowed = allowed
+        self.allowed, self.screenshots = allowed, screenshots
         # images load only when their real vs display size is wanted: skipping them makes rendering much faster
         self.skipped = _SKIPPED_RESOURCES - {"image"} if images else _SKIPPED_RESOURCES
         self.used_browser: str | None = None
@@ -298,7 +300,8 @@ class Renderer:
                 found = await page.evaluate(_IMAGES, _MAX_IMAGES)
                 html = (await page.content()).encode()
                 images = [tuple(row) for row in found["images"]]
-                return Rendered(html, page.url, console, resources, images, found["backgrounds"])
+                shot = await page.screenshot(type="jpeg", quality=70) if self.screenshots else None
+                return Rendered(html, page.url, console, resources, images, found["backgrounds"], shot)
             except Exception as exc:  # timeout, crash, navigation error: data, not a failed crawl
                 log.warning("rendering %s failed: %s", url, str(exc).splitlines()[0] if str(exc) else type(exc))
                 return None

@@ -80,6 +80,7 @@ concurrency = 10
 | `crawl.render_console` | `bool` | `true` | Записывать ошибки и предупреждения консоли браузера при рендеринге (JavaScript Error Reporting). |
 | `crawl.render_flatten_shadow_dom` | `bool` | `true` | Читать содержимое Shadow DOM веб-компонентов как часть страницы (Flatten Shadow DOM). |
 | `crawl.render_flatten_iframes` | `bool` | `true` | Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes). |
+| `crawl.render_screenshots` | `bool` | `false` | Скриншот каждой отрендеренной страницы (первый экран, JPEG) — папка рядом с базой, путь в pages.screenshot и `spider url`; ~30–100 КБ на страницу. |
 | `crawl.render_images` | `bool` | `false` | Загружать картинки в браузере при рендеринге: медленнее, зато видны реальные и отображаемые размеры картинок (Image Details, «Images: Incorrectly Sized Images»); по умолчанию картинки не грузятся. |
 | `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при рендеринге. |
 | `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при рендеринге. |

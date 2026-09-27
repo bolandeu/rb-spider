@@ -494,7 +494,7 @@ def url_details(data: dict) -> None:
     for key, label in (("redirect_url", "редирект на"), ("refresh_url", "refresh на"), ("canonical_url", "canonical"),
                        ("title", "title"), ("meta_description", "description"), ("h1", "h1"),
                        ("word_count", "слов"), ("last_modified", "Last-Modified"), ("error", "ошибка"),
-                       ("blocked", "заблокирован")):  # fmt: skip
+                       ("blocked", "заблокирован"), ("link_score", "Link Score"), ("screenshot", "скриншот")):  # fmt: skip
         if page.get(key) not in (None, ""):
             fields[label] = page[key]
     key_values(f"{page['url']} — обход #{data['crawl_id']}", fields)

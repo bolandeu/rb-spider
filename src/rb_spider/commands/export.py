@@ -78,8 +78,9 @@ def url(
     `sd_messages` ([важность, где, тип, свойство, текст]); `structured_data` — сами объекты
     разметки, если обход шёл с `--store-html`, иначе null. Картинки (Image Details):
     real_* — настоящий размер из файла, display_* — как показана на странице (рендеринг с
-    `crawl.render_images`), origin `css background` — фоновая картинка. URL нет в
-    обходе — выход 2.
+    `crawl.render_images`), origin `css background` — фоновая картинка. В page —
+    `link_score` (с `thresholds.link_score`) и `screenshot` — путь к скриншоту (с
+    `crawl.render_screenshots`). URL нет в обходе — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)

@@ -8,6 +8,7 @@ disk. Selection (`select_*`) is separate from deletion, so `--dry-run` shows exa
 from __future__ import annotations
 
 import re
+import shutil
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -25,7 +26,7 @@ from .storage import crawls, projects
 # millions of link rows (the cascade stays as a safety net).
 _CRAWL_TABLES = (storage.link_rows, storage.urls, storage.issues, storage.frontier, storage.url_metrics,
                  storage.near_duplicates, storage.sitemap_files, storage.sitemap_urls, storage.custom_values,
-                 storage.pages)  # fmt: skip
+                 storage.render_events, storage.rendered_images, storage.pages)  # fmt: skip
 _DURATION = re.compile(r"^\s*(\d+)\s*([hdwy])\s*$")
 _UNITS = {"h": timedelta(hours=1), "d": timedelta(days=1), "w": timedelta(weeks=1), "y": timedelta(days=365)}
 
@@ -104,6 +105,8 @@ def delete_crawls(engine: sa.Engine, rows: list[storage.CrawlRow]) -> int:
                 conn.execute(sa.delete(storage.html_pages).where(storage.html_pages.c.crawl_id.in_(ids)))
         finally:
             html_engine.dispose()
+    for crawl_id in ids:  # crawl.render_screenshots
+        shutil.rmtree(storage.screenshots_dir(crawl_id), ignore_errors=True)
     return sum(r.pages for r in rows)
 
 

@@ -502,7 +502,7 @@
 - [x] `v2` **Image Details: real / display dimensions** — реальный размер из файла (всегда), отображаемый — с `crawl.render_images` → `spider url`
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
 - [x] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования) → `spider url`
-- [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы
+- [x] `v3` **Rendered Page** — скриншот отрендеренной страницы → `crawl.render_screenshots`, путь в `spider url`
 - [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
@@ -577,7 +577,7 @@
 - [x] `v2` **Window Size** (desktop / mobile / ШxВ) → `crawl.render_viewport`
 - [x] `v2` **JavaScript Error Reporting** → `crawl.render_console`
 - [x] `v2` **Flatten Shadow DOM**, **Flatten iframes** → `crawl.render_flatten_shadow_dom`, `crawl.render_flatten_iframes`
-- [ ] `v3` **Rendered Page Screenshots** → `render_options.screenshots`
+- [x] `v3` **Rendered Page Screenshots** → `crawl.render_screenshots` (первый экран, JPEG, папка рядом с базой)
 - [ ] `backlog` **Old AJAX Crawling Scheme** (`_escaped_fragment_`)
 - [ ] `backlog` **Archive Website** (сохранение сайта как папки или WARC)
 

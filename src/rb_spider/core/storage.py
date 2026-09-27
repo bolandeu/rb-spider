@@ -132,6 +132,8 @@ pages = sa.Table(
     # the old AJAX crawling scheme: <meta name="fragment"> and <a href="…#!…"> links
     sa.Column("ajax_meta_fragment", sa.Boolean),
     sa.Column("hashbang_links", sa.Integer),
+    # crawl.render_screenshots: the JPEG of the rendered page (a local file, storage.screenshots_dir)
+    sa.Column("screenshot", sa.String),
     # computed after the crawl with thresholds.link_score: internal PageRank on a 0–100 log scale (Link Score)
     sa.Column("link_score", sa.Integer),
     # images: the real size, from the file's header (Image Details)
@@ -388,6 +390,12 @@ def html_db_path() -> Path:
         name = sa.make_url(url).database or "remote"
         return main.with_name(f"{main.stem}-html-{name}{main.suffix}")
     return main.with_name(f"{main.stem}-html{main.suffix}")
+
+
+def screenshots_dir(crawl_id: int) -> Path:
+    """A crawl's screenshots (crawl.render_screenshots): JPEG files in a folder beside the stored HTML."""
+    html = html_db_path()
+    return html.with_name(html.stem.replace("-html", "-screenshots", 1)) / str(crawl_id)
 
 
 html_metadata = sa.MetaData()

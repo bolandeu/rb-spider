@@ -194,3 +194,20 @@ def test_without_render_images_sizes_are_not_checked(base_url: str, rendered) ->
     assert "images_incorrectly_sized" in {rule.code for rule in issues.not_checked(engine, crawl_id)}
     pages = _pages(engine, crawl_id, base_url)
     assert (pages["/img/real.png"]["image_width"], pages["/img/real.png"]["image_height"]) == (800, 600)
+
+
+# --- screenshots (v3) --------------------------------------------------------------
+
+
+@needs_playwright
+def test_screenshots_are_files_that_go_with_their_crawl(base_url: str, engine) -> None:
+    from pathlib import Path
+
+    from rb_spider.core import maintenance
+
+    settings = _settings(render="always", render_screenshots=True, max_depth=0)
+    crawl_id = crawl_site(engine, f"{base_url}/js/viewport", "polygon", settings).crawl_id
+    shot = Path(_pages(engine, crawl_id, base_url)["/js/viewport"]["screenshot"])
+    assert shot.read_bytes()[:2] == b"\xff\xd8" and shot.parent == storage.screenshots_dir(crawl_id)  # a JPEG
+    maintenance.delete_crawls(engine, [storage.get_crawl(engine, crawl_id)[0]])
+    assert not shot.parent.exists()

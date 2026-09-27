@@ -219,6 +219,13 @@ class CrawlSettings(BaseModel):
     render_flatten_iframes: bool = Field(
         True, description="Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes)."
     )
+    render_screenshots: bool = Field(
+        False,
+        description=(
+            "Скриншот каждой отрендеренной страницы (первый экран, JPEG) — папка рядом с базой, путь в "
+            "pages.screenshot и `spider url`; ~30–100 КБ на страницу."
+        ),
+    )
     render_images: bool = Field(
         False,
         description=(
