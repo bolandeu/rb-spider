@@ -21,6 +21,7 @@ from .commands import (
     init,
     insecure,
     issues,
+    link_score,
     links,
     pagination,
     profiles,
@@ -57,6 +58,7 @@ app.add_typer(sitemaps.app, name="sitemaps")
 app.add_typer(serp.app, name="serp")
 app.add_typer(report.app, name="report")
 app.command(name="robots-test")(report.robots_test)
+app.command(name="link-score")(link_score.link_score)
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

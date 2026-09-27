@@ -692,13 +692,6 @@ class ThresholdSettings(BaseModel):
             "Images» (2 — запас на экраны высокой плотности)."
         ),
     )
-    link_score: bool = Field(
-        False,
-        description=(
-            "Считать Link Score (внутренний PageRank 0–100 по follow-ссылкам сайта) при `spider analyze` и после "
-            "обхода — колонка pages.link_score; на больших сайтах добавляет к проверкам заметное время."
-        ),
-    )
     js_content_min_words: int = Field(
         10,
         ge=1,

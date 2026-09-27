@@ -590,3 +590,13 @@ def overview(data: dict) -> None:
         values = data.get(key) or {}
         if values:
             console.print(f"[bold]{label}[/bold]: " + ", ".join(f"{k} {v}" for k, v in values.items()))
+
+
+def link_score(data: dict) -> None:
+    console.print(f"[bold]Link Score[/bold] — обход #{data['crawl_id']}: {data['pages']} страниц")
+    table = Table(box=None, pad_edge=False)
+    for column in ("score", "входящих", "URL"):
+        table.add_column(column)
+    for row in data["top"]:
+        table.add_row(str(row["link_score"]), str(row["inlinks"] or 0), row["url"])
+    console.print(table)

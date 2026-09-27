@@ -134,7 +134,7 @@ pages = sa.Table(
     sa.Column("hashbang_links", sa.Integer),
     # crawl.render_screenshots: the JPEG of the rendered page (a local file, storage.screenshots_dir)
     sa.Column("screenshot", sa.String),
-    # computed after the crawl with thresholds.link_score: internal PageRank on a 0–100 log scale (Link Score)
+    # `spider link-score`: internal PageRank on a 0–100 log scale (Link Score); NULL — not computed
     sa.Column("link_score", sa.Integer),
     # images: the real size, from the file's header (Image Details)
     sa.Column("image_width", sa.Integer),

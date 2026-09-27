@@ -4,6 +4,9 @@ PageRank over the site's pages (HTML, or reached by a link) and their own follow
 the usual damping 0.85 and the rank of pages without outlinks spread over every page. Computed in the database, a
 pass over the links per iteration through temporary tables: nothing proportional to the site is held in Python.
 The scale is logarithmic, like Screaming Frog's: the best-linked URL gets 100, the least 1.
+
+Only on request (`spider link-score`), and only for a crawl that stored its internal links — without them there is
+nothing to compute it from.
 """
 
 from __future__ import annotations
@@ -13,18 +16,47 @@ import math
 import sqlalchemy as sa
 
 from . import storage
-from .settings import ThresholdSettings
+from .errors import CliError
 
 DAMPING = 0.85
 ITERATIONS = 20  # enough for the order of pages to settle on sites of any size
 _BATCH = 5000
 
 
-def compute(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> None:
-    """Refill `pages.link_score` for a crawl (NULL everywhere while thresholds.link_score is off)."""
+class InternalLinksNotCollected(CliError):
+    """Link Score needs the crawl's internal links, and this crawl didn't store them."""
+
+    def __init__(self, crawl_id: int) -> None:
+        super().__init__(
+            "INTERNAL_LINKS_NOT_COLLECTED",
+            f"Crawl #{crawl_id} didn't store its internal links: Link Score is computed from them.",
+            action="Crawl again with them stored: spider crawl <url> --set collect.internal_links.store=true.",
+            exit_code=2,
+        )
+
+
+def compute_and_store(engine: sa.Engine, crawl_id: int, limit: int) -> dict:
+    """Compute a crawl's Link Score into `pages.link_score`; returns {pages, top: [{url, link_score, inlinks}]}."""
+    from .issues import STORE_INTERNAL, collected  # issues imports much of core: only when the command runs
+
+    if not collected(engine, crawl_id).get(STORE_INTERNAL):
+        raise InternalLinksNotCollected(crawl_id)
+    with engine.begin() as conn:
+        compute(conn, crawl_id)
+    with engine.connect() as conn:
+        scored = conn.execute(sa.text("SELECT count(*) FROM pages WHERE crawl_id = :c AND link_score IS NOT NULL"),
+                              {"c": crawl_id}).scalar_one()  # fmt: skip
+        top = conn.execute(
+            sa.text("SELECT url, link_score, inlinks FROM pages WHERE crawl_id = :c AND link_score IS NOT NULL"
+                    " ORDER BY link_score DESC, inlinks DESC, url LIMIT :limit"),
+            {"c": crawl_id, "limit": limit},
+        ).mappings()  # fmt: skip
+        return {"pages": scored, "top": [dict(row) for row in top]}
+
+
+def compute(conn: sa.Connection, crawl_id: int) -> None:
+    """Refill `pages.link_score` for a crawl."""
     conn.execute(sa.text("UPDATE pages SET link_score = NULL WHERE crawl_id = :c"), {"c": crawl_id})
-    if not thresholds.link_score:
-        return
     sqlite = storage.is_sqlite(conn)
     temp = "temp" if sqlite else "pg_temp"
     index = "temp." if sqlite else ""

@@ -22,7 +22,6 @@ from pydantic import ValidationError
 
 from . import duplicates as duplicates_module
 from . import hreflang as hreflang_module
-from . import link_score as link_score_module
 from . import pagination as pagination_module
 from . import security as security_module
 from . import serp as serp_module
@@ -1238,7 +1237,7 @@ def rule(code: str) -> Rule:
     return BY_CODE[code]
 
 
-def _collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
+def collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
     """What the crawl collected: its settings snapshot as flat keys (defaults for crawls without one)."""
     _, snapshot = storage.get_crawl(engine, crawl_id)
     try:
@@ -1261,8 +1260,8 @@ def _met(collected: dict[str, Any], requirement: str) -> bool:
 
 def not_checked(engine: sa.Engine, crawl_id: int) -> list[Rule]:
     """Rules this crawl can't answer: the data they need wasn't collected (`collect.*` off)."""
-    collected = _collected(engine, crawl_id)
-    return [r for r in RULES if not all(_met(collected, key) for key in r.requires)]
+    done = collected(engine, crawl_id)
+    return [r for r in RULES if not all(_met(done, key) for key in r.requires)]
 
 
 def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | None = None) -> int:
@@ -1282,7 +1281,6 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         steps: list[tuple[str, Callable[[], object]]] = [
             ("indexability", lambda: compute_indexability(conn, crawl_id, thresholds)),
             ("link counts", lambda: compute_link_counts(conn, crawl_id)),
-            ("link score", lambda: link_score_module.compute(conn, crawl_id, thresholds)),
             ("url flags", lambda: compute_url_issues(conn, crawl_id, thresholds)),
             ("serp widths", lambda: serp_module.compute(conn, crawl_id, thresholds)),
             ("near duplicates", lambda: duplicates_module.compute_near(conn, crawl_id, thresholds)),
