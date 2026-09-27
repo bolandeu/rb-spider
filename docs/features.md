@@ -141,8 +141,8 @@
 - [x] `v2` **Soft 404 Pages** — страница отдаёт 200, но по содержимому — «страница не найдена» (эвристика) _(SF: Warning, High)_
 - [x] `MVP` **Lorem Ipsum Placeholder** — на странице остался текст-заглушка «Lorem ipsum» _(SF: Warning, High)_
 - [x] `v2` **Near Duplicates** — почти-дубли по тексту, сходство ≥ порога (90 %), MinHash _(SF: Warning, Medium)_
-- [ ] `backlog` **Semantically Similar** — страницы близки по смыслу (косинусная близость эмбеддингов) _(SF: Warning, Medium)_
-- [ ] `backlog` **Low Relevance Content** — страница выбивается из общей тематики сайта (эмбеддинги) _(SF: Warning, Low)_
+- [ ] `backlog` **Semantically Similar** — страницы близки по смыслу (косинусная близость эмбеддингов; через `llmkit`) _(SF: Warning, Medium)_
+- [ ] `backlog` **Low Relevance Content** — страница выбивается из общей тематики сайта (эмбеддинги через `llmkit`) _(SF: Warning, Low)_
 - [x] `MVP` **Low Content Pages** — мало текста: меньше 200 слов (порог настраивается) _(SF: Opportunity, Medium)_
 - [x] `v2` **Readability Difficult** — текст трудно читать по формуле Flesch _(SF: Opportunity, Low)_
 - [x] `v2` **Readability Very Difficult** — текст очень трудно читать по формуле Flesch _(SF: Opportunity, Low)_
@@ -479,7 +479,7 @@
 - [ ] `v3` **Analytics: Sessions Above 0** — URL с сессиями в GA
 - [ ] `v3` **Search Console: Clicks Above 0** + колонки URL Inspection (Coverage, Last Crawl, Google-Selected Canonical…)
 - [ ] `backlog` **Link Metrics** — метрики Majestic / Ahrefs / Moz по URL, поддомену, домену
-- [ ] `backlog` **AI** — ответы LLM по промптам на каждую страницу
+- [ ] `backlog` **AI** — ответы LLM по промптам на каждую страницу (через `llmkit`)
 - [x] `v2` **Change Detection** — что изменилось между обходами: индексируемость, title, description, h1, word count, crawl depth, inlinks/outlinks, типы разметки, контент → `spider compare … --field`
 
 ### Извлекаемые данные страницы (Spider > Extraction)
@@ -765,7 +765,7 @@
 - [ ] `backlog` **Экспорт визуализаций в SVG**
 - [ ] `backlog` **3D-графы**
 - [ ] `backlog` **Word clouds** (анкоры, текст страниц)
-- [ ] `backlog` **Content Cluster Diagram** (кластеры по эмбеддингам)
+- [ ] `backlog` **Content Cluster Diagram** (кластеры по эмбеддингам через `llmkit`)
 
 ### Прочий анализ
 
@@ -774,7 +774,7 @@
 - [x] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt → `spider robots-test`
 - [x] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI) → `spider serp preview`
 - [ ] `backlog` **N-grams**
-- [ ] `backlog` **Semantic search / similarity** (эмбеддинги)
+- [ ] `backlog` **Semantic search / similarity** (эмбеддинги через `llmkit`)
 - [ ] `backlog` **Carbon footprint / rating** — CO₂ на загрузку страницы (шкала рейтинга — не подтверждено)
 
 ---
@@ -787,7 +787,7 @@
 - [ ] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop
 - [ ] `v3` **Lighthouse локально** — без API, работает за авторизацией
 - [ ] `backlog` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
-- [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги
+- [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги; только через `llmkit` (мост пользователя к LLM-провайдерам: цепочки моделей, кэш, расходы, ключи), своих клиентов провайдеров в spider нет
 - [ ] `v3` **Google Analytics 4** — сессии, вовлечённость, конверсии по URL (Data API)
 - [ ] `skip` **Looker Studio / Data Studio**
 - [ ] `skip` **Google Sheets / Google Drive**
