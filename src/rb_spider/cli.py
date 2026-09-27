@@ -7,6 +7,7 @@ import typer
 from . import output
 from .commands import (
     auth,
+    compare,
     crawl,
     crawls,
     custom,
@@ -68,6 +69,7 @@ app.command(name="insecure")(insecure.insecure)
 app.command(name="duplicates")(duplicates.duplicates)
 app.command(name="structured")(structured.structured)
 app.command(name="custom")(custom.custom)
+app.command(name="compare")(compare.compare)
 app.command(name="links")(links.links)
 app.command(name="url")(export.url)
 app.command(name="overview")(export.overview)

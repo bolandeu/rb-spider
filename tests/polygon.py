@@ -909,6 +909,8 @@ EXPECTED_ISSUES = {
     "mobile_alternate_link": {"/m-alternate"},
 }
 
+# A test may change the site between two crawls (compare, re-spider): path -> route, consulted first.
+OVERRIDES: dict[str, tuple[int, dict[str, str], str]] = {}
 HTTPS_CA: bytes = b""  # the running HTTPS polygon's root certificate (PEM)
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
 SEEN_HEADERS: list[dict[str, str]] = []  # every request's headers, lower-case names — proves crawl.headers are sent
@@ -934,7 +936,9 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     if request.path.startswith("/members/") and request.headers.get("Authorization") != BASIC_AUTH:
         return web.Response(status=401, headers={"WWW-Authenticate": 'Basic realm="polygon"'}, text="login")
     routes = HTTPS_ROUTES if request.secure else ROUTES
-    status, headers, body = routes.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
+    status, headers, body = OVERRIDES.get(request.path) or routes.get(
+        request.path, (404, {}, "<html><body>Не найдено</body></html>")
+    )
     port = request.host.rsplit(":", 1)[1]
     base = f"{request.scheme}://{request.host}"
     fill = {"{base}": base, "{localhost}": f"localhost:{port}", "{local}": f"http://localhost:{port}",

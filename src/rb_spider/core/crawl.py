@@ -260,7 +260,9 @@ async def _run(
     all_settings: Settings,
     on_progress: Callable[[int], None] | None,
     resume: storage.Frontier | None = None,
+    respider: bool = False,
 ) -> None:
+    """`respider` — fetch only what the queue holds (the chosen URLs), admit nothing they link to."""
     settings, collect = all_settings.crawl, all_settings.collect
     user_agent = settings.resolved_user_agent
     headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
@@ -390,7 +392,7 @@ async def _run(
         status and size only. robots.txt applies to all of them — a disallowed resource is what
         Screaming Frog calls a Blocked Resource.
         """
-        if settings.max_depth is not None and depth > settings.max_depth:
+        if respider or (settings.max_depth is not None and depth > settings.max_depth):
             return
 
         def role(url: str) -> str | None:
@@ -622,6 +624,7 @@ def run_crawl(
     crawl_id: int,
     *,
     on_progress: Callable[[int], None] | None = None,
+    respider: bool = False,
 ) -> CrawlResult:
     """Crawl (or continue crawling) a registered crawl with its own settings, then run the checks.
 
@@ -635,7 +638,7 @@ def run_crawl(
     started = time.monotonic()
     status = "failed"
     try:
-        asyncio.run(_run(row.start_url, writer, settings, on_progress, resume))
+        asyncio.run(_run(row.start_url, writer, settings, on_progress, resume, respider))
         status = "finished"
     except KeyboardInterrupt:
         status = "interrupted"
@@ -661,6 +664,21 @@ def crawl_site(
     """
     crawl_id = register_crawl(engine, start_url, project, settings)
     return run_crawl(engine, crawl_id, on_progress=on_progress)
+
+
+def respider(
+    engine: sa.Engine, crawl_id: int, urls: list[str], *, on_progress: Callable[[int], None] | None = None
+) -> CrawlResult:
+    """Re-spider selected URLs of a finished crawl: fetch them again, replace their rows and outgoing links, re-run
+    the checks. Links they now have to URLs the crawl never saw are stored, not followed."""
+    row, _ = storage.get_crawl(engine, crawl_id)
+    if row.status == "running" and process_alive(storage.crawl_pid(engine, crawl_id)):
+        raise InvalidArguments(f"Crawl #{crawl_id} is still running — see `spider status {crawl_id}`.")
+    missing = storage.reset_for_respider(engine, crawl_id, [normalize_url(url) for url in urls])
+    if missing:
+        raise InvalidArguments(f"Not in crawl #{crawl_id}: {', '.join(missing[:5])} — re-spider re-fetches URLs the "
+                               "crawl already has; crawl new ones with `spider crawl`.")  # fmt: skip
+    return run_crawl(engine, crawl_id, on_progress=on_progress, respider=True)
 
 
 def process_alive(pid: int | None) -> bool | None:

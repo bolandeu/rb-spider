@@ -602,6 +602,25 @@ def enqueue(engine: sa.Engine, crawl_id: int, urls: list[str], depth: int = 0) -
             conn.exec_driver_sql(_INSERT_QUEUED, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
 
 
+def reset_for_respider(engine: sa.Engine, crawl_id: int, targets: list[str]) -> list[str]:
+    """Put a crawl's URLs back in its queue with their outgoing links and custom values removed (the page rows are
+    replaced when fetched). Nothing changes if any URL isn't in the crawl — the unknown ones are returned."""
+    with engine.begin() as conn:
+        known = set(conn.execute(sa.select(frontier.c.url).where(frontier.c.crawl_id == crawl_id,
+                                                                  frontier.c.url.in_(targets))).scalars())  # fmt: skip
+        missing = [url for url in targets if url not in known]
+        if missing:
+            return missing
+        ids = sa.select(urls.c.id).where(urls.c.crawl_id == crawl_id, urls.c.url.in_(targets))
+        conn.execute(sa.delete(link_rows).where(link_rows.c.crawl_id == crawl_id, link_rows.c.source_id.in_(ids)))
+        conn.execute(
+            sa.delete(custom_values).where(custom_values.c.crawl_id == crawl_id, custom_values.c.url.in_(targets))
+        )
+        conn.execute(sa.update(frontier).where(frontier.c.crawl_id == crawl_id, frontier.c.url.in_(targets))
+                     .values(done=False))  # fmt: skip
+    return []
+
+
 def crawl_pid(engine: sa.Engine, crawl_id: int) -> int | None:
     with engine.connect() as conn:
         return conn.execute(sa.select(crawls.c.pid).where(crawls.c.id == crawl_id)).scalar()

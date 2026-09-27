@@ -269,6 +269,36 @@ def custom_view(data: dict) -> None:
         console.print(f"{row['url']}  {'' if value is None else value}", markup=False)
 
 
+def compare_summary(data: dict) -> None:
+    u = data["urls"]
+    console.print(f"[bold]Обход #{data['old']} → #{data['new']}[/bold]: URL {u['old']} → {u['new']}, "
+                  f"новых {u['new_urls']}, пропало {u['missing_urls']}")  # fmt: skip
+    changed = [row for row in data["issues"] if row["added"] or row["new_urls"] or row["removed"] or row["missing"]]
+    if changed:
+        table = Table(box=None, pad_edge=False, title="Проблемы", title_justify="left")
+        for column in ("проверка", "было", "стало", "added", "new", "removed", "missing"):
+            table.add_column(column)
+        for row in changed:
+            table.add_row(
+                row["name"], *(str(row[k]) for k in ("old", "new", "added", "new_urls", "removed", "missing"))
+            )
+        console.print(table)
+    moved = {k: v for k, v in data["changes"].items() if v}
+    if moved:
+        console.print("[bold]Изменились поля[/bold]: " + ", ".join(f"{k} {v}" for k, v in moved.items()))
+
+
+def compare_rows(data: dict) -> None:
+    shown, total = len(data["rows"]), data["total"]
+    console.print(
+        f"[bold]Обход #{data['old']} → #{data['new']}[/bold]: {total}"
+        + (f", показаны первые {shown}" if shown < total else "")
+    )
+    for row in data["rows"]:
+        tail = f"  {row['old']!r} → {row['new']!r}" if "old" in row else ""
+        console.print(f"{row['url']}{tail}", markup=False)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"

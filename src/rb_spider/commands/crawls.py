@@ -5,6 +5,8 @@ import typer
 from .. import output
 from ..core import crawl as crawl_service
 from ..core import maintenance, storage
+from ..core.errors import InvalidArguments
+from . import options
 
 app = output.group("Обходы в базе: список, просмотр, продолжение прерванного, удаление и чистка старых.")
 
@@ -103,6 +105,42 @@ def resume(
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         crawl_service.ensure_resumable(engine, crawl_id)
         result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
+    output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
+
+
+@app.command("respider")
+@output.guard
+def respider(
+    ctx: typer.Context,
+    crawl_id: int = typer.Argument(..., help="Номер обхода (`spider crawls list`)."),
+    urls: list[str] | None = typer.Argument(None, help="URL обхода, которые скачать заново."),
+    url_list: str | None = typer.Option(
+        None, "--list", help="Файл с URL (как у `spider crawl --list`) или - для stdin."
+    ),
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """Переобойти выбранные URL обхода: скачать заново, заменить их данные и ссылки, пересчитать проверки.
+
+    После исправлений на нескольких страницах — чтобы не обходить сайт целиком. URL
+    должны быть в обходе; новые ссылки с них записываются, но не обходятся. Настройки —
+    те, с которыми обход шёл. Сравнить до и после целиком — `spider compare`.
+
+    Примеры:
+      spider crawls respider 12 https://example.com/ https://example.com/catalog/
+      spider crawls respider 12 --list fixed.txt
+
+    JSON — как у `spider crawl`: `{crawl_id, project, start_url, status, pages, elapsed_s}`.
+    URL нет в обходе, нет ни URL, ни `--list`, обход ещё идёт — выход 2.
+    """
+    targets = list(urls or [])
+    if url_list is not None:
+        targets += crawl_service.read_url_list(options.read_url_source(url_list))
+    if not targets:
+        raise InvalidArguments("Give the URLs to re-spider, or --list <file>.")
+    with storage.database() as engine:
+        crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+        result = crawl_service.respider(engine, crawl_id, targets)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
 
 

@@ -480,7 +480,7 @@
 - [ ] `v3` **Search Console: Clicks Above 0** + колонки URL Inspection (Coverage, Last Crawl, Google-Selected Canonical…)
 - [ ] `v3` **Link Metrics** — метрики Majestic / Ahrefs / Moz по URL, поддомену, домену
 - [ ] `backlog` **AI** — ответы LLM по промптам на каждую страницу
-- [ ] `v2` **Change Detection** — что изменилось между обходами: индексируемость, title, description, h1, word count, crawl depth, inlinks/outlinks, типы разметки, контент
+- [x] `v2` **Change Detection** — что изменилось между обходами: индексируемость, title, description, h1, word count, crawl depth, inlinks/outlinks, типы разметки, контент → `spider compare … --field`
 
 ### Извлекаемые данные страницы (Spider > Extraction)
 
@@ -662,7 +662,7 @@
 - [x] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
 - [ ] `v2` **Crawl Analysis: полный список пунктов** (Pagination, Hreflang return links и др.) (не подтверждено)
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
-- [ ] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
+- [x] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
 - [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (не подтверждено)
 
 ### Системные настройки SF
@@ -681,7 +681,7 @@
 - [x] `MVP` **List** — обход списка URL из файла (глубина 0; для миграций вместе с Always Follow Redirects) → `spider crawl --list urls.txt`
 - [x] `v2` **List: загрузка из XML sitemap, CSV** — извлечь URL из файла (`<urlset>`; CSV с колонкой url / address / loc) → `spider crawl --list`
 - [ ] `v2` **List: загрузка из Excel** — вместе с XLSX-экспортом (#38): та же зависимость
-- [ ] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`
+- [x] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`
 - [ ] `v3` **APIs** — только загрузить данные API (GSC, PSI…) по списку URL, без обхода
 - [ ] `backlog` **SERP** — посчитать длины и ширину в пикселях для загруженных title/description без обхода
 - [ ] `v3` **Staging vs production** — сравнение двух окружений с сопоставлением URL
@@ -692,7 +692,7 @@
 - [x] `MVP` **Pause** — остановка с возможностью продолжить (Ctrl+C или сигнал фоновому процессу)
 - [x] `MVP` **Хранение обходов** — список, просмотр, удаление, проекты → `spider crawls list|show|delete`, `spider projects`
 - [x] `MVP` **Снимок конфига обхода** — итоговый конфиг сохраняется в `crawls`
-- [ ] `v2` **Re-spider selected URLs** — переобойти выбранные URL в существующем обходе
+- [x] `v2` **Re-spider selected URLs** — переобойти выбранные URL в существующем обходе → `spider crawls respider`
 - [ ] `backlog` **Lock crawl / rename / duplicate** — защита обхода от удаления, переименование, копия
 - [ ] `backlog` **Экспорт/импорт обхода файлом** (аналог `.seospider`)
 - [ ] `backlog` **Scheduling** — по расписанию; закрывается cron + `spider crawl --profile …`

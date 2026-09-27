@@ -512,6 +512,32 @@ class CustomSettings(BaseModel):
     )
 
 
+COMPARE_FIELDS = [
+    "indexability", "status_code", "title", "meta_description", "h1", "h2", "canonical", "directives", "word_count",
+    "content", "depth", "inlinks", "unique_inlinks", "internal_outlinks", "unique_outlinks", "external_outlinks",
+    "structured_data_types",
+]  # fmt: skip
+
+
+class CompareSettings(BaseModel):
+    """What `spider compare` checks for changes (Screaming Frog's Config > Compare, Change Detection)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: list[str] = Field(
+        list(COMPARE_FIELDS),
+        description="Поля Change Detection: " + ", ".join(COMPARE_FIELDS) + " (content — HTML изменился, по md5).",
+    )
+
+    @field_validator("fields")
+    @classmethod
+    def _known(cls, fields: list[str]) -> list[str]:
+        unknown = [f for f in fields if f not in COMPARE_FIELDS]
+        if unknown:
+            raise ValueError(f"unknown fields {unknown}: one of {', '.join(COMPARE_FIELDS)}")
+        return fields
+
+
 class ThresholdSettings(BaseModel):
     """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
 
@@ -647,6 +673,9 @@ class Settings(BaseModel):
         default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
     )
     sitemaps: SitemapSettings = Field(default_factory=SitemapSettings, description="XML sitemap: чтение и проверки.")
+    compare: CompareSettings = Field(
+        default_factory=CompareSettings, description="Сравнение обходов: поля Change Detection."
+    )
     custom: CustomSettings = Field(
         default_factory=CustomSettings,
         description="Свои поиски, извлечения и зоны ссылок (Custom Search / Extraction).",

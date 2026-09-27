@@ -122,6 +122,7 @@ concurrency = 10
 | `sitemaps.discover` | `bool` | `true` | Искать sitemap сам: строки Sitemap: в robots.txt, затем /sitemap.xml и т.п. |
 | `sitemaps.urls` | `list[str]` | `[]` | Адреса sitemap (или индексов) вдобавок к найденным. |
 | `sitemaps.follow` | `bool` | `true` | Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать). |
+| `compare.fields` | `list[str]` | `["indexability", "status_code", "title", "meta_description", "h1", "h2", "canonical", "directives", "word_count", "content", "depth", "inlinks", "unique_inlinks", "internal_outlinks", "unique_outlinks", "external_outlinks", "structured_data_types"]` | Поля Change Detection: indexability, status_code, title, meta_description, h1, h2, canonical, directives, word_count, content, depth, inlinks, unique_inlinks, internal_outlinks, unique_outlinks, external_outlinks, structured_data_types (content — HTML изменился, по md5). |
 | `custom.search` | `list[rb_spider.core.settings.CustomSearch]` | `[]` | Поиски по страницам: [[custom.search]] с name, query, regex, scope (html / text / element). |
 | `custom.extract` | `list[rb_spider.core.settings.CustomExtract]` | `[]` | Извлечения: [[custom.extract]] с name, kind (css / xpath / regex), query, output, limit. |
 | `custom.link_positions` | `list[tuple[str, str]]` | `[["nav", "nav"], ["menu", "nav"], ["header", "header"], ["footer", "footer"], ["aside", "sidebar"], ["sidebar", "sidebar"]]` | Зоны ссылок: пары [слово пути, зона] по порядку — слово класса, id или тега предка ссылки; ни одно не подошло — content. |

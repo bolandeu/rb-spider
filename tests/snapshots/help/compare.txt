@@ -1,0 +1,53 @@
+                                                                                                    
+ Usage: spider compare [OPTIONS] {old} {new}                                                        
+                                                                                                    
+ Сравнить два обхода: новые и пропавшие URL, изменения проблем и полей страниц (Change Detection).  
+                                                                                                    
+ Для контроля после релиза или миграции: обойдите сайт до и после и сравните.                       
+ Без опций — сводка; по каждой проверке четыре группы, как в Compare mode Screaming                 
+ Frog: added (у URL, который был и раньше, проблема появилась), new (новый URL с                    
+ проблемой), removed (у оставшегося URL проблема ушла), missing (URL с проблемой                    
+ пропал). Поля Change Detection — `compare.fields` (из `--profile` / `--set`); обходы               
+ сравниваются по URL сайта, при `spider analyze` пороги пересчитываются отдельно.                   
+                                                                                                    
+ Примеры:                                                                                           
+   spider compare 12 15                                                                             
+   spider compare 12 15 --issue page_title_missing --status added                                   
+   spider --json compare 12 15 --field title --limit 1000                                           
+   spider compare 12 15 --urls missing                                                              
+                                                                                                    
+ JSON: сводка — `{old, new, urls: {old, new, new_urls, missing_urls}, issues: [{code, name,         
+ old, new, added, new_urls, removed, missing}], changes: {поле: число URL}}`; список —              
+ `{old, new, total, rows}`: для `--issue` / `--urls` — `[{url}]`, для `--field` —                   
+ `[{url, old, new}]`. Несколько списков сразу, неизвестное поле или код — выход 2.                  
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    old      <int>  Номер прежнего обхода (`spider crawls list`). [required]                    │
+│ *    new      <int>  Номер нового обхода. [required]                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --issue          <str>                        Список URL одной проверки (код из `spider          │
+│                                               issues`).                                          │
+│ --status         <added|new|removed|missing>  С --issue: added — появилась у старого URL; new —  │
+│                                               у нового URL; removed — ушла у URL, который        │
+│                                               остался; missing — URL с проблемой пропал из       │
+│                                               обхода.                                            │
+│                                               [default: new]                                     │
+│ --field          <str>                        URL, у которых поле изменилось (из                 │
+│                                               compare.fields).                                   │
+│ --urls           <new|missing>                new — URL, которых не было; missing — URL, которые │
+│                                               пропали.                                           │
+│ --limit          <int range> [x>=1]           Сколько строк показать (всего — в поле total).     │
+│                                               [default: 100]                                     │
+│ --profile        <str>                        Профиль настроек: встроенный (`spider profiles     │
+│                                               list`) или из `.spider/profiles/`.                 │
+│ --config         <path>                       TOML-файл настроек поверх профиля (формат как у    │
+│                                               профиля).                                          │
+│ --set            KEY=VALUE                    Переопределить любой ключ: `--set                  │
+│                                               crawl.max_urls=500`; можно повторять.              │
+│ --json                                        Вывод в JSON для агентов и скриптов (одна          │
+│                                               строка-конверт `{ok, ...}`).                       │
+│ --quiet                                       Печатать только основной результат, без пояснений. │
+│ --help                                        Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
