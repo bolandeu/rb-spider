@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.2.0] - 2026-09-27
+
+### Changed
+
+- **Ломающее.** `spider auth status` отдаёт общий для наших инструментов отчёт (стандарт §8): `tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`, `source`, `status` и др. вместо прежних `{provider, authenticated}`; `--check` проверяет секреты (`database` — подключением к `SPIDER_DB_URL`), `--provider` фильтрует; провайдеры `proxy`, `site`, `database` необязательные. Секреты в системном хранилище ключей теперь под именем `spider:<provider>` (как и переменные `SPIDER_*`); сохранённые прежней версией `rb_spider:<provider>` по-прежнему читаются, `auth logout` удаляет оба. Версия берётся из git-тега, changelog собирается из фрагментов (шаблон cli-generator v1.2.3, стандарт выпуска); примеры в `--help` команд — строками `Example:`. Extras `sitemaps` и `gsc` ставят rb-sitemap-xml и gsc из GitHub по тегам (v0.1.1, v0.3.0), а не из соседних каталогов.
+
+
 ## [0.1.0] - 2026-09-27
 
 ### Added
