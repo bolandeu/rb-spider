@@ -35,10 +35,10 @@
 | B. Сбор данных и вкладки | 15 | 23 | 7 | 8 | 1 | 54 |
 | C. Настройки обхода | 44 | 44 | 2 | 11 | 5 | 106 |
 | D. Режимы | 6 | 4 | 2 | 4 | 1 | 17 |
-| E. Экспорт и отчёты | 11 | 24 | 8 | 11 | 2 | 56 |
+| E. Экспорт и отчёты | 11 | 24 | 8 | 12 | 2 | 57 |
 | F. Интеграции | 1 | 0 | 5 | 1 | 4 | 11 |
 | G. Наше, чего нет в SF | 22 | 4 | 0 | 0 | 0 | 26 |
-| **Итого** | **177** | **192** | **56** | **148** | **17** | **590** |
+| **Итого** | **177** | **192** | **56** | **149** | **17** | **591** |
 
 В разделе A 320 проверок SF, из них 92 — Accessibility (все `backlog`).
 
@@ -462,7 +462,7 @@
 - [x] `MVP` **Internal / External: тип содержимого** — фильтры HTML, JavaScript, CSS, Images, PDF, Other, Unknown (Flash — `skip`)
 - [x] `MVP` **Response Codes: Success (2XX)** — список успешных URL; колонки Response Time, Redirect URL, Redirect Type
 - [x] `v2` **Security: HTTPS URLs** — список URL по HTTPS (`spider overview` — счёт, `spider export pages --scheme https`)
-- [ ] `v2` **Meta Keywords** — сбор meta keywords и фильтры Missing / Duplicate / Multiple
+- [x] `v2` **Meta Keywords** — сбор meta keywords и фильтры Missing / Duplicate / Multiple → `spider report meta-keywords`
 - [x] `MVP` **Canonicals: Contains Canonical, Self Referencing** — есть canonical / canonical на себя; колонки HTML- и HTTP-canonical
 - [x] `v2` **Pagination: Contains Pagination, First Page, Paginated 2+ Pages** — сбор rel next/prev (`spider overview`, колонка `pages.pagination`)
 - [x] `MVP` **Directives: Index, Follow, NoArchive, Max-Snippet, Max-Image-Preview, Max-Video-Preview, Refresh** — все директивы meta robots и X-Robots-Tag
@@ -489,7 +489,7 @@
 - [x] `v2` **Readability** — Flesch Reading Ease, среднее число слов в предложении (`pages.flesch`, `words_per_sentence`; для русского — формула Оборневой)
 - [x] `v2` **Text to Code Ratio** — доля текста в HTML (`pages.text_ratio`, %)
 - [x] `v2` **Forms** — формы на странице (для проверок Security): число в `pages.forms`, action — ссылки вида `form`
-- [ ] `v2` **Cookies** — cookies каждого URL
+- [x] `v2` **Cookies** — cookies каждого URL (из Set-Cookie ответа) → `spider export cookies`
 - [ ] `backlog` **PDF** — свойства PDF (автор, даты, страницы, слова), анкоры ссылок внутри PDF, сохранение PDF
 
 ### Нижние вкладки SF (детали выбранного URL) → `spider url` / `spider links`
@@ -511,14 +511,14 @@
 - [ ] `v3` **Lighthouse Details** — метрики PSI по URL
 - [ ] `backlog` **Accessibility Details**, **Spelling & Grammar Details**
 - [ ] `backlog` **N-grams** — частоты фраз из 1–6 слов (нужен сохранённый HTML)
-- [ ] `v2` **Crawl Path** — кратчайший путь, которым краулер нашёл URL
+- [x] `v2` **Crawl Path** — кратчайший путь, которым краулер нашёл URL → `spider report crawl-path`
 
 ### Правая панель SF → `spider status` / `spider issues`
 
 - [x] `MVP` **Overview** — сводка обхода: число URL по вкладкам и фильтрам
 - [x] `MVP` **Issues** — все сработавшие проверки: тип, приоритет, число URL, % от общего, описание
-- [ ] `v2` **Site Structure** — дерево каталогов (URL, индексируемые/нет) и гистограмма глубины
-- [ ] `v2` **Response Times** — гистограмма времени ответа
+- [x] `v2` **Site Structure** — дерево каталогов (URL, индексируемые/нет) и гистограмма глубины → `spider report structure`
+- [x] `v2` **Response Times** — гистограмма времени ответа → `spider report response-times`
 - [ ] `v3` **API** — прогресс и ошибки подключённых API
 - [ ] `backlog` **Segments** — разрезы по сегментам
 - [ ] `backlog` **Spelling & Grammar**, **Semantic Search** — панели орфографии и семантического поиска
@@ -680,7 +680,7 @@
 - [x] `MVP` **Spider** — обход сайта от стартового URL по ссылкам → `spider crawl <url>`
 - [x] `MVP` **List** — обход списка URL из файла (глубина 0; для миграций вместе с Always Follow Redirects) → `spider crawl --list urls.txt`
 - [x] `v2` **List: загрузка из XML sitemap, CSV** — извлечь URL из файла (`<urlset>`; CSV с колонкой url / address / loc) → `spider crawl --list`
-- [ ] `v2` **List: загрузка из Excel** — вместе с XLSX-экспортом (#38): та же зависимость
+- [x] `v2` **List: загрузка из Excel** — первый лист .xlsx, колонка url / address / loc → `spider crawl --list urls.xlsx`
 - [x] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`
 - [ ] `v3` **APIs** — только загрузить данные API (GSC, PSI…) по списку URL, без обхода
 - [ ] `backlog` **SERP** — посчитать длины и ширину в пикселях для загруженных title/description без обхода
@@ -707,8 +707,8 @@
 - [x] `MVP` **Экспорт вкладки / фильтра** → `spider urls --issue <code> --json`, `spider export --format csv|json`
 - [x] `MVP` **Экспорт деталей URL** (inlinks, outlinks, картинки) → `spider links <url> --in|--out --json`
 - [x] `MVP` **Форматы CSV и JSON**
-- [ ] `v2` **Формат Excel (.xlsx)**
-- [ ] `v2` **Multi-Export** — много вкладок и отчётов за один вызов, пресеты
+- [x] `v2` **Формат Excel (.xlsx)** → `--format xlsx` (openpyxl, потоком)
+- [x] `v2` **Multi-Export** — много вкладок и отчётов за один вызов, пресеты → `spider export --preset` (`export.presets`)
 - [ ] `skip` **Google Sheets / Google Drive**
 - [ ] `skip` **Export for Looker Studio**
 
@@ -717,12 +717,13 @@
 - [x] `MVP` **Links: All Inlinks, All Outlinks, All Anchor Text, External Links**
 - [x] `MVP` **Response Codes: inlinks к URL с каждым кодом** (например, все ссылки на 404)
 - [x] `MVP` **Issues: All** — все сработавшие проверки со списками URL
-- [ ] `v2` **Links: выгрузки по проблемам** (nofollow, без анкора, неинформативный анкор, localhost…)
-- [ ] `v2` **Queued URLs** — очередь необойдённых URL
-- [ ] `v2` **Path Type** — ссылки по типу пути: абсолютные, протокол-относительные, от корня, относительные
-- [ ] `v2` **Security, Canonicals, Directives, Images, Content, JavaScript, Structured Data, Sitemaps, Custom Search, Custom Extraction** — выгрузки по фильтрам вкладок (в т.ч. все пары почти-дублей, RDF-тройки разметки)
-- [ ] `v2` **Web: All Page Source, All Page Text** (нужен `--store-html`)
-- [ ] `v2` **Web: All HTTP Request / Response Headers, All Cookies**
+- [x] `v2` **Links: выгрузки по проблемам** (nofollow, без анкора, localhost, картинки, 4xx / 5xx, смешанное содержимое) → `spider export links --issue`
+- [x] `v2` **Queued URLs** — очередь необойдённых URL → `spider export queued`
+- [x] `v2` **Path Type** — ссылки по типу пути: абсолютные, протокол-относительные, от корня, относительные → колонка `path_type` у ссылок
+- [x] `v2` **Security, Canonicals, Directives, Images, Content, Structured Data, Sitemaps, Custom Search, Custom Extraction** — выгрузки по фильтрам вкладок: находки любой проверки (`export pages|issues|links --issue`), пары почти-дублей (`export duplicates`), `export custom`, `export sitemap-urls`; JavaScript — с #39
+- [ ] `backlog` **RDF-тройки микроразметки** — выгрузка троек; сама разметка страницы — в `spider url`
+- [x] `v2` **Web: All Page Source, All Page Text** (нужен `--store-html`) → `spider export source|text`
+- [x] `v2` **Web: All HTTP Response Headers, All Cookies** → `spider export headers|cookies` (заголовки запроса одинаковы для обхода — в `spider url`)
 - [ ] `v3` **Web: Screenshots**
 - [ ] `v3` **URL Inspection: Rich Results, Referring Pages, Sitemaps** (данные GSC)
 - [ ] `backlog` **Web: Archived Website, All PDF Documents, All PDF Content**
@@ -735,8 +736,8 @@
 - [x] `MVP` **Redirects: All Redirects** — все редиректы
 - [x] `MVP` **Redirects: Redirect Chains** — цепочки из 2+ прыжков и петли, тип (HTTP / JS / meta refresh)
 - [x] `MVP` **Redirects: Redirects to Errors** — редиректы на заблокированные, неотвечающие, 4xx, 5xx
-- [ ] `v2` **Redirects: Redirect & Canonical Chains** — цепочки с учётом canonical
-- [ ] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals**
+- [x] `v2` **Redirects: Redirect & Canonical Chains** — цепочки с учётом canonical → `spider redirects --canonicals`
+- [x] `v2` **Canonicals: Canonical Chains, Non-Indexable Canonicals** → `spider report canonicals`
 - [x] `v2` **Pagination: Non-200, Unlinked** → `spider pagination --only …`
 - [x] `v2` **Hreflang: All, Non-200, Unlinked, Missing Return, Inconsistent, Non-Canonical, Noindex Return Links** → `spider hreflang --only …`
 - [x] `v2` **Insecure Content** — HTTPS-страницы с HTTP-ссылками и ресурсами → `spider insecure`
@@ -744,8 +745,8 @@
 - [x] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже) → `spider sitemaps show --only orphans`
 - [x] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)** → `spider structured [--report validation|features]`
 - [ ] `v2` **JavaScript: Chrome Console Log Summary**
-- [ ] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL
-- [ ] `v2` **Crawl Path Report** — кратчайший путь обнаружения URL
+- [x] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL → `spider report headers [--cookies]`
+- [x] `v2` **Crawl Path Report** — кратчайший путь обнаружения URL → `spider report crawl-path`
 - [ ] `v3` **PageSpeed: Opportunities Summary, CSS / JavaScript Coverage Summary**
 - [ ] `v3` **Mobile** — выгрузки с деталями Lighthouse
 - [ ] `backlog` **Segments Overview** (не подтверждено)
@@ -770,7 +771,7 @@
 
 - [ ] `v3` **Link Score** — внутренний PageRank 0–100 после обхода
 - [x] `v2` **Readability** — Flesch Reading Ease
-- [ ] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt
+- [x] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt → `spider robots-test`
 - [x] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI) → `spider serp preview`
 - [ ] `backlog` **N-grams**
 - [ ] `backlog` **Semantic search / similarity** (эмбеддинги)

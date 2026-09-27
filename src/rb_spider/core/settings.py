@@ -538,6 +538,29 @@ class CompareSettings(BaseModel):
         return fields
 
 
+EXPORT_DATASETS = ["pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates",
+                   "custom", "sitemap-urls"]  # fmt: skip
+
+
+class ExportSettings(BaseModel):
+    """Multi-Export presets: `spider export --preset NAME` writes several datasets in one call."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    presets: dict[str, list[str]] = Field(
+        {
+            "audit": ["pages", "issues", "links"],
+            "links": ["links", "links:links_no_anchor_text", "links:links_internal_nofollow_outlinks",
+                      "links:internal_client_error"],
+            "full": list(EXPORT_DATASETS),
+        },
+        description=(
+            "Пресеты выгрузки: имя → список наборов (" + ", ".join(EXPORT_DATASETS) + "); `набор:код` — только "
+            "находки / ссылки / URL одной проверки, например `issues:page_title_missing`, `links:links_no_anchor_text`."
+        ),
+    )  # fmt: skip
+
+
 class ThresholdSettings(BaseModel):
     """Limits the issue rules compare against. Changing them needs `spider analyze`, not a new crawl."""
 
@@ -673,6 +696,7 @@ class Settings(BaseModel):
         default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
     )
     sitemaps: SitemapSettings = Field(default_factory=SitemapSettings, description="XML sitemap: чтение и проверки.")
+    export: ExportSettings = Field(default_factory=ExportSettings, description="Пресеты выгрузки (Multi-Export).")
     compare: CompareSettings = Field(
         default_factory=CompareSettings, description="Сравнение обходов: поля Change Detection."
     )

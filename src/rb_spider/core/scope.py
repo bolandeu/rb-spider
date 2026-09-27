@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 # Columns of a `links` row as `PageReader` builds it (the crawl id is added by the writer).
 LINK_FIELDS = (
     "source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment",
-    "hreflang", "position", "path",
+    "hreflang", "position", "path", "path_type",
 )  # fmt: skip
 _LINK_DEFAULTS = dict.fromkeys(LINK_FIELDS[4:]) | {"nofollow": False}
 
@@ -232,7 +232,7 @@ class PageReader:
             if kind.store:
                 rows.append(link_row(page.url, link.url, "hyperlink", internal, anchor=link.anchor, alt=link.alt,
                                      rel=link.rel, nofollow=link.nofollow, fragment=link.fragment,
-                                     position=link.position, path=link.path))  # fmt: skip
+                                     position=link.position, path=link.path, path_type=link.path_type))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
             if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)

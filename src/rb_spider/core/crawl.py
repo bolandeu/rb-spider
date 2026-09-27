@@ -244,6 +244,27 @@ def site_auth_header(settings: CrawlSettings) -> dict[str, str]:
     return {"Authorization": f"Basic {token}"}
 
 
+def test_robots(settings: CrawlSettings, urls: list[str], robots_text: str | None = None) -> list[dict]:
+    """Robots.txt tester: may the crawl's user agent fetch these URLs, and which line of robots.txt decides.
+
+    `robots_text` — a robots.txt to test instead of the sites' own (an edit before it goes live).
+    """
+    agent = settings.robots_user_agent or settings.resolved_user_agent or "*"
+
+    async def run() -> list[dict]:
+        client = http_client(settings)
+        gates: dict[str, RobotsGate] = {}
+        found = []
+        for url in urls:
+            host = urlsplit(url).netloc
+            gate = gates.setdefault(host, RobotsGate(client, agent, robots_text, host))
+            allowed = await gate.allowed(url)
+            found.append({"url": url, "allowed": allowed, "rule": gate.rule(url), "user_agent": agent})
+        return found
+
+    return asyncio.run(run())
+
+
 def requests_per_minute(settings: CrawlSettings, crawl_delay: int | None) -> float:
     """The request-rate cap: `max_rps` and robots.txt Crawl-delay, whichever is stricter; inf — none."""
     caps = [float("inf")]

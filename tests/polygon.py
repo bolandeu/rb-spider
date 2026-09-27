@@ -575,6 +575,11 @@ CUSTOM_PAGE = (
     '<footer><a href="/">Контакты</a></footer></body></html>'
 ).format(t=TITLE.format("custom"), d=DESCRIPTION.format("custom"))
 SETTINGS_TRAPS["/cx"] = (200, {}, CUSTOM_PAGE)
+# Meta keywords (#38), crawled as a list: the same keywords twice, two tags on one page
+_KW = '<meta name="keywords" content="{}">'
+SETTINGS_TRAPS["/mk-1"] = (200, {}, _html("mk-1", head=_head("mk-1", extra=_KW.format("диван, кресло"))))
+SETTINGS_TRAPS["/mk-2"] = (200, {}, _html("mk-2", head=_head("mk-2", extra=_KW.format("диван, кресло"))))
+SETTINGS_TRAPS["/mk-3"] = (200, {}, _html("mk-3", head=_head("mk-3", extra=_KW.format("стол") + _KW.format("стул"))))
 FLAKY_FAILS = 2
 FLAKY_SEEN: dict[str, int] = {}
 BASIC_AUTH = "Basic " + __import__("base64").b64encode(b"stage:pa55").decode()

@@ -40,10 +40,31 @@ def resolve(
 
 
 def read_url_source(source: str) -> str:
-    """The text of a `--list` URL file, or of stdin for `-`."""
+    """The text of a `--list` URL file, or of stdin for `-`; an Excel file (.xlsx) comes back as CSV text."""
     if source == "-":
         return sys.stdin.read()
     path = Path(source)
     if not path.is_file():
         raise InvalidArguments(f"No such URL list file: {source}")
+    if path.suffix.lower() in (".xlsx", ".xlsm"):
+        return _xlsx_as_csv(path)
     return path.read_text(encoding="utf-8-sig")
+
+
+def _xlsx_as_csv(path: Path) -> str:
+    """The first sheet of an Excel file as CSV text — `read_url_list` then finds the URL column by its header."""
+    import csv
+    import io
+
+    from openpyxl import load_workbook
+
+    try:
+        book = load_workbook(path, read_only=True, data_only=True)
+    except Exception as exc:  # openpyxl raises zipfile / XML errors of its own
+        raise InvalidArguments(f"Not a readable Excel file: {path} ({exc}).") from exc
+    out = io.StringIO()
+    writer = csv.writer(out)
+    for row in book.worksheets[0].iter_rows(values_only=True):
+        writer.writerow(["" if value is None else value for value in row])
+    book.close()
+    return out.getvalue()

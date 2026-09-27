@@ -26,7 +26,28 @@ from .errors import InvalidArguments
 from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings, ThresholdSettings
 
-DATASETS = ("pages", "links", "issues")
+DATASETS = ("pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates", "custom",
+            "sitemap-urls")  # fmt: skip
+# Bulk Export «Links» by issue: the link rows behind a link rule (Screaming Frog exports the links, not the pages)
+LINK_ISSUES = {
+    "links_internal_nofollow_outlinks": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
+    "links_nofollow_inlinks_only": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
+    "links_follow_and_nofollow_inlinks": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
+    "links_no_anchor_text": "l.kind = 'hyperlink' AND l.internal AND trim(coalesce(l.anchor, '')) = ''"
+    " AND trim(coalesce(l.alt, '')) = ''",
+    "links_outlinks_to_localhost": "l.kind = 'hyperlink' AND NOT l.internal AND (l.target LIKE 'http://localhost%'"
+    " OR l.target LIKE 'https://localhost%' OR l.target LIKE 'http://127.%' OR l.target LIKE 'https://127.%')",
+    "images_missing_alt_text": "l.kind = 'image' AND l.alt_attr AND trim(coalesce(l.alt, '')) = ''",
+    "images_missing_alt_attribute": "l.kind = 'image' AND NOT l.alt_attr",
+    "images_missing_size": "l.kind = 'image' AND NOT l.sized",
+    "internal_client_error": "t.status_code BETWEEN 400 AND 499 AND NOT coalesce(t.external, 0)",
+    "internal_server_error": "t.status_code >= 500 AND NOT coalesce(t.external, 0)",
+    "external_client_error": "t.status_code BETWEEN 400 AND 499 AND coalesce(t.external, 0)",
+    "external_server_error": "t.status_code >= 500 AND coalesce(t.external, 0)",
+    "security_mixed_content": "l.source LIKE 'https://%' AND l.target LIKE 'http://%'"
+    " AND l.kind IN ('image', 'css', 'js', 'media', 'iframe')",
+    "security_form_url_insecure": "l.source LIKE 'https://%' AND l.target LIKE 'http://%' AND l.kind = 'form'",
+}
 RESOURCE_KINDS = ("image", "css", "js", "media", "iframe")
 _STATUS_CLASS = re.compile(r"^([1-5])xx$", re.IGNORECASE)
 
@@ -102,7 +123,12 @@ def dataset(
             clause, extra = _status_filter(target_status)
             where, params = f"{where} AND {clause}", params | extra
         if issue is not None:
-            raise InvalidArguments("--issue filters pages or issues, not links.")
+            issues.rule(issue)
+            if issue not in LINK_ISSUES:
+                raise InvalidArguments(
+                    f"--issue for links: one of {', '.join(LINK_ISSUES)} (other rules: pages or issues)."
+                )
+            where += f" AND ({LINK_ISSUES[issue]})"
         select = ", ".join(f"l.{c}" for c in columns[:-1])
         sql = (
             f"SELECT {select}, t.status_code FROM links l"  # noqa: S608 — fixed names, bound values
@@ -111,9 +137,94 @@ def dataset(
         )
     elif what == "issues":
         return _issues_table(conn, crawl_id, issue)
+    elif what in _EXTRA:
+        if issue is not None or target_status is not None or external:
+            raise InvalidArguments(f"--issue / --status / --external filter pages, links or issues, not {what}.")
+        return _EXTRA[what](conn, crawl_id)
     else:
         raise InvalidArguments(f"Unknown dataset '{what}': one of {', '.join(DATASETS)}.")
     return Table(columns, _rows(conn, sql, params))
+
+
+def _sql_table(conn: sa.Connection, crawl_id: int, sql: str) -> Table:
+    result = conn.execution_options(yield_per=1000).execute(sa.text(sql), {"crawl_id": crawl_id})
+    return Table(list(result.keys()), (tuple(row) for row in result))
+
+
+def _pages_json(conn: sa.Connection, crawl_id: int, columns: list[str], rows_of) -> Table:
+    """A table whose rows come from each page's headers JSON — parsed a page at a time."""
+    sql = sa.text("SELECT url, headers FROM pages WHERE crawl_id = :crawl_id AND headers IS NOT NULL ORDER BY url")
+
+    def rows() -> Iterator[tuple]:
+        for url, raw in conn.execution_options(yield_per=500).execute(sql, {"crawl_id": crawl_id}):
+            yield from rows_of(url, json.loads(raw))
+
+    return Table(columns, rows())
+
+
+def _headers(url: str, headers: dict) -> Iterator[tuple]:
+    for name, value in headers.items():
+        yield url, name, value
+
+
+_COOKIE_SPLIT = re.compile(r",\s*(?=[^;,=\s]+=)")  # a folded Set-Cookie list: split before the next name=
+
+
+def cookies_of(headers: dict) -> list[dict]:
+    """The cookies a response sets: name, value and attributes (Path, Domain, Secure, HttpOnly, SameSite…)."""
+    found = []
+    for item in _COOKIE_SPLIT.split(headers.get("set-cookie", "")):
+        name, sep, rest = item.strip().partition("=")
+        if not sep or not name:
+            continue
+        value, *attributes = rest.split(";")
+        attrs = {}
+        for attribute in attributes:
+            key, _, val = attribute.strip().partition("=")
+            if key:
+                attrs[key.strip().lower()] = val.strip() or True
+        found.append({"name": name.strip(), "value": value.strip(), **attrs})
+    return found
+
+
+def _cookies(url: str, headers: dict) -> Iterator[tuple]:
+    for cookie in cookies_of(headers):
+        yield (url, cookie["name"], cookie["value"], cookie.get("domain"), cookie.get("path"), cookie.get("expires"),
+               "secure" in cookie, "httponly" in cookie, cookie.get("samesite"))  # fmt: skip
+
+
+def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool) -> Table:
+    """Page source or visible text of every stored page (`--store-html`), one page at a time."""
+    from .extract import visible_text
+
+    sql = sa.text(
+        "SELECT url FROM pages WHERE crawl_id = :crawl_id AND parsed AND content_type LIKE '%html%' ORDER BY url"
+    )
+
+    def rows() -> Iterator[tuple]:
+        for (url,) in conn.execution_options(yield_per=500).execute(sql, {"crawl_id": crawl_id}):
+            body = storage.get_html(crawl_id, url)
+            if body is not None:
+                yield url, visible_text(body) if as_text else body.decode("utf-8", "replace")
+
+    return Table(["url", "text" if as_text else "html"], rows())
+
+
+_EXTRA = {
+    "queued": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url, depth, check_only FROM frontier WHERE crawl_id = :crawl_id AND NOT done ORDER BY depth, url"),
+    "headers": lambda conn, crawl_id: _pages_json(conn, crawl_id, ["url", "name", "value"], _headers),
+    "cookies": lambda conn, crawl_id: _pages_json(conn, crawl_id, ["url", "name", "value", "domain", "path", "expires",
+                                                                  "secure", "httponly", "samesite"], _cookies),
+    "source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False),
+    "text": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=True),
+    "duplicates": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url_a, url_b, similarity FROM near_duplicates WHERE crawl_id = :crawl_id ORDER BY similarity DESC, url_a"),
+    "custom": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT kind, name, url, value, n FROM custom_values WHERE crawl_id = :crawl_id ORDER BY kind, name, url, n"),
+    "sitemap-urls": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url, source, lastmod FROM sitemap_urls WHERE crawl_id = :crawl_id ORDER BY url, source"),
+}  # fmt: skip
 
 
 def _issues_table(conn: sa.Connection, crawl_id: int, issue: str | None) -> Table:
@@ -157,7 +268,39 @@ def write(table: Table, fmt: str, out: IO[str]) -> int:
             count += 1
         out.write("\n]\n" if count else "]\n")
         return count
-    raise InvalidArguments(f"Unknown format '{fmt}': csv or json.")
+    raise InvalidArguments(f"Unknown format '{fmt}': csv, json or xlsx.")
+
+
+def preset_tables(conn: sa.Connection, crawl_id: int, specs: list[str]) -> Iterator[tuple[str, Table]]:
+    """The tables of a preset: `dataset` or `dataset:issue code` (pages / links / issues of one rule)."""
+    for spec in specs:
+        what, _, code = spec.partition(":")
+        if what not in DATASETS:
+            raise InvalidArguments(f"Preset entry '{spec}': unknown dataset — one of {', '.join(DATASETS)}.")
+        yield spec.replace(":", "-"), dataset(conn, crawl_id, what, issue=code or None)
+
+
+XLSX_CELL = 32_767  # Excel's limit on one cell's text
+
+
+def write_xlsx(sheets: Iterable[tuple[str, Table]], path: Path) -> dict[str, int]:
+    """Tables as sheets of one .xlsx, streamed (openpyxl write-only: rows go to disk as they come).
+    Returns rows per sheet; text over Excel's cell limit is cut."""
+    from openpyxl import Workbook
+
+    book = Workbook(write_only=True)
+    counts: dict[str, int] = {}
+    for title, table in sheets:
+        name = re.sub(r"[\[\]:*?/\\]", "-", title)[:31] or "sheet"
+        sheet = book.create_sheet(name)
+        sheet.append(table.columns)
+        n = 0
+        for row in table.rows:
+            sheet.append([v[:XLSX_CELL] if isinstance(v, str) else v for v in row])
+            n += 1
+        counts[name] = n
+    book.save(path)
+    return counts
 
 
 # --- read-only SQL -------------------------------------------------------------------

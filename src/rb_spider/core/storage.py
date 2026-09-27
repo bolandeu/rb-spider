@@ -75,6 +75,8 @@ pages = sa.Table(
     sa.Column("meta_description", sa.String),
     sa.Column("meta_description_count", sa.Integer),
     sa.Column("meta_description_outside_head", sa.Integer),
+    sa.Column("meta_keywords", sa.String),  # the first <meta name="keywords">
+    sa.Column("meta_keywords_count", sa.Integer),
     # computed after the crawl (issues.analyze): the title and description's width in Google's results, pixels
     sa.Column("title_px", sa.Integer),
     sa.Column("description_px", sa.Integer),
@@ -192,7 +194,7 @@ urls = sa.Table(
 )
 LINK_DATA = (
     "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang", "position",
-    "path",
+    "path", "path_type",
 )  # fmt: skip
 link_rows = sa.Table(
     "link_rows",
@@ -215,6 +217,7 @@ link_rows = sa.Table(
         "position", sa.String
     ),  # hyperlinks: nav | header | footer | sidebar (custom.link_positions); NULL — content
     sa.Column("path", sa.String),  # hyperlinks: the landmark ancestors, /nav.menu/… (collect.link_path)
+    sa.Column("path_type", sa.String),  # hyperlinks: a | p | r | l — the view spells them out (Path Type)
     sa.Index("link_rows_by_source", "crawl_id", "source_id"),
     sa.Index("link_rows_by_target", "crawl_id", "target_id"),
     # links to a #bookmark are few: Broken Bookmark reads them without scanning every link of the crawl
@@ -246,6 +249,7 @@ links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never w
     sa.Column("hreflang", sa.String),
     sa.Column("position", sa.String),
     sa.Column("path", sa.String),
+    sa.Column("path_type", sa.String),
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(

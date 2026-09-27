@@ -21,8 +21,8 @@ def crawl(
     url_list: str | None = typer.Option(
         None,
         "--list",
-        help="Режим списка: файл с URL (по одному в строке, # — комментарий; CSV с колонкой url / address / loc; "
-        "XML sitemap) или - для stdin; обходятся только они и их редиректы (ключ crawl.mode = list).",
+        help="Режим списка: файл с URL (по одному в строке, # — комментарий; CSV или Excel с колонкой url / "
+        "address / loc; XML sitemap) или - для stdin; обходятся только они и их редиректы (ключ crawl.mode = list).",
     ),
     profile: str | None = options.ProfileOption,
     config_file: Path | None = options.ConfigFileOption,
@@ -93,8 +93,8 @@ def crawl(
     без перехода по ссылкам, например перед миграцией или после неё: каждый URL
     скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до
     конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из
-    списка. Список — URL построчно, CSV с колонкой url / address / loc (выгрузка
-    Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —
+    списка. Список — URL построчно, CSV или Excel (.xlsx) с колонкой url / address / loc
+    (выгрузка Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —
     обычный обход: issues, urls, redirects, links работают.
 
     XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider[sitemaps]`) читается в

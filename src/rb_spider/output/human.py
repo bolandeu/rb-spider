@@ -299,6 +299,67 @@ def compare_rows(data: dict) -> None:
         console.print(f"{row['url']}{tail}", markup=False)
 
 
+def exported_preset(data: dict) -> None:
+    console.print(f"Обход #{data['crawl_id']}, пресет {data['preset']} → {data['path']}")
+    for name, rows in data["files"].items():
+        console.print(f"  {name}: {rows} строк")
+
+
+def report_rows(data: dict) -> None:
+    shown, total = len(data["rows"]), data["total"]
+    head = f"[bold]{data['report']}[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    if data["rows"]:
+        table = Table(box=None, pad_edge=False)
+        columns = list(data["rows"][0])
+        for column in columns:
+            table.add_column(column)
+        for row in data["rows"]:
+            table.add_row(*("—" if row[c] is None else str(row[c]) for c in columns))
+        console.print(table)
+
+
+def report_structure(data: dict) -> None:
+    table = Table(box=None, pad_edge=False, title=f"Структура — обход #{data['crawl_id']}", title_justify="left")
+    for column in ("папка", "URL", "индексируется", "нет"):
+        table.add_column(column)
+    for row in data["folders"]:
+        table.add_row(row["folder"], str(row["urls"]), str(row["indexable"]), str(row["non_indexable"]))
+    console.print(table)
+    console.print("[bold]По глубине[/bold]: " + ", ".join(f"{d}: {n}" for d, n in data["depths"].items()))
+
+
+def report_response_times(data: dict) -> None:
+    console.print(f"[bold]Время ответа[/bold] — обход #{data['crawl_id']}: {data['urls']} URL, "
+                  f"среднее {data['average_ms']} мс, максимум {data['max_ms']} мс")  # fmt: skip
+    console.print("  " + ", ".join(f"{band} мс: {n}" for band, n in data["bands"].items()))
+    for row in data["slowest"]:
+        console.print(f"  {row['response_ms']} мс  {row['status_code']}  {row['url']}", markup=False)
+
+
+def report_path(data: dict) -> None:
+    console.print(f"[bold]Путь обхода[/bold] до {data['url']} — обход #{data['crawl_id']}", markup=False)
+    for step in data["path"]:
+        via = f"  —{step['via']}→" if step["via"] else ""
+        console.print(f"  {step['depth']}  {step['url']}{via}", markup=False)
+
+
+def report_headers(data: dict) -> None:
+    title = "Cookies" if data["cookies"] else "Заголовки ответа"
+    table = Table(box=None, pad_edge=False, title=f"{title} — обход #{data['crawl_id']}", title_justify="left")
+    for column in ("имя", "URL", "например"):
+        table.add_column(column)
+    for row in data["rows"]:
+        table.add_row(row["name"], str(row["urls"]), row["example"])
+    console.print(table)
+
+
+def robots_rows(data: dict) -> None:
+    for row in data["rows"]:
+        verdict = "[green]разрешён[/green]" if row["allowed"] else "[red]запрещён[/red]"
+        console.print(f"{verdict}  {escape(row['url'])}  {escape(row['rule'] or '')}  ({escape(row['user_agent'])})")
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"

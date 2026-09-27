@@ -32,6 +32,9 @@ class Link:
     fragment: str | None = None  # the #bookmark the link jumps to, when it names one (see bookmark_fragment)
     position: str | None = None  # nav | header | footer | sidebar | content… (custom.link_positions)
     path: str | None = None  # the landmark ancestors, /nav.menu/… (collect.link_path)
+    path_type: str | None = (
+        None  # how the href is written: a — absolute, p — //protocol-relative, r — /root, l — relative
+    )
 
 
 @dataclass
@@ -242,7 +245,9 @@ def _onpage(tree: LexborHTMLParser) -> dict:
     """What the Page Titles / Meta Description / H1 / H2 checks need, in `pages` column names."""
     head = tree.head
     titles = tree.css("title")
-    descriptions = [m for m in tree.css("meta[name]") if (m.attributes.get("name") or "").lower() == "description"]
+    named = tree.css("meta[name]")
+    descriptions = [m for m in named if (m.attributes.get("name") or "").lower() == "description"]
+    keywords = [m for m in named if (m.attributes.get("name") or "").lower() == "keywords"]
     in_head = {n.mem_id for n in head.css("title, meta")} if head else set()  # mem_id: stable node identity
     headings = tree.css("h1, h2, h3, h4, h5, h6")
     h1s = [h for h in headings if h.tag == "h1"]
@@ -265,6 +270,8 @@ def _onpage(tree: LexborHTMLParser) -> dict:
         "meta_description": (descriptions[0].attributes.get("content") or "").strip() if descriptions else None,
         "meta_description_count": len(descriptions),
         "meta_description_outside_head": sum(m.mem_id not in in_head for m in descriptions),
+        "meta_keywords": (keywords[0].attributes.get("content") or "").strip() if keywords else None,
+        "meta_keywords_count": len(keywords),
         "h1": h1_text,
         "h1_count": len(h1s),
         "h1_from_alt": h1_from_alt,
@@ -311,6 +318,18 @@ def visible_text(body: bytes) -> str:
     return _WHITESPACE.sub(" ", root.text(separator=" ")).strip() if root else ""
 
 
+def path_type(href: str) -> str:
+    """How a link is written: a — absolute (https://…), p — protocol-relative (//host/…), r — from the root (/x),
+    l — relative (x, ../x, ?q, #f). One letter: stored with every link row."""
+    href = href.strip()
+    if href.startswith("//"):
+        return "p"
+    if href.startswith("/"):
+        return "r"
+    return "a" if _SCHEME.match(href) else "l"
+
+
+_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 # Fragments that aren't bookmarks: "#top" scrolls up without an id (HTML spec), "#!" / "#/" are
 # client-side routes, "#:~:text=" is a text fragment.
 _NOT_BOOKMARK = re.compile(r"^(top|!|/|:~:)", re.IGNORECASE)
@@ -360,6 +379,7 @@ def _links(
                 rel=rel,
                 nofollow="nofollow" in (rel or "").split(),
                 fragment=bookmark_fragment(href),
+                path_type=path_type(href),
             )
         )
         if place is not None:

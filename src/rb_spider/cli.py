@@ -26,6 +26,7 @@ from .commands import (
     profiles,
     projects,
     redirects,
+    report,
     serp,
     sitemaps,
     skill,
@@ -54,6 +55,8 @@ app.add_typer(projects.app, name="projects")
 app.add_typer(db.app, name="db")
 app.add_typer(sitemaps.app, name="sitemaps")
 app.add_typer(serp.app, name="serp")
+app.add_typer(report.app, name="report")
+app.command(name="robots-test")(report.robots_test)
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

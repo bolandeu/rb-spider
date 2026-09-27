@@ -1,0 +1,32 @@
+                                                                                                    
+ Usage: spider report canonicals [OPTIONS] [crawl_id]                                               
+                                                                                                    
+ Canonical Chains и Non-Indexable Canonicals: страницы с canonical на другой URL и что с этим URL.  
+                                                                                                    
+ Цепочка — canonical ведёт на страницу, которая сама canonical-ит дальше или                        
+ редиректит; поисковик может не дойти до конца. Цепочки вместе с редиректами —                      
+ `spider redirects --canonicals`.                                                                   
+                                                                                                    
+ Примеры:                                                                                           
+   spider report canonicals                                                                         
+   spider --json report canonicals --only non_indexable                                             
+                                                                                                    
+ JSON: `{crawl_id, report, only, total, rows: [{url, canonical, canonical_status,                   
+ canonical_indexability, next_hop}]}`; next_hop — куда ведёт сам canonical.                         
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --only         <all|chains|non_indexable>  chains — canonical ведёт на URL, который снова        │
+│                                            уводит; non_indexable — на неиндексируемый; all — все │
+│                                            canonical на другой URL.                              │
+│                                            [default: chains]                                     │
+│ --limit        <int range> [x>=1]          Сколько строк показать (всего — в поле total).        │
+│                                            [default: 100]                                        │
+│ --json                                     Вывод в JSON для агентов и скриптов (одна             │
+│                                            строка-конверт `{ok, ...}`).                          │
+│ --quiet                                    Печатать только основной результат, без пояснений.    │
+│ --help                                     Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

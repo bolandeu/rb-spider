@@ -11,7 +11,9 @@ from .. import output
 from ..core import export as export_service
 from ..core import overview as overview_service
 from ..core import storage
+from ..core.errors import InvalidArguments
 from ..core.extract import normalize_url
+from . import options
 
 
 class Format(StrEnum):
@@ -19,10 +21,14 @@ class Format(StrEnum):
     json = "json"
 
 
-class Dataset(StrEnum):
-    pages = "pages"
-    links = "links"
-    issues = "issues"
+class ExportFormat(StrEnum):
+    csv = "csv"
+    json = "json"
+    xlsx = "xlsx"
+
+
+Dataset = StrEnum("Dataset", {name.replace("-", "_"): name for name in export_service.DATASETS})
+_DATASETS_HELP = "Что выгрузить: " + ", ".join(export_service.DATASETS) + "; по умолчанию pages."
 
 
 OutputOption = typer.Option(
@@ -80,12 +86,17 @@ def url(
 @output.guard
 def export(
     ctx: typer.Context,
-    what: Dataset = typer.Argument(Dataset.pages, help="Что выгрузить: pages (URL), links (ссылки), issues (находки)."),
+    what: Dataset | None = typer.Argument(None, help=_DATASETS_HELP),
     crawl_id: int | None = typer.Option(None, "--crawl", help="Номер обхода; по умолчанию — последний."),
-    fmt: Format = typer.Option(Format.csv, "--format", help="csv (с заголовком) или json (массив объектов)."),
+    fmt: ExportFormat = typer.Option(
+        ExportFormat.csv, "--format", help="csv (с заголовком), json (массив объектов) или xlsx (нужен -o)."
+    ),
     path: Path | None = OutputOption,
+    preset: str | None = typer.Option(
+        None, "--preset", help="Несколько наборов за раз (export.presets: audit, links, full): -o — папка или .xlsx."
+    ),
     issue: str | None = typer.Option(
-        None, "--issue", help="Только URL (pages) или находки (issues) этой проверки из `spider issues`."
+        None, "--issue", help="Только URL (pages), находки (issues) или ссылки (links) этой проверки."
     ),
     target_status: str | None = typer.Option(
         None, "--status", help="Код ответа: 404 или класс 4xx — у URL (pages) или у цели ссылки (links)."
@@ -95,46 +106,78 @@ def export(
         None, "--type", help="Только URL этого типа (pages): html, js, css, image, pdf, other, unknown."
     ),
     scheme: str | None = typer.Option(None, "--scheme", help="Только URL по этому протоколу (pages): https или http."),
+    profile: str | None = options.ProfileOption,
+    config_file: Path | None = options.ConfigFileOption,
+    assignments: list[str] | None = options.SetOption,
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Выгрузить данные обхода в CSV или JSON: URL, ссылки или находки проверок.
+    """Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.
 
-    Для таблиц и сторонних инструментов; вопрос к данным точнее задать
-    `spider query`. Данные идут потоком — выгрузка любого размера не занимает
-    память. Колонки pages — все данные страницы (как в `spider url`) и тип
-    `content_kind` (html, js, css, image, pdf, other, unknown), links —
-    ссылки с кодом ответа цели (`target_status`), issues — находки с названием,
-    типом и приоритетом проверки.
+    Для таблиц и сторонних инструментов; вопрос к данным точнее задать `spider query`.
+    Данные идут потоком — выгрузка любого размера не занимает память. Наборы: pages
+    (все данные страницы и тип `content_kind`), links (с кодом цели, зоной и типом пути
+    ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),
+    headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —
+    нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /
+    Extraction), sitemap-urls (URL из sitemap). `--issue` у links — ссылки, из-за которых
+    сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
 
     Примеры:
       spider export > pages.csv                                # все URL последнего обхода
-      spider export issues -o issues.csv                       # все сработавшие проверки
-      spider export pages --issue page_title_missing --format json
+      spider export issues -o issues.xlsx --format xlsx
+      spider export links --issue links_no_anchor_text -o no-anchor.csv
       spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
-      spider export links --external                           # все внешние ссылки
       spider export pages --type css --status 4xx              # битые стили
-      spider export pages --scheme http                        # что осталось на HTTP
+      spider export --preset audit -o report.xlsx              # несколько листов за раз
+      spider export --preset full -o out/ --format json        # файл на набор
 
-    Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает). С `-o`
-    печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`. Неизвестная
-    проверка или тип, неверный `--status`, `--issue` для links, `--type` / `--scheme` не
-    для pages — выход 2.
+    Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает; xlsx без `-o`
+    нельзя). С `-o` печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`, у
+    пресета — `{crawl_id, preset, format, files: {набор: строк}, path}`. Неизвестный набор,
+    проверка, тип или пресет, неверный `--status`, фильтр не для этого набора — выход 2.
     """
+    if fmt is ExportFormat.xlsx and path is None:
+        raise InvalidArguments("--format xlsx writes a file: give -o report.xlsx.")
+    if preset is not None:
+        if path is None:
+            raise InvalidArguments("--preset writes several datasets: give -o (a folder, or a .xlsx file).")
+        specs = options.resolve(ctx, profile, config_file, assignments).settings.export.presets.get(preset)
+        if specs is None:
+            raise InvalidArguments(f"No export preset '{preset}' — see export.presets in `spider config show`.")
+        with storage.database() as engine:
+            crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+            with engine.connect() as conn:
+                files = _write_preset(conn, crawl_id, specs, fmt, path)
+        data = {"crawl_id": crawl_id, "preset": preset, "format": fmt.value, "files": files, "path": str(path)}
+        output.emit_success(ctx, data, render_human=output.human.exported_preset)
+        return
+    dataset = what.value if what else "pages"
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         with engine.connect() as conn:
-            table = export_service.dataset(
-                conn,
-                crawl_id,
-                what.value,
-                issue=issue,
-                target_status=target_status,
-                external=external,
-                kind=kind,
-                scheme=scheme,
-            )
-            _stream(ctx, table, fmt, path, {"crawl_id": crawl_id, "dataset": what.value})
+            table = export_service.dataset(conn, crawl_id, dataset, issue=issue, target_status=target_status,
+                                           external=external, kind=kind, scheme=scheme)  # fmt: skip
+            if fmt is ExportFormat.xlsx:
+                assert path is not None  # noqa: S101 — checked above
+                rows = export_service.write_xlsx([(dataset, table)], path)[dataset]
+                data = {"crawl_id": crawl_id, "dataset": dataset, "format": "xlsx", "rows": rows, "path": str(path)}
+                output.emit_success(ctx, data, render_human=output.human.exported)
+                return
+            _stream(ctx, table, Format(fmt.value), path, {"crawl_id": crawl_id, "dataset": dataset})
+
+
+def _write_preset(conn, crawl_id: int, specs: list[str], fmt: ExportFormat, path: Path) -> dict[str, int]:
+    """A preset's tables: sheets of one .xlsx (path ends with .xlsx, or --format xlsx), else a file per table."""
+    tables = export_service.preset_tables(conn, crawl_id, specs)
+    if fmt is ExportFormat.xlsx or path.suffix.lower() == ".xlsx":
+        return export_service.write_xlsx(tables, path if path.suffix else path.with_suffix(".xlsx"))
+    path.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for name, table in tables:
+        with (path / f"{name}.{fmt.value}").open("w", encoding="utf-8", newline="") as out:
+            files[name] = export_service.write(table, fmt.value, out)
+    return files
 
 
 @output.guard

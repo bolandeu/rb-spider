@@ -1,49 +1,63 @@
                                                                                                     
- Usage: spider export [OPTIONS] [what]:<pages|links|issues>                                         
+ Usage: spider export [OPTIONS] [what]:<pages|links|issues|queued|headers|cookies                   
+                      |source|text|duplicates|custom|sitemap-urls>                                  
                                                                                                     
- Выгрузить данные обхода в CSV или JSON: URL, ссылки или находки проверок.                          
+ Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.               
                                                                                                     
- Для таблиц и сторонних инструментов; вопрос к данным точнее задать                                 
- `spider query`. Данные идут потоком — выгрузка любого размера не занимает                          
- память. Колонки pages — все данные страницы (как в `spider url`) и тип                             
- `content_kind` (html, js, css, image, pdf, other, unknown), links —                                
- ссылки с кодом ответа цели (`target_status`), issues — находки с названием,                        
- типом и приоритетом проверки.                                                                      
+ Для таблиц и сторонних инструментов; вопрос к данным точнее задать `spider query`.                 
+ Данные идут потоком — выгрузка любого размера не занимает память. Наборы: pages                    
+ (все данные страницы и тип `content_kind`), links (с кодом цели, зоной и типом пути                
+ ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),                
+ headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —             
+ нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /                     
+ Extraction), sitemap-urls (URL из sitemap). `--issue` у links — ссылки, из-за которых              
+ сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.                            
                                                                                                     
  Примеры:                                                                                           
    spider export > pages.csv                                # все URL последнего обхода             
-   spider export issues -o issues.csv                       # все сработавшие проверки              
-   spider export pages --issue page_title_missing --format json                                     
+   spider export issues -o issues.xlsx --format xlsx                                                
+   spider export links --issue links_no_anchor_text -o no-anchor.csv                                
    spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404                  
-   spider export links --external                           # все внешние ссылки                    
    spider export pages --type css --status 4xx              # битые стили                           
-   spider export pages --scheme http                        # что осталось на HTTP                  
+   spider export --preset audit -o report.xlsx              # несколько листов за раз               
+   spider export --preset full -o out/ --format json        # файл на набор                         
                                                                                                     
- Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает). С `-o`                     
- печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`. Неизвестная                      
- проверка или тип, неверный `--status`, `--issue` для links, `--type` / `--scheme` не               
- для pages — выход 2.                                                                               
+ Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает; xlsx без `-o`               
+ нельзя). С `-o` печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`, у                
+ пресета — `{crawl_id, preset, format, files: {набор: строк}, path}`. Неизвестный набор,            
+ проверка, тип или пресет, неверный `--status`, фильтр не для этого набора — выход 2.               
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
-│   what      <pages|links|issues>  Что выгрузить: pages (URL), links (ссылки), issues (находки).  │
-│                                   [default: pages]                                               │
+│   what      <pages|links|issues|queued|headers|cooki  Что выгрузить: pages, links, issues,       │
+│             es|source|text|duplicates|custom|sitemap  queued, headers, cookies, source, text,    │
+│             -urls>                                    duplicates, custom, sitemap-urls; по       │
+│                                                       умолчанию pages.                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --crawl             <int>       Номер обхода; по умолчанию — последний.                          │
-│ --format            <csv|json>  csv (с заголовком) или json (массив объектов). [default: csv]    │
-│ --output    -o      <path>      Записать в файл; без него — поток данных в stdout (без           │
-│                                 JSON-конверта).                                                  │
-│ --issue             <str>       Только URL (pages) или находки (issues) этой проверки из `spider │
-│                                 issues`.                                                         │
-│ --status            <str>       Код ответа: 404 или класс 4xx — у URL (pages) или у цели ссылки  │
-│                                 (links).                                                         │
-│ --external                      Только чужие сайты: внешние URL или ссылки на них.               │
-│ --type              <str>       Только URL этого типа (pages): html, js, css, image, pdf, other, │
-│                                 unknown.                                                         │
-│ --scheme            <str>       Только URL по этому протоколу (pages): https или http.           │
-│ --json                          Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok,   │
-│                                 ...}`).                                                          │
-│ --quiet                         Печатать только основной результат, без пояснений.               │
-│ --help                          Show this message and exit.                                      │
+│ --crawl             <int>            Номер обхода; по умолчанию — последний.                     │
+│ --format            <csv|json|xlsx>  csv (с заголовком), json (массив объектов) или xlsx (нужен  │
+│                                      -o).                                                        │
+│                                      [default: csv]                                              │
+│ --output    -o      <path>           Записать в файл; без него — поток данных в stdout (без      │
+│                                      JSON-конверта).                                             │
+│ --preset            <str>            Несколько наборов за раз (export.presets: audit, links,     │
+│                                      full): -o — папка или .xlsx.                                │
+│ --issue             <str>            Только URL (pages), находки (issues) или ссылки (links)     │
+│                                      этой проверки.                                              │
+│ --status            <str>            Код ответа: 404 или класс 4xx — у URL (pages) или у цели    │
+│                                      ссылки (links).                                             │
+│ --external                           Только чужие сайты: внешние URL или ссылки на них.          │
+│ --type              <str>            Только URL этого типа (pages): html, js, css, image, pdf,   │
+│                                      other, unknown.                                             │
+│ --scheme            <str>            Только URL по этому протоколу (pages): https или http.      │
+│ --profile           <str>            Профиль настроек: встроенный (`spider profiles list`) или   │
+│                                      из `.spider/profiles/`.                                     │
+│ --config            <path>           TOML-файл настроек поверх профиля (формат как у профиля).   │
+│ --set               KEY=VALUE        Переопределить любой ключ: `--set crawl.max_urls=500`;      │
+│                                      можно повторять.                                            │
+│ --json                               Вывод в JSON для агентов и скриптов (одна строка-конверт    │
+│                                      `{ok, ...}`).                                               │
+│ --quiet                              Печатать только основной результат, без пояснений.          │
+│ --help                               Show this message and exit.                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

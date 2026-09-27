@@ -117,7 +117,7 @@ def test_export_all_issues_to_file(crawled, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "args", [["links", "--issue", "internal_client_error"], ["pages", "--issue", "nope"], ["links", "--status", "4x"]]
+    "args", [["links", "--issue", "page_title_missing"], ["pages", "--issue", "nope"], ["links", "--status", "4x"]]
 )
 def test_export_rejects_bad_filters(crawled, args: list[str]) -> None:
     code, data = _json("export", *args)

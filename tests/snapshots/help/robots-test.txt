@@ -1,0 +1,34 @@
+                                                                                                    
+ Usage: spider robots-test [OPTIONS] {urls}...                                                      
+                                                                                                    
+ Robots.txt tester: разрешён ли URL для робота и какая строка robots.txt это решает.                
+                                                                                                    
+ Качает robots.txt сайтов из списка (или берёт `--robots`), не обходит сайт. User-Agent —           
+ как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты            
+ googlebot, yandexbot…).                                                                            
+                                                                                                    
+ Примеры:                                                                                           
+   spider robots-test https://example.com/cart https://example.com/catalog/                         
+   spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt          
+                                                                                                    
+ JSON: `{rows: [{url, allowed, rule, user_agent}]}`; rule — решившая строка («Disallow:             
+ /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2.                    
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    urls      <str>  URL, которые проверить. [required]                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --robots            <path>     Свой robots.txt вместо настоящего — проверить правку до выкладки. │
+│ --user-agent        <str>      От чьего имени читать правила (иначе crawl.robots_user_agent /    │
+│                                user_agent).                                                      │
+│ --profile           <str>      Профиль настроек: встроенный (`spider profiles list`) или из      │
+│                                `.spider/profiles/`.                                              │
+│ --config            <path>     TOML-файл настроек поверх профиля (формат как у профиля).         │
+│ --set               KEY=VALUE  Переопределить любой ключ: `--set crawl.max_urls=500`; можно      │
+│                                повторять.                                                        │
+│ --json                         Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok,    │
+│                                ...}`).                                                           │
+│ --quiet                        Печатать только основной результат, без пояснений.                │
+│ --help                         Show this message and exit.                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
