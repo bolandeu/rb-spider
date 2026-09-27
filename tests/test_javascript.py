@@ -211,3 +211,46 @@ def test_screenshots_are_files_that_go_with_their_crawl(base_url: str, engine) -
     assert shot.read_bytes()[:2] == b"\xff\xd8" and shot.parent == storage.screenshots_dir(crawl_id)  # a JPEG
     maintenance.delete_crawls(engine, [storage.get_crawl(engine, crawl_id)[0]])
     assert not shot.parent.exists()
+
+
+# --- View Source, screenshot export (#51) ------------------------------------------
+
+
+@needs_playwright
+def test_view_source_raw_rendered_and_diff(base_url: str, engine, monkeypatch, tmp_path) -> None:
+    from .conftest import use_db
+
+    settings = _settings(render="always", store_html=True, render_screenshots=True, max_depth=0)
+    crawl_id = crawl_site(engine, f"{base_url}/js/title-updated", "polygon", settings).crawl_id
+    use_db(monkeypatch, engine)
+    runner = CliRunner()
+
+    def run(*args: str) -> dict:
+        result = runner.invoke(app, ["--json", *args])
+        assert result.exit_code == 0, result.stdout
+        return json.loads(result.stdout)
+
+    url = f"{base_url}/js/title-updated"
+    raw = run("source", url)["html"]
+    rendered = run("source", url, "--rendered")["html"]
+    assert polygon.TITLE.format("js-title-updated") in raw and "новый" not in raw.split("<script>")[0]
+    assert polygon.TITLE.format("js-title-updated, новый") in rendered
+    diff = run("source", url, "--diff")
+    assert any(line.startswith("+") and "новый" in line for line in diff["diff"])
+
+    exported = runner.invoke(app, ["export", "rendered-source", "--crawl", str(crawl_id)])
+    assert "новый" in exported.stdout
+    folder = tmp_path / "shots"
+    data = run("export", "screenshots", "--crawl", str(crawl_id), "-o", str(folder))
+    assert data["rows"] == 1 and (folder / "index.csv").read_text().count("\n") == 2
+    [shot] = folder.glob("*.jpg")
+    assert shot.read_bytes()[:2] == b"\xff\xd8"
+
+
+def test_view_source_needs_stored_html(base_url: str, engine, monkeypatch) -> None:
+    from .conftest import use_db
+
+    crawl_site(engine, f"{base_url}/a", "polygon", _settings(max_depth=0))
+    use_db(monkeypatch, engine)
+    result = CliRunner().invoke(app, ["--json", "source", f"{base_url}/a"])
+    assert result.exit_code == 2 and "--store-html" in json.loads(result.stdout)["error"]["message"]

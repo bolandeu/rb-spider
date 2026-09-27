@@ -503,7 +503,7 @@
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
 - [x] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования) → `spider url`
 - [x] `v3` **Rendered Page** — скриншот отрендеренной страницы → `crawl.render_screenshots`, путь в `spider url`
-- [ ] `v3` **View Source** — просмотр исходного и отрендеренного HTML рядом
+- [x] `v3` **View Source** — исходный и отрендеренный HTML и diff между ними → `spider source` (#51)
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
 - [x] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации → `spider url` (объекты — при `--store-html`)
@@ -663,7 +663,7 @@
 - [x] `v2` **Crawl Analysis: полный список пунктов** — после обхода в `spider analyze` считаются Canonicals, Pagination, Hreflang (return links и др.), Sitemaps, почти-дубли, индексируемость и ссылки; Link Score — v3
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
 - [x] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
-- [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (не подтверждено)
+- [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (#53)
 
 ### Системные настройки SF
 
@@ -724,7 +724,7 @@
 - [ ] `backlog` **RDF-тройки микроразметки** — выгрузка троек; сама разметка страницы — в `spider url`
 - [x] `v2` **Web: All Page Source, All Page Text** (нужен `--store-html`) → `spider export source|text`
 - [x] `v2` **Web: All HTTP Response Headers, All Cookies** → `spider export headers|cookies` (заголовки запроса одинаковы для обхода — в `spider url`)
-- [ ] `v3` **Web: Screenshots**
+- [x] `v3` **Web: Screenshots** → `spider export screenshots -o папка` (#51)
 - [ ] `v3` **URL Inspection: Rich Results, Referring Pages, Sitemaps** (данные GSC)
 - [ ] `backlog` **Web: Archived Website, All PDF Documents, All PDF Content**
 - [ ] `backlog` **AMP, Accessibility, AI** — выгрузки соответствующих вкладок

@@ -405,7 +405,19 @@ html_pages = sa.Table(
     sa.Column("crawl_id", sa.Integer, primary_key=True),
     sa.Column("url", sa.String, primary_key=True),
     sa.Column("body", sa.LargeBinary, nullable=False),  # zstd-compressed response body
+    sa.Column("rendered", sa.LargeBinary),  # zstd-compressed DOM after JavaScript (crawl.render), for View Source
 )
+
+
+def open_html_db(path: Path) -> sa.Engine:
+    """The stored-HTML file, created or brought up to date (files from before View Source lack `rendered`)."""
+    engine = sa.create_engine(f"sqlite:///{path}")
+    html_metadata.create_all(engine)
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(html)")}
+        if "rendered" not in columns:
+            conn.exec_driver_sql("ALTER TABLE html ADD COLUMN rendered BLOB")
+    return engine
 
 
 def _pragmas(dbapi_connection, _record) -> None:
@@ -788,19 +800,24 @@ class PageWriter:
         if store_html:
             path = html_db_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            self.html_engine = sa.create_engine(f"sqlite:///{path}")
-            html_metadata.create_all(self.html_engine)
+            self.html_engine = open_html_db(path)
             self._compressor = zstandard.ZstdCompressor(level=3)
 
     def queued(self, url: str, depth: int, check_only: bool) -> None:
         """A URL went into the crawl queue."""
         self._batch.queued.append((self.crawl_id, url, depth, check_only))
 
-    def add(self, page: Page, depth: int, body: bytes | None = None) -> None:
-        """A URL's result: stored with its queue entry marked done, in the same batch."""
+    def add(self, page: Page, depth: int, body: bytes | None = None, rendered: bytes | None = None) -> None:
+        """A URL's result: stored with its queue entry marked done, in the same batch. With store_html the body is
+        kept too, and a rendered page's DOM beside it."""
         if self.html_engine is not None and body:
             self._batch.html.append(
-                {"crawl_id": self.crawl_id, "url": page.url, "body": self._compressor.compress(body)}
+                {
+                    "crawl_id": self.crawl_id,
+                    "url": page.url,
+                    "body": self._compressor.compress(body),
+                    "rendered": self._compressor.compress(rendered) if rendered else None,
+                }
             )
         # Every row carries every column: a batch insert needs one shape, and a redirect or an
         # error page has no on-page fields at all.
@@ -1030,16 +1047,18 @@ def list_crawls(engine: sa.Engine, limit: int | None = None) -> list[CrawlRow]:
     return rows
 
 
-def get_html(crawl_id: int, url: str) -> bytes | None:
-    """A stored response body (crawl made with `crawl.store_html`), or None."""
+def get_html(crawl_id: int, url: str, *, rendered: bool = False) -> bytes | None:
+    """A stored response body (crawl made with `crawl.store_html`), or with `rendered` its DOM after JavaScript;
+    None — not stored."""
     path = html_db_path()
     if not path.is_file():
         return None
-    engine = sa.create_engine(f"sqlite:///{path}")
+    engine = open_html_db(path)
     try:
         with engine.connect() as conn:
             where = sa.and_(html_pages.c.crawl_id == crawl_id, html_pages.c.url == url)
-            blob = conn.execute(sa.select(html_pages.c.body).where(where)).scalar()
+            column = html_pages.c.rendered if rendered else html_pages.c.body
+            blob = conn.execute(sa.select(column).where(where)).scalar()
     finally:
         engine.dispose()
     return zstandard.ZstdDecompressor().decompress(blob) if blob is not None else None

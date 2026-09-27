@@ -69,6 +69,7 @@
 - PostgreSQL как база обходов (#41): `SPIDER_DB_URL=postgresql://пользователь@хост/база` (extra `rb-spider[postgres]`), пароль — `spider auth login --provider database` или в URL. Все команды, проверки, отчёты, выгрузки и `spider query` (только чтение) работают так же, как с SQLite; `spider doctor` проверяет, что сервер отвечает, `db info` / `db vacuum` понимают PostgreSQL. Весь набор тестов гоняется и на PostgreSQL: `scripts/check.sh --pg`. MySQL — в backlog (см. spec.md).
 - Link Score (v3): `spider link-score [обход]` — внутренний PageRank страниц по follow-ссылкам сайта на шкале 0–100 (логарифмической, как в Screaming Frog), только по запросу и только для обхода с сохранёнными внутренними ссылками (иначе выход 2, `INTERNAL_LINKS_NOT_COLLECTED`); результат — колонка `pages.link_score` (`spider url`, `spider export`, `spider query`).
 - Скриншоты отрендеренных страниц (v3): `crawl.render_screenshots = true` — первый экран каждой страницы в JPEG в папке рядом с базой, путь — `pages.screenshot` и `spider url`; удаляются вместе с обходом. Удаление обхода теперь явно чистит и `render_events` / `rendered_images`.
+- View Source (#51): при `--store-html` у отрендеренных страниц рядом с ответом сервера сохраняется DOM после JavaScript; `spider source <url> [--rendered | --diff]` — исходный HTML, отрендеренный или diff между ними; наборы `spider export rendered-source` и `spider export screenshots` (`-o папка` — сами JPEG-файлы с index.csv).
 
 ### Changed
 

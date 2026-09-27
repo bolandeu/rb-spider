@@ -522,7 +522,7 @@ async def _run(
         if settings.robots == "report" and not await robots.allowed(page.url):
             page.blocked = "robots_txt"  # fetched anyway, flagged as disallowed
         depth = depth_of.get(page.url, ctx.request.crawl_depth)
-        writer.add(page, depth=depth, body=None if check else body)
+        writer.add(page, depth=depth, body=None if check else body, rendered=source if raw is not None else None)
         writer.add_links(reading.links)
         await admit(reading.follow, depth + 1, start=listed)
         await admit(reading.check, depth + 1, resources=True)

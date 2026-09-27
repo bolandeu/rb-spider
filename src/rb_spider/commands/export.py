@@ -126,7 +126,10 @@ def export(
     headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —
     нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /
     Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и
-    незагруженные ресурсы при рендеринге — Chrome Console Log). `--issue` у links — ссылки, из-за которых
+    незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML
+    после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты
+    `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с
+    index.csv). `--issue` у links — ссылки, из-за которых
     сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
 
     Примеры:
@@ -159,6 +162,14 @@ def export(
         output.emit_success(ctx, data, render_human=output.human.exported_preset)
         return
     dataset = what.value if what else "pages"
+    if dataset == "screenshots" and path is not None and not path.suffix:  # a folder: the image files themselves
+        with storage.database() as engine:
+            crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+            with engine.connect() as conn:
+                copied = export_service.copy_screenshots(conn, crawl_id, path)
+        data = {"crawl_id": crawl_id, "dataset": dataset, "format": "files", "rows": copied, "path": str(path)}
+        output.emit_success(ctx, data, render_human=output.human.exported)
+        return
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         with engine.connect() as conn:

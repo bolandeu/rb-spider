@@ -28,7 +28,7 @@ from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings, ThresholdSettings
 
 DATASETS = ("pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates", "custom",
-            "sitemap-urls", "javascript")  # fmt: skip
+            "sitemap-urls", "javascript", "rendered-source", "screenshots")  # fmt: skip
 # Bulk Export «Links» by issue: the link rows behind a link rule (Screaming Frog exports the links, not the pages)
 LINK_ISSUES = {
     "links_internal_nofollow_outlinks": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
@@ -195,8 +195,9 @@ def _cookies(url: str, headers: dict) -> Iterator[tuple]:
                "secure" in cookie, "httponly" in cookie, cookie.get("samesite"))  # fmt: skip
 
 
-def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool) -> Table:
-    """Page source or visible text of every stored page (`--store-html`), one page at a time."""
+def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool, rendered: bool = False) -> Table:
+    """Page source (or the DOM after JavaScript) or visible text of every stored page (`--store-html`), one page at a
+    time."""
     from .extract import visible_text
 
     sql = sa.text(
@@ -205,7 +206,7 @@ def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool) -> Table:
 
     def rows() -> Iterator[tuple]:
         for (url,) in storage.streamed(conn, 500).execute(sql, {"crawl_id": crawl_id}):
-            body = storage.get_html(crawl_id, url)
+            body = storage.get_html(crawl_id, url, rendered=rendered)
             if body is not None:
                 yield url, visible_text(body) if as_text else body.decode("utf-8", "replace")
 
@@ -220,6 +221,9 @@ _EXTRA = {
                                                                   "secure", "httponly", "samesite"], _cookies),
     "source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False),
     "text": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=True),
+    "rendered-source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False, rendered=True),
+    "screenshots": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url, screenshot FROM pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"),
     "duplicates": lambda conn, crawl_id: _sql_table(conn, crawl_id,
         "SELECT url_a, url_b, similarity FROM near_duplicates WHERE crawl_id = :crawl_id ORDER BY similarity DESC, url_a"),
     "custom": lambda conn, crawl_id: _sql_table(conn, crawl_id,
@@ -507,3 +511,32 @@ def _request_headers(engine: sa.Engine, crawl_id: int) -> dict[str, str]:
         return {}
     agent = crawl.resolved_user_agent
     return {**crawl.headers, "User-Agent": agent or "(браузерный по умолчанию — Firefox)"}
+
+
+def copy_screenshots(conn: sa.Connection, crawl_id: int, folder: Path) -> int:
+    """Bulk Export > Screenshots: the crawl's screenshots copied into `folder`, named after their pages, with an
+    index.csv (url, file). Returns how many were copied."""
+    import csv
+    import shutil
+
+    folder.mkdir(parents=True, exist_ok=True)
+    sql = sa.text(
+        "SELECT url, screenshot FROM pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"
+    )
+    count = 0
+    with (folder / "index.csv").open("w", encoding="utf-8", newline="") as index:
+        writer = csv.writer(index)
+        writer.writerow(["url", "file"])
+        for url, shot in storage.streamed(conn, 1000).execute(sql, {"crawl_id": crawl_id}):
+            if not Path(shot).is_file():  # the file was removed by hand: the row stays out of the index
+                continue
+            name = f"{count + 1:05d}-{_slug(url)}.jpg"
+            shutil.copyfile(shot, folder / name)
+            writer.writerow([url, name])
+            count += 1
+    return count
+
+
+def _slug(url: str) -> str:
+    """A short, file-name-safe version of a URL."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", url.split("://", 1)[-1]).strip("-")[:80] or "page"

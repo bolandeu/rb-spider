@@ -25,6 +25,8 @@
 │ robots-test  Robots.txt tester: разрешён ли URL для робота и какая строка robots.txt это решает. │
 │ link-score   Link Score: посчитать внутренний PageRank страниц обхода (0–100) по перелинковке    │
 │              сайта.                                                                              │
+│ source       View Source: HTML страницы — как его отдал сервер, после JavaScript или разница     │
+│              между ними.                                                                         │
 │ init         Создать проект spider в каталоге: файл `.spider/config.toml`.                       │
 │ status       Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли     │
 │              процесс.                                                                            │

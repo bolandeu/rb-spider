@@ -600,3 +600,13 @@ def link_score(data: dict) -> None:
     for row in data["top"]:
         table.add_row(str(row["link_score"]), str(row["inlinks"] or 0), row["url"])
     console.print(table)
+
+
+def page_source(data: dict) -> None:
+    """The HTML or the diff as it is — plain print, so `> page.html` gets a clean file."""
+    if "diff" in data:
+        print("\n".join(data["diff"]) or "Исходный и отрендеренный HTML совпадают.")
+        if data["truncated"]:
+            print("… (diff обрезан)")
+    else:
+        print(data["html"])

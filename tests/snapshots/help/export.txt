@@ -1,6 +1,7 @@
                                                                                                     
  Usage: spider export [OPTIONS] [what]:<pages|links|issues|queued|headers|cookies                   
-                      |source|text|duplicates|custom|sitemap-urls|javascript>                       
+                      |source|text|duplicates|custom|sitemap-                                       
+                      urls|javascript|rendered-source|screenshots>                                  
                                                                                                     
  Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.               
                                                                                                     
@@ -11,8 +12,10 @@
  headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —             
  нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /                     
  Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и                           
- незагруженные ресурсы при рендеринге — Chrome Console Log). `--issue` у links — ссылки, из-за      
- которых                                                                                            
+ незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML                  
+ после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты                             
+ `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с                      
+ index.csv). `--issue` у links — ссылки, из-за которых                                              
  сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.                            
                                                                                                     
  Примеры:                                                                                           
@@ -32,8 +35,9 @@
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   what      <pages|links|issues|queued|headers|cooki  Что выгрузить: pages, links, issues,       │
 │             es|source|text|duplicates|custom|sitemap  queued, headers, cookies, source, text,    │
-│             -urls|javascript>                         duplicates, custom, sitemap-urls,          │
-│                                                       javascript; по умолчанию pages.            │
+│             -urls|javascript|rendered-source|screens  duplicates, custom, sitemap-urls,          │
+│             hots>                                     javascript, rendered-source, screenshots;  │
+│                                                       по умолчанию pages.                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --crawl             <int>            Номер обхода; по умолчанию — последний.                     │
