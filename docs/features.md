@@ -418,12 +418,12 @@
 
 ### Analytics — Google Analytics
 
-Интеграция с GA4 не делается (`skip`).
+Данные GA4 — через инструмент набора (ключи и авторизация Google — у него), по запросу.
 
-- [ ] `skip` **Orphan URLs** — URL есть в GA, но обходом не найден _(SF: Issue, Medium)_
-- [ ] `skip` **Bounce Rate Above 70%** — показатель отказов выше 70 % _(SF: Warning, Low)_
-- [ ] `skip` **No GA Data** — по URL нет данных в GA _(SF: Warning, Low)_
-- [ ] `skip` **Non-Indexable with GA Data** — неиндексируемый URL, но с трафиком в GA _(SF: Warning, Low)_
+- [ ] `v3` **Orphan URLs** — URL есть в GA, но обходом не найден _(SF: Issue, Medium)_
+- [ ] `v3` **Bounce Rate Above 70%** — показатель отказов выше 70 % _(SF: Warning, Low)_
+- [ ] `v3` **No GA Data** — по URL нет данных в GA _(SF: Warning, Low)_
+- [ ] `v3` **Non-Indexable with GA Data** — неиндексируемый URL, но с трафиком в GA _(SF: Warning, Low)_
 
 ### Search Console
 
@@ -476,7 +476,7 @@
 - [x] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений → `spider custom`
 - [ ] `backlog` **Custom JavaScript** — результаты пользовательских JS-сниппетов
 - [ ] `backlog` **AMP: Non-Indexable** — список неиндексируемых AMP
-- [ ] `skip` **Analytics: Sessions Above 0** — URL с сессиями в GA
+- [ ] `v3` **Analytics: Sessions Above 0** — URL с сессиями в GA
 - [ ] `v3` **Search Console: Clicks Above 0** + колонки URL Inspection (Coverage, Last Crawl, Google-Selected Canonical…)
 - [ ] `backlog` **Link Metrics** — метрики Majestic / Ahrefs / Moz по URL, поддомену, домену
 - [ ] `backlog` **AI** — ответы LLM по промптам на каждую страницу
@@ -788,7 +788,7 @@
 - [ ] `v3` **Lighthouse локально** — без API, работает за авторизацией
 - [ ] `backlog` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
 - [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги
-- [ ] `skip` **Google Analytics 4**
+- [ ] `v3` **Google Analytics 4** — сессии, вовлечённость, конверсии по URL (Data API)
 - [ ] `skip` **Looker Studio / Data Studio**
 - [ ] `skip` **Google Sheets / Google Drive**
 - [ ] `skip` **Email-уведомления** (Outlook, Gmail, SMTP)
