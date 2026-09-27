@@ -660,7 +660,7 @@
 
 - [x] `MVP` **Crawl Analysis** — сайтовые проверки (дубли, unlinked canonical, non-indexable inlinks…) считаются SQL после обхода автоматически
 - [x] `MVP` **Повторный анализ без переобхода** (после смены порогов) — например, `spider analyze <crawl_id>`
-- [ ] `v2` **Crawl Analysis: полный список пунктов** (Pagination, Hreflang return links и др.) (не подтверждено)
+- [x] `v2` **Crawl Analysis: полный список пунктов** — после обхода в `spider analyze` считаются Canonicals, Pagination, Hreflang (return links и др.), Sitemaps, почти-дубли, индексируемость и ссылки; Link Score — v3
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
 - [x] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
 - [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (не подтверждено)
