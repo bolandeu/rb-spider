@@ -31,10 +31,9 @@ def pagination(
     пары, неиндексируемые страницы серии) — `spider issues`, группа Pagination; сколько
     страниц в сериях — `spider overview`. Считается по сохранённому обходу.
 
-    Примеры:
-      spider pagination
-      spider pagination --only non_200
-      spider --json pagination 12 --only unlinked --limit 1000
+    Example: spider pagination
+    Example: spider pagination --only non_200
+    Example: spider --json pagination 12 --only unlinked --limit 1000
 
     JSON: `{crawl_id, only, total, links: [{source, rel, target, target_status, target_blocked,
     target_indexability}]}`; `rel` — next | prev; `target_status` null — цель не скачивалась.

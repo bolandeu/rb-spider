@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
@@ -16,7 +15,7 @@ from rb_spider.providers import Health, Provider, Quota
 
 from .test_cli import invoke, invoke_json
 
-PKG = "rb_spider"  # keychain service and env prefix use the package name
+PKG = "spider"  # keychain service and env prefix use the command name (`spider:<provider>`, SPIDER_*)
 PREFIX = PKG.upper()
 GOOD, BAD = "good-secret-123", "bad-secret-456"
 
@@ -167,13 +166,17 @@ def test_unreachable_counts_only_for_required(demo_providers, monkeypatch: pytes
     assert code == 0
 
 
-def test_check_times_out(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(health, "CHECK_TIMEOUT", 0.05)
-    monkeypatch.setattr(Demo, "health_check", lambda self: time.sleep(0.5) or Health())
+def test_check_timeout_is_unreachable(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The 10 s limit is the provider's client timeout (HttpProvider.probe);
+    # hitting it surfaces as ProviderError, which auth status reports as unreachable.
+    def timed_out(self) -> Health:
+        raise ProviderError(self.name, f"ReadTimeout after {health.CHECK_TIMEOUT:g} s while calling GET /me")
+
+    monkeypatch.setattr(Demo, "health_check", timed_out)
     code, payload, _ = status("--check", demo=GOOD)
     demo = by_provider(payload)["demo"]
     assert (code, demo["status"]) == (3, "unreachable")
-    assert "no answer" in demo["message"]
+    assert "ReadTimeout" in demo["message"]
 
 
 def test_past_expiry_is_expired(demo_providers, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -43,3 +43,25 @@ def test_missing_or_unreadable_cli(fake_cli, change: dict) -> None:
     fake_cli.update(change)
     with pytest.raises(DependencyTooOld):
         deps.require_cli("other", "0.3.0")
+
+
+def test_missing_cli_action_uses_install_url(fake_cli) -> None:
+    fake_cli["path"] = None
+    with pytest.raises(DependencyTooOld) as excinfo:
+        deps.require_cli("other", "0.3.0", install_url="https://github.com/example/other")
+    pinned = 'uv tool install --reinstall "git+https://github.com/example/other@v0.3.0"'
+    assert excinfo.value.action == f"Run '{pinned}', then retry."
+
+    with pytest.raises(DependencyTooOld) as excinfo:
+        deps.require_cli("other", "0.3.0")
+    action = excinfo.value.action or ""
+    assert "<" not in action  # no placeholder to copy-paste
+    assert "other >= 0.3.0" in action
+
+
+def test_old_cli_action_offers_pinned_install_too(fake_cli) -> None:
+    fake_cli["version"] = "0.2.0"
+    with pytest.raises(DependencyTooOld) as excinfo:
+        deps.require_cli("other", "0.3.0", install_url="https://github.com/example/other")
+    action = excinfo.value.action or ""
+    assert "uv tool upgrade other" in action and "git+https://github.com/example/other@v0.3.0" in action

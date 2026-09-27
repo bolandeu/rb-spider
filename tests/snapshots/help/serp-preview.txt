@@ -1,0 +1,32 @@
+
+ Usage: spider serp preview [OPTIONS]
+
+ Предпросмотр сниппета Google для своего title и description — без обхода.
+
+ Для подбора текста до публикации: ширина в пикселях и как выдача обрежет
+ title и description (по словам, с «…»). Пороги и кегли — `thresholds.title_max_px`,
+ `description_max_px`, `serp_*_font_px` (из `--profile` / `--set`).
+
+ Example: spider serp preview --title "Купить диван в Москве — каталог" --description "Доставка за
+ день…"
+ Example: spider --json serp preview --title "…" --set thresholds.title_max_px=600
+
+ JSON: `{url, title, title_px, title_truncated, description, description_px,
+ description_truncated}`; title / description — как их покажет выдача.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --title              <str>      Title, который проверить.                                        │
+│ --description        <str>      Meta description, который проверить.                             │
+│ --url                <str>      URL страницы — строка адреса сниппета.                           │
+│                                 [default: https://example.com/]                                  │
+│ --profile            <str>      Профиль настроек: встроенный (`spider profiles list`) или из     │
+│                                 `.spider/profiles/`.                                             │
+│ --config             <path>     TOML-файл настроек поверх профиля (формат как у профиля).        │
+│ --set                KEY=VALUE  Переопределить любой ключ: `--set crawl.max_urls=500`; можно     │
+│                                 повторять.                                                       │
+│ --json                          Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok,   │
+│                                 ...}`).                                                          │
+│ --quiet                         Печатать только основной результат, без пояснений.               │
+│ --help                          Show this message and exit.                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

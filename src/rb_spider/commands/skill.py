@@ -45,9 +45,8 @@ def install(
 ) -> None:
     """Скопировать встроенный SKILL.md в каталог скиллов ИИ-инструмента.
 
-    Примеры:
-      spider skill install                  # ~/.claude/skills/spider/
-      spider skill install --tool agents --project
+    Example: spider skill install                  # ~/.claude/skills/spider/
+    Example: spider skill install --tool agents --project
 
     JSON: `{tool, scope, path}`.
     """

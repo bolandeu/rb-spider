@@ -29,15 +29,14 @@ for flag in "$@"; do
       # uv's cache and its Pythons live in a Docker volume, so runs after the first are quick.
       for python in 3.12 3.14; do
         echo "--- Linux, Python $python"
-        # rb-sitemap-xml and gsc are path sources (../sitemap-xml, ../google-search-console): they go into the
-        # container beside the project
-        { git ls-files -co --exclude-standard | sed 's|^|spider/|'
-          git -C ../sitemap-xml ls-files -co --exclude-standard | sed 's|^|sitemap-xml/|'
-          git -C ../google-search-console ls-files -co --exclude-standard | sed 's|^|google-search-console/|'; } \
+        # Extras without render (a browser costs hundreds of MB a run) and without sitemaps / gsc: those are private
+        # GitHub repos (git sources by tag) the container has no credentials for — their tests run on macOS, and so
+        # does the coverage floor (release.py --check): without that code covered here it would fail.
+        git ls-files -co --exclude-standard | sed 's|^|spider/|' \
           | COPYFILE_DISABLE=1 tar --no-mac-metadata -C .. -cf - -T - 2>/dev/null | docker run --rm -i \
           -v spider-check-uv:/root/.cache/uv -e UV_PYTHON="$python" -e UV_LINK_MODE=copy \
           ghcr.io/astral-sh/uv:bookworm-slim \
-          sh -c 'mkdir /work && cd /work && tar -xf - 2>/dev/null && cd spider && uv sync --quiet --frozen && uv run pytest -q -p no:cacheprovider'
+          sh -c 'mkdir /work && cd /work && tar -xf - 2>/dev/null && cd spider && uv sync --quiet --frozen --extra curl --extra near --extra structured --extra xpath --extra postgres && uv run pytest -q --no-cov -p no:cacheprovider'
       done
       ;;
     --pg)

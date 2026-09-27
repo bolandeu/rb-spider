@@ -35,10 +35,9 @@ def structured(
     при `--store-html`). Сравнивается со словарём Schema.org и с обязательными и
     рекомендуемыми свойствами основных функций Google (Product, Recipe, Event, FAQ…).
 
-    Примеры:
-      spider structured
-      spider structured --report features
-      spider --json structured 12
+    Example: spider structured
+    Example: spider structured --report features
+    Example: spider --json structured 12
 
     JSON: `{crawl_id, report, rows}`; validation — `[{severity, scope, type, property, message,
     urls, example}]` (scope — schema.org | google; учитываются первые 50 сообщений страницы),

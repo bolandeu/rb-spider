@@ -22,9 +22,8 @@ def insecure(
     Insecure) — `spider issues`, группа Security; сколько URL сайта по HTTP и HTTPS —
     `spider overview`, список — `spider export pages --scheme http`.
 
-    Примеры:
-      spider insecure
-      spider --json insecure 12 --limit 1000
+    Example: spider insecure
+    Example: spider --json insecure 12 --limit 1000
 
     JSON: `{crawl_id, total, links: [{source, kind, target}]}`; `kind` — hyperlink, image,
     css, js, media, iframe, form, canonical…

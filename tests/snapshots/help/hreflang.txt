@@ -1,23 +1,22 @@
-                                                                                                    
- Usage: spider hreflang [OPTIONS] [crawl_id]                                                        
-                                                                                                    
- Отчёт Hreflang: языковые версии страниц — каждая аннотация с кодом и состоянием цели.              
-                                                                                                    
- Аннотации берутся из `<link rel="alternate" hreflang>` и заголовка Link; их сбор и                 
- обход целей — `collect.hreflang.store` / `.follow`. Проблемы (коды, обратные ссылки,               
- x-default…) — `spider issues`, группа Hreflang; здесь — сами пары страниц для                      
- разбора. Считается по сохранённому обходу, сайт не скачивается.                                    
-                                                                                                    
- Примеры:                                                                                           
-   spider hreflang                                                                                  
-   spider hreflang --only missing_return                                                            
-   spider --json hreflang 12 --only non_200 --limit 1000                                            
-                                                                                                    
- JSON: `{crawl_id, only, total, annotations: [{source, hreflang, target, target_status,             
- target_blocked, target_indexability, return_link}]}`; `target_status` null — цель не               
- скачивалась; `return_link` null — ссылка страницы на себя; для `missing` заполнен только           
- `source`.                                                                                          
-                                                                                                    
+
+ Usage: spider hreflang [OPTIONS] [crawl_id]
+
+ Отчёт Hreflang: языковые версии страниц — каждая аннотация с кодом и состоянием цели.
+
+ Аннотации берутся из `<link rel="alternate" hreflang>` и заголовка Link; их сбор и
+ обход целей — `collect.hreflang.store` / `.follow`. Проблемы (коды, обратные ссылки,
+ x-default…) — `spider issues`, группа Hreflang; здесь — сами пары страниц для
+ разбора. Считается по сохранённому обходу, сайт не скачивается.
+
+ Example: spider hreflang
+ Example: spider hreflang --only missing_return
+ Example: spider --json hreflang 12 --only non_200 --limit 1000
+
+ JSON: `{crawl_id, only, total, annotations: [{source, hreflang, target, target_status,
+ target_blocked, target_indexability, return_link}]}`; `target_status` null — цель не
+ скачивалась; `return_link` null — ссылка страницы на себя; для `missing` заполнен только
+ `source`.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

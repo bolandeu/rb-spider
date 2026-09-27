@@ -1,20 +1,19 @@
-                                                                                                    
- Usage: spider insecure [OPTIONS] [crawl_id]                                                        
-                                                                                                    
- Отчёт Insecure Content: HTTPS-страницы, которые ссылаются на HTTP-адреса или грузят с них ресурсы. 
-                                                                                                    
- Для перевода сайта на HTTPS: каждая ссылка, картинка, стиль, скрипт, фрейм и форма                 
- HTTPS-страницы, ведущие на http://. Проверки на этой основе (Mixed Content, Form URL               
- Insecure) — `spider issues`, группа Security; сколько URL сайта по HTTP и HTTPS —                  
- `spider overview`, список — `spider export pages --scheme http`.                                   
-                                                                                                    
- Примеры:                                                                                           
-   spider insecure                                                                                  
-   spider --json insecure 12 --limit 1000                                                           
-                                                                                                    
- JSON: `{crawl_id, total, links: [{source, kind, target}]}`; `kind` — hyperlink, image,             
- css, js, media, iframe, form, canonical…                                                           
-                                                                                                    
+
+ Usage: spider insecure [OPTIONS] [crawl_id]
+
+ Отчёт Insecure Content: HTTPS-страницы, которые ссылаются на HTTP-адреса или грузят с них ресурсы.
+
+ Для перевода сайта на HTTPS: каждая ссылка, картинка, стиль, скрипт, фрейм и форма
+ HTTPS-страницы, ведущие на http://. Проверки на этой основе (Mixed Content, Form URL
+ Insecure) — `spider issues`, группа Security; сколько URL сайта по HTTP и HTTPS —
+ `spider overview`, список — `spider export pages --scheme http`.
+
+ Example: spider insecure
+ Example: spider --json insecure 12 --limit 1000
+
+ JSON: `{crawl_id, total, links: [{source, kind, target}]}`; `kind` — hyperlink, image,
+ css, js, media, iframe, form, canonical…
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,23 +1,22 @@
-                                                                                                    
- Usage: spider structured [OPTIONS] [crawl_id]                                                      
-                                                                                                    
- Сводка микроразметки: ошибки валидации по всему обходу или функции расширенных результатов Google. 
-                                                                                                    
- Микроразметка собирается при обходе с `collect.structured_data` (json-ld, microdata,               
- rdfa) — у обхода без неё отчёт пуст. Страницы с ошибками — `spider issues`, группа                 
- Structured Data; сообщения одной страницы и её разметка — `spider url` (сама разметка —            
- при `--store-html`). Сравнивается со словарём Schema.org и с обязательными и                       
- рекомендуемыми свойствами основных функций Google (Product, Recipe, Event, FAQ…).                  
-                                                                                                    
- Примеры:                                                                                           
-   spider structured                                                                                
-   spider structured --report features                                                              
-   spider --json structured 12                                                                      
-                                                                                                    
- JSON: `{crawl_id, report, rows}`; validation — `[{severity, scope, type, property, message,        
- urls, example}]` (scope — schema.org | google; учитываются первые 50 сообщений страницы),          
- features — `[{feature, urls, with_errors, with_warnings}]`.                                        
-                                                                                                    
+
+ Usage: spider structured [OPTIONS] [crawl_id]
+
+ Сводка микроразметки: ошибки валидации по всему обходу или функции расширенных результатов Google.
+
+ Микроразметка собирается при обходе с `collect.structured_data` (json-ld, microdata,
+ rdfa) — у обхода без неё отчёт пуст. Страницы с ошибками — `spider issues`, группа
+ Structured Data; сообщения одной страницы и её разметка — `spider url` (сама разметка —
+ при `--store-html`). Сравнивается со словарём Schema.org и с обязательными и
+ рекомендуемыми свойствами основных функций Google (Product, Recipe, Event, FAQ…).
+
+ Example: spider structured
+ Example: spider structured --report features
+ Example: spider --json structured 12
+
+ JSON: `{crawl_id, report, rows}`; validation — `[{severity, scope, type, property, message,
+ urls, example}]` (scope — schema.org | google; учитываются первые 50 сообщений страницы),
+ features — `[{feature, urls, with_errors, with_warnings}]`.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -23,9 +23,8 @@ def init(
     Каталог — текущий или заданный через `--project`. Повторный вызов ничего
     не меняет (`already_initialized: true`), `--force` пересоздаёт конфиг.
 
-    Примеры:
-      spider init
-      spider --project ~/audits/shop init --name shop
+    Example: spider init
+    Example: spider --project ~/audits/shop init --name shop
 
     JSON: `{project, path, already_initialized}`.
     """

@@ -1,19 +1,18 @@
-                                                                                                    
- Usage: spider robots-test [OPTIONS] {urls}...                                                      
-                                                                                                    
- Robots.txt tester: разрешён ли URL для робота и какая строка robots.txt это решает.                
-                                                                                                    
- Качает robots.txt сайтов из списка (или берёт `--robots`), не обходит сайт. User-Agent —           
- как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты            
- googlebot, yandexbot…).                                                                            
-                                                                                                    
- Примеры:                                                                                           
-   spider robots-test https://example.com/cart https://example.com/catalog/                         
-   spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt          
-                                                                                                    
- JSON: `{rows: [{url, allowed, rule, user_agent}]}`; rule — решившая строка («Disallow:             
- /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2.                    
-                                                                                                    
+
+ Usage: spider robots-test [OPTIONS] {urls}...
+
+ Robots.txt tester: разрешён ли URL для робота и какая строка robots.txt это решает.
+
+ Качает robots.txt сайтов из списка (или берёт `--robots`), не обходит сайт. User-Agent —
+ как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты
+ googlebot, yandexbot…).
+
+ Example: spider robots-test https://example.com/cart https://example.com/catalog/
+ Example: spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt
+
+ JSON: `{rows: [{url, allowed, rule, user_agent}]}`; rule — решившая строка («Disallow:
+ /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    urls      <str>  URL, которые проверить. [required]                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

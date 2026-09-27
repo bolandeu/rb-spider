@@ -76,9 +76,8 @@ def doctor(
     (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
     `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights.
 
-    Примеры:
-      spider doctor
-      spider --json doctor
+    Example: spider doctor
+    Example: spider --json doctor
 
     JSON: `{healthy, checks: [{name, ok, detail}]}`.
     """

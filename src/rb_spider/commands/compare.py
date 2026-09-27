@@ -64,12 +64,11 @@ def compare(
     регулярному выражению, и страницы сравниваются между собой, а не считаются
     пропавшими и новыми.
 
-    Примеры:
-      spider compare 12 15
-      spider compare 12 15 --issue page_title_missing --status added
-      spider --json compare 12 15 --field title --limit 1000
-      spider compare 12 15 --urls missing
-      spider compare 12 15 --map 'https://staging\\.example\\.com=>https://example.com'
+    Example: spider compare 12 15
+    Example: spider compare 12 15 --issue page_title_missing --status added
+    Example: spider --json compare 12 15 --field title --limit 1000
+    Example: spider compare 12 15 --urls missing
+    Example: spider compare 12 15 --map 'https://staging\\.example\\.com=>https://example.com'
 
     JSON: сводка — `{old, new, urls: {old, new, new_urls, missing_urls}, issues: [{code, name,
     old, new, added, new_urls, removed, missing}], changes: {поле: число URL}}`; список —

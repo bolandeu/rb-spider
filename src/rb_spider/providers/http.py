@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 # Responses worth retrying: the server said "not now", not "no".
 _RETRY_STATUSES = frozenset({429, 502, 503, 504})
-PROBE_TIMEOUT = 10.0  # auth status --check budget per provider (standard §8)
+PROBE_TIMEOUT = 10.0  # auth status --check budget per provider (standard §8), as the httpx timeout
 
 
 class HttpProvider(Provider):

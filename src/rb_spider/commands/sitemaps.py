@@ -37,10 +37,9 @@ def show(
     (`sitemaps.follow`). Проблемы — `spider issues`, группа Sitemaps; число URL
     в sitemap и вне — `spider overview`.
 
-    Примеры:
-      spider sitemaps show
-      spider sitemaps show --only orphans
-      spider --json sitemaps show 12 --only not_in_sitemap --limit 1000
+    Example: spider sitemaps show
+    Example: spider sitemaps show --only orphans
+    Example: spider --json sitemaps show 12 --only not_in_sitemap --limit 1000
 
     JSON: `{crawl_id, only, total, rows}`; files — `{url, kind, bytes, urls, sitemaps, error}`
     (kind null — файл не получен, см. error), urls — `{url, source, lastmod, status_code,
@@ -88,11 +87,10 @@ def build(
     49 999 URL — файлы sitemap-N.xml и индекс sitemap.xml. Нужен extra
     `rb-spider[sitemaps]`. Пишет только в каталог `--out`.
 
-    Примеры:
-      spider sitemaps build -o public/
-      spider sitemaps build 12 -o out/ --lastmod --include pdf
-      spider sitemaps build -o out/ --images
-      spider sitemaps build -o out/ --priority depth --changefreq weekly
+    Example: spider sitemaps build -o public/
+    Example: spider sitemaps build 12 -o out/ --lastmod --include pdf
+    Example: spider sitemaps build -o out/ --images
+    Example: spider sitemaps build -o out/ --priority depth --changefreq weekly
 
     JSON: `{crawl_id, files: [путь…], urls}`; индекс — первым. Неизвестное значение
     `--include` / `--changefreq`, неверный `--priority` — выход 2; нет extra —

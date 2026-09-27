@@ -1,25 +1,24 @@
-                                                                                                    
- Usage: spider link-score [OPTIONS] [crawl_id]                                                      
-                                                                                                    
- Link Score: посчитать внутренний PageRank страниц обхода (0–100) по перелинковке сайта.            
-                                                                                                    
- Какие страницы сайт «продвигает» ссылками сильнее всего, а какие получают мало                     
- веса. Считается только по запросу: PageRank по follow-ссылкам сайта (каждая пара                   
- «откуда → куда» один раз), шкала логарифмическая, как у Screaming Frog, — самая                    
- сильная страница 100, самая слабая 1. Результат сохраняется в колонку                              
- `link_score` страниц (`spider url`, `spider export`, `spider query`); повторный                    
- запуск пересчитывает. Нужны внутренние ссылки обхода                                               
- (`collect.internal_links.store`, по умолчанию включено).                                           
-                                                                                                    
- Примеры:                                                                                           
-   spider link-score                                                                                
-   spider link-score 12 --limit 100                                                                 
-   spider --json link-score                                                                         
-                                                                                                    
- JSON: `{crawl_id, pages, top: [{url, link_score, inlinks}]}`; pages — сколько                      
- страниц получили оценку. Обход без сохранённых внутренних ссылок — выход 2,                        
- `INTERNAL_LINKS_NOT_COLLECTED` (переобойти с `--set collect.internal_links.store=true`).           
-                                                                                                    
+
+ Usage: spider link-score [OPTIONS] [crawl_id]
+
+ Link Score: посчитать внутренний PageRank страниц обхода (0–100) по перелинковке сайта.
+
+ Какие страницы сайт «продвигает» ссылками сильнее всего, а какие получают мало
+ веса. Считается только по запросу: PageRank по follow-ссылкам сайта (каждая пара
+ «откуда → куда» один раз), шкала логарифмическая, как у Screaming Frog, — самая
+ сильная страница 100, самая слабая 1. Результат сохраняется в колонку
+ `link_score` страниц (`spider url`, `spider export`, `spider query`); повторный
+ запуск пересчитывает. Нужны внутренние ссылки обхода
+ (`collect.internal_links.store`, по умолчанию включено).
+
+ Example: spider link-score
+ Example: spider link-score 12 --limit 100
+ Example: spider --json link-score
+
+ JSON: `{crawl_id, pages, top: [{url, link_score, inlinks}]}`; pages — сколько
+ страниц получили оценку. Обход без сохранённых внутренних ссылок — выход 2,
+ `INTERNAL_LINKS_NOT_COLLECTED` (переобойти с `--set collect.internal_links.store=true`).
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

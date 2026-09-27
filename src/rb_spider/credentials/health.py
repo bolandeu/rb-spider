@@ -9,7 +9,6 @@ how a provider talks to its service (HTTP or not) is the provider's business.
 
 from __future__ import annotations
 
-import concurrent.futures
 from datetime import UTC, datetime
 
 from rich.markup import escape
@@ -19,7 +18,7 @@ from ..core.errors import AuthRequired, CliError, CredentialsUnhealthy, InvalidA
 from ..providers import Health, Provider
 from . import manager
 
-CHECK_TIMEOUT = 10.0
+CHECK_TIMEOUT = 10.0  # seconds per provider (standard §8) — enforced by the provider's own client timeout
 # Statuses that are a problem even for an optional provider: a credential is
 # there but wrong. Anything else only counts against required providers.
 ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
@@ -44,13 +43,15 @@ def _scrub(message: str | None, secrets: list[str]) -> str | None:
 
 
 def _run_check(provider_cls: type[Provider], target: str | None) -> Health:
-    """`health_check()` under a hard wall-clock limit; its exceptions mapped to statuses."""
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    """`health_check()` with its exceptions mapped to statuses.
+
+    No thread and no wall-clock timer here: a thread can't be killed, and
+    the interpreter would still wait for it at exit. The 10 s limit is the
+    provider's own request timeout (`HttpProvider.probe()` sets it; a
+    non-HTTP provider passes `CHECK_TIMEOUT` to whatever it calls).
+    """
     try:
-        provider = provider_cls.for_health_check(target)
-        return pool.submit(provider.health_check).result(timeout=CHECK_TIMEOUT)
-    except concurrent.futures.TimeoutError:
-        return Health(status="unreachable", message=f"no answer within {CHECK_TIMEOUT:g} s")
+        return provider_cls.for_health_check(target).health_check()
     except AuthRequired:
         return Health(status="invalid", message="the provider rejected the credential")
     except ProviderError as exc:
@@ -61,8 +62,6 @@ def _run_check(provider_cls: type[Provider], target: str | None) -> Health:
         return Health(status="unreachable", message=str(exc))
     except Exception as exc:
         return Health(status="unreachable", message=f"{type(exc).__name__}: {exc}")
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _entry(provider_cls: type[Provider], check: bool, target: str | None = None) -> dict:

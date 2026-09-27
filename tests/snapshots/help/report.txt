@@ -1,9 +1,9 @@
-                                                                                                    
- Usage: spider report [OPTIONS] COMMAND [ARGS]...                                                   
-                                                                                                    
- Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы,           
- заголовки, консоль JavaScript, PageSpeed.                                                          
-                                                                                                    
+
+ Usage: spider report [OPTIONS] COMMAND [ARGS]...
+
+ Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы,
+ заголовки, консоль JavaScript, PageSpeed.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

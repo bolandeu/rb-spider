@@ -25,10 +25,9 @@ def link_score(
     запуск пересчитывает. Нужны внутренние ссылки обхода
     (`collect.internal_links.store`, по умолчанию включено).
 
-    Примеры:
-      spider link-score
-      spider link-score 12 --limit 100
-      spider --json link-score
+    Example: spider link-score
+    Example: spider link-score 12 --limit 100
+    Example: spider --json link-score
 
     JSON: `{crawl_id, pages, top: [{url, link_score, inlinks}]}`; pages — сколько
     страниц получили оценку. Обход без сохранённых внутренних ссылок — выход 2,

@@ -148,3 +148,16 @@ def test_probe_is_one_attempt_with_the_check_timeout() -> None:
     assert len(seen) == 1  # no retries, even for a retryable status
     assert seen[0].extensions["timeout"]["read"] == PROBE_TIMEOUT
     assert provider.retries == 2  # restored afterwards
+
+
+def test_probe_timeout_is_a_provider_error() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with pytest.raises(ProviderError) as excinfo:
+        _Provider(handler).probe("/me")
+    assert calls == [1]
+    assert "ReadTimeout" in excinfo.value.message

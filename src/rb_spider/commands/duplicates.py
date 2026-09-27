@@ -43,10 +43,9 @@ def duplicates(
     и «только индексируемые» — `thresholds.near_duplicate_similarity` и
     `thresholds.duplicates_indexable_only`, меняются через `spider analyze`.
 
-    Примеры:
-      spider duplicates
-      spider duplicates --kind near --limit 1000
-      spider duplicates --url https://site.ru/a --diff
+    Example: spider duplicates
+    Example: spider duplicates --kind near --limit 1000
+    Example: spider duplicates --url https://site.ru/a --diff
 
     JSON: `{crawl_id, kind, total, pairs: [{url, other, similarity, kind, diff?}]}`;
     `similarity` — 0–1 (у точных 1); `diff` — строки unified diff текста (по предложениям),

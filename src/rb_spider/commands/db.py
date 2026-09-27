@@ -30,9 +30,8 @@ def info(
     этой командой: если ждут миграции, их видно здесь (применяет `spider db
     migrate` или любая другая команда).
 
-    Примеры:
-      spider db info
-      spider --json db info
+    Example: spider db info
+    Example: spider --json db info
 
     JSON: `{path, size_bytes, html_path, html_size_bytes, free_bytes, sqlite_version,
     schema_revision, schema_head, pending_migrations, projects, crawls, pages, links, issues,
@@ -58,9 +57,8 @@ def migrate(
     открытии базы. Полезна, чтобы обновить схему явно (после обновления spider,
     перед долгим фоновым обходом) или посмотреть с `--dry-run`, что изменится.
 
-    Примеры:
-      spider db migrate --dry-run
-      spider db migrate
+    Example: spider db migrate --dry-run
+    Example: spider db migrate
 
     JSON: `{migrations: [ревизия, ...], schema_head, dry_run}`; `migrations` —
     применённые (или, с `--dry-run`, ожидающие), пусто — схема актуальна.
@@ -88,9 +86,8 @@ def vacuum(
     PostgreSQL (`SPIDER_DB_URL`) — VACUUM FULL: таблицы переписываются и на это
     время заблокированы.
 
-    Примеры:
-      spider db vacuum
-      spider --json db vacuum
+    Example: spider db vacuum
+    Example: spider --json db vacuum
 
     JSON: `{before_bytes, after_bytes}` — размер файлов баз до и после. База
     занята идущим обходом — выход 2.

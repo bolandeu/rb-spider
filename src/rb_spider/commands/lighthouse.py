@@ -72,11 +72,10 @@ def lighthouse(
     Mobile: ширина контента и размер шрифта меряются в браузере на этой машине при
     любом источнике (нужен extra `render`).
 
-    Примеры:
-      spider lighthouse --dry-run
-      spider lighthouse
-      spider lighthouse https://example.com/ https://example.com/catalog/ --strategy desktop
-      spider lighthouse --source psi
+    Example: spider lighthouse --dry-run
+    Example: spider lighthouse
+    Example: spider lighthouse https://example.com/ https://example.com/catalog/ --strategy desktop
+    Example: spider lighthouse --source psi
 
     JSON: `{crawl_id, strategy, source, dry_run, pages: [{url, ok, error, performance, metrics:
     {lcp_ms, fcp_ms, cls, tbt_ms, speed_index_ms}, failed: [аудиты]}], findings}`; с `--dry-run` —

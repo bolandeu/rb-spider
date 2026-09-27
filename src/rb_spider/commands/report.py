@@ -53,9 +53,8 @@ def canonicals(
     редиректит; поисковик может не дойти до конца. Цепочки вместе с редиректами —
     `spider redirects --canonicals`.
 
-    Примеры:
-      spider report canonicals
-      spider --json report canonicals --only non_indexable
+    Example: spider report canonicals
+    Example: spider --json report canonicals --only non_indexable
 
     JSON: `{crawl_id, report, only, total, rows: [{url, canonical, canonical_status,
     canonical_indexability, next_hop}]}`; next_hop — куда ведёт сам canonical.
@@ -80,9 +79,8 @@ def structure(
     Где сосредоточены страницы и неиндексируемые разделы. Папка — первые `--depth`
     сегментов пути (страница `/a/b/c` — в папке `/a/b/`).
 
-    Примеры:
-      spider report structure
-      spider --json report structure --depth 3
+    Example: spider report structure
+    Example: spider --json report structure --depth 3
 
     JSON: `{crawl_id, folders: [{folder, urls, indexable, non_indexable}], depths: {глубина:
     число URL}}`.
@@ -107,9 +105,8 @@ def response_times(
     Время — от запроса до заголовков ответа, как его видел обход (при `concurrency`
     обхода, а не одиночным запросом).
 
-    Примеры:
-      spider report response-times
-      spider --json report response-times --slowest 100
+    Example: spider report response-times
+    Example: spider --json report response-times --slowest 100
 
     JSON: `{crawl_id, urls, average_ms, max_ms, bands: {"<100": n, …, ">=5000": n},
     slowest: [{url, response_ms, status_code}]}`.
@@ -134,9 +131,8 @@ def crawl_path(
     Почему страница так глубоко и через что до неё добраться. Каждый шаг — страница на
     клик ближе к старту, которая ссылается (или редиректит, canonical-ит…) на следующую.
 
-    Примеры:
-      spider report crawl-path https://example.com/deep/page
-      spider --json report crawl-path https://example.com/x --crawl 12
+    Example: spider report crawl-path https://example.com/deep/page
+    Example: spider --json report crawl-path https://example.com/x --crawl 12
 
     JSON: `{crawl_id, url, path: [{url, depth, via}]}`, от стартовой страницы к URL; via — как
     на этот шаг пришли с предыдущего (hyperlink, redirect, canonical…), у стартовой null.
@@ -168,9 +164,8 @@ def meta_keywords(
     Google keywords не учитывает; Яндекс учитывает слабо. Полезно, чтобы найти мусор и
     дубли от шаблонов CMS.
 
-    Примеры:
-      spider report meta-keywords --only duplicate
-      spider --json report meta-keywords --only missing
+    Example: spider report meta-keywords --only duplicate
+    Example: spider --json report meta-keywords --only missing
 
     JSON: `{crawl_id, report, only, total, rows: [{url, keywords, tags}]}`.
     """
@@ -194,9 +189,8 @@ def forms(
     Формы хранятся со ссылками своего вида (`collect.internal_links.store` /
     `external_links.store`). Проблемы форм — `spider issues`, группа Security.
 
-    Примеры:
-      spider report forms
-      spider --json report forms --limit 1000
+    Example: spider report forms
+    Example: spider --json report forms --limit 1000
 
     JSON: `{crawl_id, report, total, rows: [{page, action, internal, insecure}]}`.
     """
@@ -220,9 +214,8 @@ def headers(
     Заголовки каждого URL — `spider url`, все построчно — `spider export headers` /
     `spider export cookies`.
 
-    Примеры:
-      spider report headers
-      spider --json report headers --cookies
+    Example: spider report headers
+    Example: spider --json report headers --cookies
 
     JSON: `{crawl_id, cookies, rows: [{name, urls, example, attributes?}]}`; attributes — у
     cookies: какие атрибуты встречались (path, domain, secure, httponly, samesite…).
@@ -258,10 +251,9 @@ def javascript(
     проверка «JavaScript: Pages with Blocked Resources». Всё построчно — `spider export
     javascript`.
 
-    Примеры:
-      spider report javascript
-      spider report javascript --only resources
-      spider --json report javascript --url https://example.com/app
+    Example: spider report javascript
+    Example: spider report javascript --only resources
+    Example: spider --json report javascript --url https://example.com/app
 
     JSON: `{crawl_id, report, only, total, rows}`; console — rows `[{kind, message, pages,
     example}]`, resources — `[{resource, kind, reason, pages, example}]`, с `--url` —
@@ -294,10 +286,9 @@ def pagespeed(
     неиспользуемый код. Проблемы конкретной страницы — `spider url <url>` (поле
     lighthouse), все аудиты построчно — `spider export lighthouse`.
 
-    Примеры:
-      spider report pagespeed
-      spider report pagespeed --only coverage
-      spider --json report pagespeed --only pages
+    Example: spider report pagespeed
+    Example: spider report pagespeed --only coverage
+    Example: spider --json report pagespeed --only pages
 
     JSON: `{crawl_id, report, only, total, rows}`; opportunities — `[{audit, pages, example}]`,
     pages — `[{url, strategy, performance}]`, coverage — `[{kind, resource, pages,
@@ -331,9 +322,8 @@ def robots_test(
     как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты
     googlebot, yandexbot…).
 
-    Примеры:
-      spider robots-test https://example.com/cart https://example.com/catalog/
-      spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt
+    Example: spider robots-test https://example.com/cart https://example.com/catalog/
+    Example: spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt
 
     JSON: `{rows: [{url, allowed, rule, user_agent}]}`; rule — решившая строка («Disallow:
     /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2.

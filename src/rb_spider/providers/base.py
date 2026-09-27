@@ -82,9 +82,11 @@ class Provider:
         authenticated read is) then `return Health()`; add `expires_at` for
         anything with a lifetime and `quota` if the API reports it. Just let
         `AuthRequired` / `ProviderError` propagate — `auth status` maps them
-        to `invalid` / `unreachable`. It must finish within 10 s and not retry:
-        `auth status` enforces the 10 s wall clock but can't make a slow check
-        fast. `HttpProvider.probe()` makes exactly one such request.
+        to `invalid` / `unreachable`. It must finish within 10 s and not retry,
+        and it is the provider's own client timeout that guarantees it —
+        `auth status` runs no watchdog thread. `HttpProvider.probe()` makes
+        exactly one request with a 10 s httpx timeout; anything else passes
+        `credentials.health.CHECK_TIMEOUT` (10 s) to what it calls.
         """
         raise NotImplementedError(f"{type(self).__name__} must implement health_check()")
 

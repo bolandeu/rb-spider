@@ -1,21 +1,20 @@
-                                                                                                    
- Usage: spider status [OPTIONS] [crawl_id]                                                          
-                                                                                                    
- Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли процесс.           
-                                                                                                    
- Для обхода в фоне (`spider crawl --detach`) — основной способ следить за ним.                      
- Данные в базе обновляются во время обхода каждые ~2 с. Проект — если команда                       
- запущена в каталоге проекта (или с `--project`), иначе null.                                       
-                                                                                                    
- Примеры:                                                                                           
-   spider status                                                                                    
-   spider --json status 12                                                                          
-                                                                                                    
- JSON: `{project, path, crawl: {id, project, start_url, status, pages, pending, pid,                
- alive}}`; `crawl` null — обходов ещё нет. `alive` — жив ли процесс обхода (null —                  
- не определить, например на Windows). Статус running при `alive: false` — процесс                   
- умер, обход можно продолжить: `spider crawls resume <id>`.                                         
-                                                                                                    
+
+ Usage: spider status [OPTIONS] [crawl_id]
+
+ Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли процесс.
+
+ Для обхода в фоне (`spider crawl --detach`) — основной способ следить за ним.
+ Данные в базе обновляются во время обхода каждые ~2 с. Проект — если команда
+ запущена в каталоге проекта (или с `--project`), иначе null.
+
+ Example: spider status
+ Example: spider --json status 12
+
+ JSON: `{project, path, crawl: {id, project, start_url, status, pages, pending, pid,
+ alive}}`; `crawl` null — обходов ещё нет. `alive` — жив ли процесс обхода (null —
+ не определить, например на Windows). Статус running при `alive: false` — процесс
+ умер, обход можно продолжить: `spider crawls resume <id>`.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода; по умолчанию — последний.                                   │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

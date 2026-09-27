@@ -34,10 +34,9 @@ def links(
     `custom.link_positions`) и, с `collect.link_path`, путь её предков. Пример
     вопроса: «кто ссылается на эту 404» — `spider links <404-url> --in`.
 
-    Примеры:
-      spider links https://example.com/
-      spider links https://example.com/old-page --in
-      spider --json links https://example.com/ --out --limit 500
+    Example: spider links https://example.com/
+    Example: spider links https://example.com/old-page --in
+    Example: spider --json links https://example.com/ --out --limit 500
 
     JSON: `{crawl_id, url, direction, total, links: [{source, target, kind, anchor, alt,
     rel, nofollow, internal, position, path, status_code}]}`; `status_code` — код URL на другом конце

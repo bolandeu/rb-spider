@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .version import DIST_NAME, cli_name
+from .._distribution import DIST_NAME
+from .version import cli_name
 
 # The real command (`spider`, not the package name) for `action` hints;
 # `uv tool upgrade` takes the distribution name (`rb-spider`).
@@ -67,13 +68,19 @@ class CredentialsUnhealthy(CliError):
 class DependencyTooOld(CliError):
     """Another CLI this one calls is missing or older than required (core/deps.py)."""
 
-    def __init__(self, name: str, installed: str | None, required: str) -> None:
+    def __init__(self, name: str, installed: str | None, required: str, *, install_url: str | None = None) -> None:
         found = "is not installed" if installed is None else f"is {installed}"
-        fix = f"uv tool upgrade {name}" if installed is not None else f"uv tool install <{name} repo URL>@v{required}"
+        pinned = f'uv tool install --reinstall "git+{install_url}@v{required}"' if install_url else None
+        if installed is not None:
+            action = f"Run 'uv tool upgrade {name}'" + (f" (or '{pinned}')" if pinned else "") + ", then retry."
+        elif pinned:
+            action = f"Run '{pinned}', then retry."
+        else:
+            action = f"Install {name} >= {required} (see its README for the install command), then retry."
         super().__init__(
             "DEPENDENCY_TOO_OLD",
             f"'{name}' {found}; {_CLI} needs {name} >= {required}.",
-            action=f"Run '{fix}', then retry.",
+            action=action,
             exit_code=1,
         )
 
@@ -204,9 +211,9 @@ class SitemapsUnavailable(CliError):
             "SITEMAPS_UNAVAILABLE",
             "XML sitemaps need rb-sitemap-xml, which is not installed.",
             action=(
-                "Install spider with it beside: uv tool install --reinstall --with-editable <path to sitemap-xml> "
-                f'"{DIST_NAME} @ git+https://github.com/bolandeu/spider.git" (in a checkout next to ../sitemap-xml: '
-                "uv sync --extra sitemaps), or turn it off: --set sitemaps.crawl=false."
+                f'Install spider with the extra: uv tool install --reinstall "{DIST_NAME}[sitemaps] @ '
+                'git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra sitemaps), '
+                "or turn it off: --set sitemaps.crawl=false."
             ),
             exit_code=1,
         )

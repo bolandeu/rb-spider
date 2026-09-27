@@ -52,11 +52,10 @@ def fetch(
     `--list` — URL построчно, CSV с колонкой url / address / loc или XML sitemap.
     Обойти сайт целиком — `spider crawl`. Из Python — `rb_spider.fetch`.
 
-    Примеры:
-      spider fetch https://example.com/old-page
-      spider --json fetch https://a.ru/ https://b.ru/ --include links,text
-      spider fetch https://spa.example/ --render --markdown          # страница для LLM
-      cat urls.txt | spider --json fetch --list - --concurrency 20 --profile googlebot
+    Example: spider fetch https://example.com/old-page
+    Example: spider --json fetch https://a.ru/ https://b.ru/ --include links,text
+    Example: spider fetch https://spa.example/ --render --markdown          # страница для LLM
+    Example: cat urls.txt | spider --json fetch --list - --concurrency 20 --profile googlebot
 
     Выход: человеку — строка на URL (код, финальный URL, title, время). `--json` —
     JSON Lines, объект на URL в порядке ввода: `{url, final_url, status, redirects:

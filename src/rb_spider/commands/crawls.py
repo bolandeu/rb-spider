@@ -21,9 +21,8 @@ def list_crawls(
 ) -> None:
     """Показать обходы всех проектов, новые сверху.
 
-    Примеры:
-      spider crawls list
-      spider --json crawls list --limit 5
+    Example: spider crawls list
+    Example: spider --json crawls list --limit 5
 
     JSON: `{crawls: [{id, project, start_url, status, started_at, finished_at, pages}]}`,
     даты — ISO 8601 в UTC; `status` — running | finished | failed | interrupted.
@@ -56,9 +55,8 @@ def show_crawl(
     Снимок настроек объясняет, почему два обхода одного сайта различаются
     (другой профиль, лимит, User-Agent).
 
-    Примеры:
-      spider crawls show
-      spider --json crawls show 12
+    Example: spider crawls show
+    Example: spider --json crawls show 12
 
     JSON: `{id, project, start_url, status, started_at, finished_at, pages, settings}`;
     `settings` — null у обходов, сделанных до появления снимков. Нет обхода — выход 2.
@@ -89,9 +87,8 @@ def resume(
     с которыми обход начинался (`spider crawls show`). Так же запускается обход
     в фоне (`spider crawl --detach`).
 
-    Примеры:
-      spider crawls resume
-      spider --json crawls resume 12
+    Example: spider crawls resume
+    Example: spider --json crawls resume 12
 
     JSON — как у `spider crawl`: `{crawl_id, project, start_url, status, pages, elapsed_s}`.
     Обход уже завершён или ещё идёт — выход 2.
@@ -126,9 +123,8 @@ def respider(
     должны быть в обходе; новые ссылки с них записываются, но не обходятся. Настройки —
     те, с которыми обход шёл. Сравнить до и после целиком — `spider compare`.
 
-    Примеры:
-      spider crawls respider 12 https://example.com/ https://example.com/catalog/
-      spider crawls respider 12 --list fixed.txt
+    Example: spider crawls respider 12 https://example.com/ https://example.com/catalog/
+    Example: spider crawls respider 12 --list fixed.txt
 
     JSON — как у `spider crawl`: `{crawl_id, project, start_url, status, pages, elapsed_s}`.
     URL нет в обходе, нет ни URL, ни `--list`, обход ещё идёт — выход 2.
@@ -173,10 +169,9 @@ def delete(
     диск его возвращает `spider db vacuum`. Чистка по возрасту и количеству —
     `spider crawls prune`, проект целиком — `spider projects delete`.
 
-    Примеры:
-      spider crawls delete 3 4 --dry-run
-      spider crawls delete 3
-      spider --json crawls delete 3 --yes
+    Example: spider crawls delete 3 4 --dry-run
+    Example: spider crawls delete 3
+    Example: spider --json crawls delete 3 --yes
 
     JSON: `{crawls: [{id, project, start_url, pages}], pages, dry_run}`. Нет
     такого обхода или он ещё идёт — выход 2; отказ в подтверждении — выход 1.
@@ -209,10 +204,9 @@ def prune(
     условиями удаляется обход, который и старше срока, и не входит в N последних
     своего проекта. Подтверждение, `--yes` и `--dry-run` — как у `crawls delete`.
 
-    Примеры:
-      spider crawls prune --keep-last 3 --dry-run
-      spider crawls prune --older-than 90d
-      spider --json crawls prune --keep-last 5 --older-than 30d --project-name shop --yes
+    Example: spider crawls prune --keep-last 3 --dry-run
+    Example: spider crawls prune --older-than 90d
+    Example: spider --json crawls prune --keep-last 5 --older-than 30d --project-name shop --yes
 
     JSON — как у `crawls delete`: `{crawls: [{id, project, start_url, pages}], pages,
     dry_run}`. Не задано ни одно условие или неверный срок — выход 2.

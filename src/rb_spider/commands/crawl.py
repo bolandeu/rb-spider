@@ -77,17 +77,16 @@ def crawl(
     `spider config show` с теми же флагами. Проект — из `.spider/config.toml`,
     если команда запущена в проекте, иначе хост сайта.
 
-    Примеры:
-      spider crawl https://example.com/
-      spider crawl https://example.com/ --profile googlebot --max-urls 1000
-      spider crawl https://example.com/ --user-agent googlebot --max-depth 3
-      spider crawl https://example.com/ --set 'crawl.exclude=["\\?sort="]' --set crawl.max_rps=5
-      spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
-      spider --json crawl https://example.com/
-      spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000
-      spider crawl --list old-urls.txt              # аудит списка, например после миграции
-      cat urls.txt | spider crawl --list - --detach
-      spider crawl https://example.com/ --set sitemaps.crawl=true   # и сравнить с sitemap
+    Example: spider crawl https://example.com/
+    Example: spider crawl https://example.com/ --profile googlebot --max-urls 1000
+    Example: spider crawl https://example.com/ --user-agent googlebot --max-depth 3
+    Example: spider crawl https://example.com/ --set 'crawl.exclude=["\\?sort="]' --set crawl.max_rps=5
+    Example: spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой
+    Example: spider --json crawl https://example.com/
+    Example: spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000
+    Example: spider crawl --list old-urls.txt              # аудит списка, например после миграции
+    Example: cat urls.txt | spider crawl --list - --detach
+    Example: spider crawl https://example.com/ --set sitemaps.crawl=true   # и сравнить с sitemap
 
     Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL
     без перехода по ссылкам, например перед миграцией или после неё: каждый URL

@@ -1,23 +1,22 @@
-                                                                                                    
- Usage: spider source [OPTIONS] {url}                                                               
-                                                                                                    
- View Source: HTML страницы — как его отдал сервер, после JavaScript или разница между ними.        
-                                                                                                    
- Нужен HTML, сохранённый при обходе (`--store-html`); отрендеренный — только у                      
- страниц, открытых в браузере (`--render always|auto`). Что именно поменял JS в                     
- title, description, H1, canonical, ссылках — проверки группы JavaScript                            
- (`spider issues`); эта команда показывает сам код.                                                 
-                                                                                                    
- Примеры:                                                                                           
-   spider source https://example.com/ > page.html                                                   
-   spider source https://example.com/app --rendered                                                 
-   spider source https://example.com/app --diff                                                     
-                                                                                                    
- Человеку — HTML или diff как есть (для перенаправления в файл). JSON: `{crawl_id,                  
- url, mode, html}` или с `--diff` — `{crawl_id, url, mode, diff: [строки], truncated}`.             
- HTML не сохранён или страница не рендерилась — выход 2. `--rendered` и `--diff`                    
- вместе — выход 2.                                                                                  
-                                                                                                    
+
+ Usage: spider source [OPTIONS] {url}
+
+ View Source: HTML страницы — как его отдал сервер, после JavaScript или разница между ними.
+
+ Нужен HTML, сохранённый при обходе (`--store-html`); отрендеренный — только у
+ страниц, открытых в браузере (`--render always|auto`). Что именно поменял JS в
+ title, description, H1, canonical, ссылках — проверки группы JavaScript
+ (`spider issues`); эта команда показывает сам код.
+
+ Example: spider source https://example.com/ > page.html
+ Example: spider source https://example.com/app --rendered
+ Example: spider source https://example.com/app --diff
+
+ Человеку — HTML или diff как есть (для перенаправления в файл). JSON: `{crawl_id,
+ url, mode, html}` или с `--diff` — `{crawl_id, url, mode, diff: [строки], truncated}`.
+ HTML не сохранён или страница не рендерилась — выход 2. `--rendered` и `--diff`
+ вместе — выход 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    url      <str>  URL из обхода. [required]                                                   │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,38 +1,37 @@
-                                                                                                    
- Usage: spider export [OPTIONS] [what]:<pages|links|issues|queued|headers|cookies                   
-                      |source|text|duplicates|custom|sitemap-                                       
-                      urls|javascript|rendered-source|screenshots|lighthouse>                       
-                                                                                                    
- Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.               
-                                                                                                    
- Для таблиц и сторонних инструментов; вопрос к данным точнее задать `spider query`.                 
- Данные идут потоком — выгрузка любого размера не занимает память. Наборы: pages                    
- (все данные страницы и тип `content_kind`), links (с кодом цели, зоной и типом пути                
- ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),                
- headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —             
- нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /                     
- Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и                           
- незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML                  
- после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты                             
- `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с                      
- index.csv), lighthouse (все аудиты `spider lighthouse` построчно, с источником local / psi и       
- CrUX). `--issue` у links — ссылки, из-за которых                                                   
- сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.                            
-                                                                                                    
- Примеры:                                                                                           
-   spider export > pages.csv                                # все URL последнего обхода             
-   spider export issues -o issues.xlsx --format xlsx                                                
-   spider export links --issue links_no_anchor_text -o no-anchor.csv                                
-   spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404                  
-   spider export pages --type css --status 4xx              # битые стили                           
-   spider export --preset audit -o report.xlsx              # несколько листов за раз               
-   spider export --preset full -o out/ --format json        # файл на набор                         
-                                                                                                    
- Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает; xlsx без `-o`               
- нельзя). С `-o` печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`, у                
- пресета — `{crawl_id, preset, format, files: {набор: строк}, path}`. Неизвестный набор,            
- проверка, тип или пресет, неверный `--status`, фильтр не для этого набора — выход 2.               
-                                                                                                    
+
+ Usage: spider export [OPTIONS] [what]:<pages|links|issues|queued|headers|cookies
+                      |source|text|duplicates|custom|sitemap-
+                      urls|javascript|rendered-source|screenshots|lighthouse>
+
+ Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.
+
+ Для таблиц и сторонних инструментов; вопрос к данным точнее задать `spider query`.
+ Данные идут потоком — выгрузка любого размера не занимает память. Наборы: pages
+ (все данные страницы и тип `content_kind`), links (с кодом цели, зоной и типом пути
+ ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),
+ headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —
+ нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /
+ Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и
+ незагруженные ресурсы при рендеринге — Chrome Console Log), rendered-source (HTML
+ после JavaScript — `--store-html` и рендеринг), screenshots (скриншоты
+ `crawl.render_screenshots`: CSV / JSON — пути; `-o папка` — сами JPEG-файлы с
+ index.csv), lighthouse (все аудиты `spider lighthouse` построчно, с источником local / psi и
+ CrUX). `--issue` у links — ссылки, из-за которых
+ сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
+
+ Example: spider export > pages.csv                                # все URL последнего обхода
+ Example: spider export issues -o issues.xlsx --format xlsx
+ Example: spider export links --issue links_no_anchor_text -o no-anchor.csv
+ Example: spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
+ Example: spider export pages --type css --status 4xx              # битые стили
+ Example: spider export --preset audit -o report.xlsx              # несколько листов за раз
+ Example: spider export --preset full -o out/ --format json        # файл на набор
+
+ Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает; xlsx без `-o`
+ нельзя). С `-o` печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`, у
+ пресета — `{crawl_id, preset, format, files: {набор: строк}, path}`. Неизвестный набор,
+ проверка, тип или пресет, неверный `--status`, фильтр не для этого набора — выход 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   what      <pages|links|issues|queued|headers|cooki  Что выгрузить: pages, links, issues,       │
 │             es|source|text|duplicates|custom|sitemap  queued, headers, cookies, source, text,    │

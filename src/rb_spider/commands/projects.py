@@ -20,9 +20,8 @@ def list_projects(
     Проект — сайт или имя из `.spider/config.toml`; все проекты живут в одной
     базе обходов (`spider db info`). Обходы проекта — `spider crawls list`.
 
-    Примеры:
-      spider projects list
-      spider --json projects list
+    Example: spider projects list
+    Example: spider --json projects list
 
     JSON: `{projects: [{name, crawls, pages, last_crawl_at}]}`, дата — ISO 8601 в UTC или null.
     """
@@ -49,9 +48,8 @@ def delete(
     трогаются — только данные в базе. Удалить отдельные обходы —
     `spider crawls delete`, старые — `spider crawls prune`.
 
-    Примеры:
-      spider projects delete example.com --dry-run
-      spider --json projects delete example.com --yes
+    Example: spider projects delete example.com --dry-run
+    Example: spider --json projects delete example.com --yes
 
     JSON: `{project, crawls, pages, dry_run}`. Нет проекта или его обход ещё идёт —
     выход 2; отказ в подтверждении — выход 1.

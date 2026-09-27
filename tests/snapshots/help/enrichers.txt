@@ -1,20 +1,19 @@
-                                                                                                    
- Usage: spider enrichers [OPTIONS]                                                                  
-                                                                                                    
- Показать установленные обогатители — плагины, которые добавляют метрики к URL.                     
-                                                                                                    
- Обогатитель — отдельный пакет (данные Search Console, Вебмастера, PageSpeed…)                      
- с entry point в группе `rb_spider.enrichers`; установить его рядом со spider:                      
- `uv tool install rb-spider --with <пакет>`. Плагин, который не загружается,                        
- показан с причиной. Запустить — `spider enrich`.                                                   
-                                                                                                    
- Примеры:                                                                                           
-   spider enrichers                                                                                 
-   spider --json enrichers                                                                          
-                                                                                                    
- JSON: `{enrichers: [{name, target, description, error}]}`; `error` — null у                        
- рабочих плагинов.                                                                                  
-                                                                                                    
+
+ Usage: spider enrichers [OPTIONS]
+
+ Показать установленные обогатители — плагины, которые добавляют метрики к URL.
+
+ Обогатитель — отдельный пакет (данные Search Console, Вебмастера, PageSpeed…)
+ с entry point в группе `rb_spider.enrichers`; установить его рядом со spider:
+ `uv tool install rb-spider --with <пакет>`. Плагин, который не загружается,
+ показан с причиной. Запустить — `spider enrich`.
+
+ Example: spider enrichers
+ Example: spider --json enrichers
+
+ JSON: `{enrichers: [{name, target, description, error}]}`; `error` — null у
+ рабочих плагинов.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json           Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).          │
 │ --quiet          Печатать только основной результат, без пояснений.                              │

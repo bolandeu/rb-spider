@@ -35,10 +35,9 @@ def hreflang(
     x-default…) — `spider issues`, группа Hreflang; здесь — сами пары страниц для
     разбора. Считается по сохранённому обходу, сайт не скачивается.
 
-    Примеры:
-      spider hreflang
-      spider hreflang --only missing_return
-      spider --json hreflang 12 --only non_200 --limit 1000
+    Example: spider hreflang
+    Example: spider hreflang --only missing_return
+    Example: spider --json hreflang 12 --only non_200 --limit 1000
 
     JSON: `{crawl_id, only, total, annotations: [{source, hreflang, target, target_status,
     target_blocked, target_indexability, return_link}]}`; `target_status` null — цель не

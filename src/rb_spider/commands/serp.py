@@ -28,9 +28,8 @@ def summary(
     (шире / уже порогов) — `spider issues`, группы Page Titles и Meta Description;
     сниппет одной страницы — `spider url`.
 
-    Примеры:
-      spider serp summary
-      spider --json serp summary 12 --limit 1000
+    Example: spider serp summary
+    Example: spider --json serp summary 12 --limit 1000
 
     JSON: `{crawl_id, total, pages: [{url, title, title_chars, title_px, description,
     description_chars, description_px}]}`.
@@ -61,9 +60,8 @@ def preview(
     title и description (по словам, с «…»). Пороги и кегли — `thresholds.title_max_px`,
     `description_max_px`, `serp_*_font_px` (из `--profile` / `--set`).
 
-    Примеры:
-      spider serp preview --title "Купить диван в Москве — каталог" --description "Доставка за день…"
-      spider --json serp preview --title "…" --set thresholds.title_max_px=600
+    Example: spider serp preview --title "Купить диван в Москве — каталог" --description "Доставка за день…"
+    Example: spider --json serp preview --title "…" --set thresholds.title_max_px=600
 
     JSON: `{url, title, title_px, title_truncated, description, description_px,
     description_truncated}`; title / description — как их покажет выдача.

@@ -1,8 +1,8 @@
-                                                                                                    
- Usage: spider sitemaps [OPTIONS] COMMAND [ARGS]...                                                 
-                                                                                                    
- XML sitemap: что прочитал обход (файлы, URL, сироты) и генерация sitemap по обходу.                
-                                                                                                    
+
+ Usage: spider sitemaps [OPTIONS] COMMAND [ARGS]...
+
+ XML sitemap: что прочитал обход (файлы, URL, сироты) и генерация sitemap по обходу.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

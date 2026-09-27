@@ -27,7 +27,7 @@ def list_profiles(
 
     Профиль проекта с тем же именем заменяет встроенный.
 
-    Пример: spider profiles list
+    Example: spider profiles list
 
     JSON: `{profiles: [{name, where, extends, description, path}]}`; `where` —
     builtin | project.
@@ -59,7 +59,7 @@ def show_profile(
 
     Итог вместе с остальными слоями (проект, флаги) — `spider config show --profile <имя>`.
 
-    Пример: spider profiles show googlebot
+    Example: spider profiles show googlebot
 
     JSON: `{name, chain: [{profile, settings}]}` — от самого общего предка к профилю.
     Нет профиля или цикл в `extends` — выход 2.
@@ -84,9 +84,8 @@ def init_profile(
     Раскомментируйте и поменяйте нужные ключи — остальные наследуются из
     `--from`. Нужен проект (`spider init`).
 
-    Примеры:
-      spider profiles init shop
-      spider profiles init shop-mobile --from googlebot
+    Example: spider profiles init shop
+    Example: spider profiles init shop-mobile --from googlebot
 
     JSON: `{name, path, extends}`. Файл уже есть (без `--force`) или нет
     профиля `--from` — выход 2; нет проекта — выход 4.

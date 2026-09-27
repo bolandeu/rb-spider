@@ -27,10 +27,9 @@ def issues(
     warning — проверить; opportunity — можно улучшить. Проверки считаются после
     обхода; после обновления spider пересчитать — `spider analyze`.
 
-    Примеры:
-      spider issues
-      spider issues 12
-      spider --json issues
+    Example: spider issues
+    Example: spider issues 12
+    Example: spider --json issues
 
     Проверки, чьи данные при обходе не собирались (выключен `collect.*`, обход без
     рендеринга для группы JavaScript), не считаются «пройденными», а перечислены
@@ -68,10 +67,9 @@ def urls(
     Второй шаг после `spider issues`. `detail` зависит от проверки: цель
     редиректа, цепочка прыжков, текст ошибки соединения.
 
-    Примеры:
-      spider urls --issue internal_client_error
-      spider urls 12 --issue internal_redirect_chain --limit 20
-      spider --json urls --issue internal_no_response
+    Example: spider urls --issue internal_client_error
+    Example: spider urls 12 --issue internal_redirect_chain --limit 20
+    Example: spider --json urls --issue internal_no_response
 
     JSON: `{crawl_id, issue, total, urls: [{url, status_code, detail}]}`; `status_code`
     0 — ответа не было (сбой или запрет robots.txt). Неизвестный код — выход 2.
@@ -100,9 +98,8 @@ def analyze(
     берутся из текущих настроек — со всеми слоями, как у `spider crawl`, — а не
     из снимка обхода. Прежние результаты проверок этого обхода заменяются.
 
-    Примеры:
-      spider analyze
-      spider analyze 12 --set thresholds.redirect_chain_hops=3
+    Example: spider analyze
+    Example: spider analyze 12 --set thresholds.redirect_chain_hops=3
 
     JSON: `{crawl_id, findings}` — сколько пар «проверка — URL» найдено.
     """

@@ -26,7 +26,7 @@ def list_config(
     Только то, что задано в проекте. Итоговые значения со всеми слоями
     (профиль, флаги, переменные окружения) — `spider config show`.
 
-    Пример: spider config list
+    Example: spider config list
 
     JSON: содержимое файла (поля проекта и разделы настроек, например `crawl`).
     """
@@ -46,7 +46,7 @@ def get_config(
 ) -> None:
     """Показать одно значение из проектного файла.
 
-    Пример: spider config get crawl.concurrency
+    Example: spider config get crawl.concurrency
 
     JSON: `{key, value}`; `value` — null, если в проекте ключ не задан (действует
     значение из другого слоя — см. `spider config show`). Неизвестный ключ — выход 2.
@@ -75,10 +75,9 @@ def set_config(
     Значение разбирается как TOML (`500` — число, `false` — логическое), иначе
     сохраняется строкой. Весь файл проверяется до записи.
 
-    Примеры:
-      spider config set crawl.concurrency 10
-      spider config set crawl.robots report
-      spider config set name shop
+    Example: spider config set crawl.concurrency 10
+    Example: spider config set crawl.robots report
+    Example: spider config set name shop
 
     JSON: `{key, value}`. Неизвестный ключ или неверный тип — выход 2.
     """
@@ -116,9 +115,8 @@ def show(
     / `--set`, — проверить профиль до обхода. Слои: default, global, project,
     profile:<имя>, file:<путь>, env, flag, set.
 
-    Примеры:
-      spider config show
-      spider config show --profile googlebot --set crawl.max_urls=500
+    Example: spider config show
+    Example: spider config show --profile googlebot --set crawl.max_urls=500
 
     JSON: `{settings: {раздел: {ключ: значение}}, sources: {"раздел.ключ": слой}}`.
     Ошибка в любом слое — выход 2 с указанием ключа и слоя.
@@ -138,9 +136,8 @@ def validate(
 ) -> None:
     """Проверить файл профиля до использования: ключи, типы, цепочку `extends`.
 
-    Примеры:
-      spider config validate .spider/profiles/shop.toml
-      spider --json config validate my-settings.toml
+    Example: spider config validate .spider/profiles/shop.toml
+    Example: spider --json config validate my-settings.toml
 
     JSON: `{file, valid: true, extends}`. Ошибки — выход 2, в сообщении каждый
     неверный ключ и причина.
@@ -168,8 +165,7 @@ def schema(
     По ней агент составляет корректный профиль без угадывания. Всегда печатает
     саму схему (без конверта `{ok}`), чтобы её можно было сразу сохранить в файл.
 
-    Примеры:
-      spider config schema
-      spider config schema > spider-profile.schema.json
+    Example: spider config schema
+    Example: spider config schema > spider-profile.schema.json
     """
     typer.echo(json.dumps(settings.ProfileFile.model_json_schema(), ensure_ascii=False, indent=2))

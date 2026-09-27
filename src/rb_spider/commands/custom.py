@@ -28,10 +28,9 @@ def custom(
     или регулярному выражению. Без опций — список правил обхода с числом страниц;
     `--search` / `--extract` — страницы одного правила.
 
-    Примеры:
-      spider custom
-      spider custom --search GTM --without          # где счётчика нет
-      spider --json custom 12 --extract price --limit 1000
+    Example: spider custom
+    Example: spider custom --search GTM --without          # где счётчика нет
+    Example: spider --json custom 12 --extract price --limit 1000
 
     JSON: без опций — `{crawl_id, rules: [{kind, name, pages, without}]}` (without —
     HTML-страниц без совпадений, у извлечений null); с опцией — `{crawl_id, kind, name,

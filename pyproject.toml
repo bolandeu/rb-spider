@@ -124,6 +124,11 @@ directory = "security"
 name = "Security"
 showcontent = true
 
+[tool.cli-generator]
+# Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
+# looks for commands: a glob or a list of globs, relative to the repo root.
+commands = ["src/rb_spider/commands/*.py"]
+
 [tool.pytest.ini_options]
 addopts = "--cov --cov-report=term-missing:skip-covered"
 # tests/test_help.py keeps help snapshots at tests/snapshots/help/<command>.txt

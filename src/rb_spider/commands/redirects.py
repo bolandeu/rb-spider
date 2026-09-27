@@ -44,11 +44,10 @@ def redirects(
     приводят к ошибке: нет ответа, запрет robots.txt, 4xx, 5xx или петля.
     Считается по сохранённому обходу, сайт не скачивается.
 
-    Примеры:
-      spider redirects
-      spider redirects --only chains
-      spider redirects --only chains --canonicals
-      spider --json redirects 12 --only errors
+    Example: spider redirects
+    Example: spider redirects --only chains
+    Example: spider redirects --only chains --canonicals
+    Example: spider --json redirects 12 --only errors
 
     JSON: `{crawl_id, only, total, redirects: [{url, hops: [{url, status_code, type}],
     final_url, final_status, loop, is_error}]}`; `type` — 3xx | meta | http; `final_status`

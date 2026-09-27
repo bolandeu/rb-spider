@@ -1,21 +1,20 @@
-                                                                                                    
- Usage: spider pagination [OPTIONS] [crawl_id]                                                      
-                                                                                                    
- Отчёт Pagination: ссылки rel=next / prev каждой страницы и состояние их целей.                     
-                                                                                                    
- Ссылки берутся из `<link rel="next|prev">` и заголовка Link; их сбор и обход целей —               
- `collect.pagination.store` / `.follow`. Проблемы (нет ссылки <a>, петли, несходящиеся              
- пары, неиндексируемые страницы серии) — `spider issues`, группа Pagination; сколько                
- страниц в сериях — `spider overview`. Считается по сохранённому обходу.                            
-                                                                                                    
- Примеры:                                                                                           
-   spider pagination                                                                                
-   spider pagination --only non_200                                                                 
-   spider --json pagination 12 --only unlinked --limit 1000                                         
-                                                                                                    
- JSON: `{crawl_id, only, total, links: [{source, rel, target, target_status, target_blocked,        
- target_indexability}]}`; `rel` — next | prev; `target_status` null — цель не скачивалась.          
-                                                                                                    
+
+ Usage: spider pagination [OPTIONS] [crawl_id]
+
+ Отчёт Pagination: ссылки rel=next / prev каждой страницы и состояние их целей.
+
+ Ссылки берутся из `<link rel="next|prev">` и заголовка Link; их сбор и обход целей —
+ `collect.pagination.store` / `.follow`. Проблемы (нет ссылки <a>, петли, несходящиеся
+ пары, неиндексируемые страницы серии) — `spider issues`, группа Pagination; сколько
+ страниц в сериях — `spider overview`. Считается по сохранённому обходу.
+
+ Example: spider pagination
+ Example: spider pagination --only non_200
+ Example: spider --json pagination 12 --only unlinked --limit 1000
+
+ JSON: `{crawl_id, only, total, links: [{source, rel, target, target_status, target_blocked,
+ target_indexability}]}`; `rel` — next | prev; `target_status` null — цель не скачивалась.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,28 @@
+
+ Usage: spider serp summary [OPTIONS] [crawl_id]
+
+ SERP Summary: title и description каждой HTML-страницы — в символах и пикселях.
+
+ Пиксели — ширина в выдаче Google (Arial: title — `thresholds.serp_title_font_px`,
+ description — `serp_description_font_px`), считаются в `spider analyze`. Проблемы
+ (шире / уже порогов) — `spider issues`, группы Page Titles и Meta Description;
+ сниппет одной страницы — `spider url`.
+
+ Example: spider serp summary
+ Example: spider --json serp summary 12 --limit 1000
+
+ JSON: `{crawl_id, total, pages: [{url, title, title_chars, title_px, description,
+ description_chars, description_px}]}`.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --limit        <int range> [x>=1]  Сколько страниц показать (всего — в поле total).              │
+│                                    [default: 100]                                                │
+│ --json                             Вывод в JSON для агентов и скриптов (одна строка-конверт      │
+│                                    `{ok, ...}`).                                                 │
+│ --quiet                            Печатать только основной результат, без пояснений.            │
+│ --help                             Show this message and exit.                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

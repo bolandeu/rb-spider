@@ -61,9 +61,8 @@ def url(
     `spider url <url>`. Сами ссылки страницы — `spider links <url> --in|--out`,
     шаги редиректа — `spider redirects`.
 
-    Примеры:
-      spider url https://example.com/
-      spider --json url https://example.com/catalog/ --crawl 12
+    Example: spider url https://example.com/
+    Example: spider --json url https://example.com/catalog/ --crawl 12
 
     JSON: `{crawl_id, page: {url, status_code, response_ms, last_modified, headers,
     indexable, indexability_status, title, …все колонки страницы}, request_headers,
@@ -135,14 +134,13 @@ def export(
     index.csv), lighthouse (все аудиты `spider lighthouse` построчно, с источником local / psi и CrUX). `--issue` у links — ссылки, из-за которых
     сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
 
-    Примеры:
-      spider export > pages.csv                                # все URL последнего обхода
-      spider export issues -o issues.xlsx --format xlsx
-      spider export links --issue links_no_anchor_text -o no-anchor.csv
-      spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
-      spider export pages --type css --status 4xx              # битые стили
-      spider export --preset audit -o report.xlsx              # несколько листов за раз
-      spider export --preset full -o out/ --format json        # файл на набор
+    Example: spider export > pages.csv                                # все URL последнего обхода
+    Example: spider export issues -o issues.xlsx --format xlsx
+    Example: spider export links --issue links_no_anchor_text -o no-anchor.csv
+    Example: spider export links --status 404 -o links-to-404.csv     # кто ссылается на 404
+    Example: spider export pages --type css --status 4xx              # битые стили
+    Example: spider export --preset audit -o report.xlsx              # несколько листов за раз
+    Example: spider export --preset full -o out/ --format json        # файл на набор
 
     Без `-o` в stdout идут только данные (флаг `--json` их не оборачивает; xlsx без `-o`
     нельзя). С `-o` печатается итог; JSON: `{crawl_id, dataset, format, rows, path}`, у
@@ -223,10 +221,9 @@ def query(
     соединять с urls в конце. Колонки — `spider export` с тем же набором или
     `SELECT * FROM pages LIMIT 1`. Функция casefold(x) — регистр без учёта кириллицы.
 
-    Примеры:
-      spider query "SELECT status_code, count(*) FROM pages WHERE crawl_id = 3 GROUP BY 1"
-      spider --json query "SELECT url, word_count FROM pages WHERE crawl_id = 3 ORDER BY 2 LIMIT 20"
-      spider query "SELECT source, target FROM links WHERE crawl_id = 3 AND anchor = ''" --format csv -o empty.csv
+    Example: spider query "SELECT status_code, count(*) FROM pages WHERE crawl_id = 3 GROUP BY 1"
+    Example: spider --json query "SELECT url, word_count FROM pages WHERE crawl_id = 3 ORDER BY 2 LIMIT 20"
+    Example: spider query "SELECT source, target FROM links WHERE crawl_id = 3 AND anchor = ''" --format csv -o empty.csv
 
     Выход — таблица (не больше `--limit` строк); JSON: `{columns, rows, truncated}`,
     `rows` — массивы значений. С `--format` строки идут потоком без ограничения —
@@ -257,9 +254,8 @@ def overview(
     `spider export pages --type css`, `--status 4xx`, `spider urls --issue <код>`,
     `spider query`.
 
-    Примеры:
-      spider overview
-      spider --json overview 12
+    Example: spider overview
+    Example: spider --json overview 12
 
     JSON: `{crawl_id, totals: {stored, internal, external, blocked_by_robots,
     no_response, indexable, queued_ever, still_queued}, content_types,

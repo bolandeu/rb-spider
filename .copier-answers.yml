@@ -1,10 +1,11 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v1.2.1
+_commit: v1.2.3
 _src_path: gh:bolandeu/cli-generator
 author_name: Roman Bolandau
 cli_name: spider
 description: SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO
     Spider
+dist_name: rb-spider
 include_auth: true
 package_name: rb_spider
 project_name: rb-spider

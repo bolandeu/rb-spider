@@ -86,9 +86,9 @@ class PageSpeedUnavailable(CliError):
             "PAGESPEED_UNAVAILABLE",
             "PageSpeed Insights needs the gsc package, which is not installed.",
             action=(
-                "Install spider with it beside: uv tool install --reinstall --with-editable <path to "
-                f'google-search-console> "{DIST_NAME} @ git+https://github.com/bolandeu/spider.git" (in a checkout next '
-                "to ../google-search-console: uv sync --extra gsc), or measure here: --source local."
+                f'Install spider with the extra: uv tool install --reinstall "{DIST_NAME}[gsc] @ '
+                'git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra gsc), '
+                "or measure here: --source local."
             ),
             exit_code=1,
         )

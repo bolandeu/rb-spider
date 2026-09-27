@@ -23,9 +23,8 @@ def status(
     Данные в базе обновляются во время обхода каждые ~2 с. Проект — если команда
     запущена в каталоге проекта (или с `--project`), иначе null.
 
-    Примеры:
-      spider status
-      spider --json status 12
+    Example: spider status
+    Example: spider --json status 12
 
     JSON: `{project, path, crawl: {id, project, start_url, status, pages, pending, pid,
     alive}}`; `crawl` null — обходов ещё нет. `alive` — жив ли процесс обхода (null —

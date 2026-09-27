@@ -1,34 +1,33 @@
-                                                                                                    
- Usage: spider compare [OPTIONS] {old} {new}                                                        
-                                                                                                    
- Сравнить два обхода: новые и пропавшие URL, изменения проблем и полей страниц (Change Detection).  
-                                                                                                    
- Для контроля после релиза или миграции: обойдите сайт до и после и сравните.                       
- Без опций — сводка; по каждой проверке четыре группы, как в Compare mode Screaming                 
- Frog: added (у URL, который был и раньше, проблема появилась), new (новый URL с                    
- проблемой), removed (у оставшегося URL проблема ушла), missing (URL с проблемой                    
- пропал). Поля Change Detection — `compare.fields` (из `--profile` / `--set`); обходы               
- сравниваются по URL сайта, при `spider analyze` пороги пересчитываются отдельно.                   
-                                                                                                    
- URL Mapping — если адреса страниц в обходах разные (staging против production,                     
- переезд на другой домен или HTTPS, новая структура URL): `--map` или                               
- `compare.url_mapping` переписывают URL прежнего обхода в адреса нового по                          
- регулярному выражению, и страницы сравниваются между собой, а не считаются                         
- пропавшими и новыми.                                                                               
-                                                                                                    
- Примеры:                                                                                           
-   spider compare 12 15                                                                             
-   spider compare 12 15 --issue page_title_missing --status added                                   
-   spider --json compare 12 15 --field title --limit 1000                                           
-   spider compare 12 15 --urls missing                                                              
-   spider compare 12 15 --map 'https://staging\.example\.com=>https://example.com'                  
-                                                                                                    
- JSON: сводка — `{old, new, urls: {old, new, new_urls, missing_urls}, issues: [{code, name,         
- old, new, added, new_urls, removed, missing}], changes: {поле: число URL}}`; список —              
- `{old, new, total, rows}`: для `--issue` / `--urls` — `[{url}]`, для `--field` —                   
- `[{url, old, new}]`. Несколько списков сразу, неизвестное поле или код, `--map` без                
- `=>` или с неверной регуляркой — выход 2.                                                          
-                                                                                                    
+
+ Usage: spider compare [OPTIONS] {old} {new}
+
+ Сравнить два обхода: новые и пропавшие URL, изменения проблем и полей страниц (Change Detection).
+
+ Для контроля после релиза или миграции: обойдите сайт до и после и сравните.
+ Без опций — сводка; по каждой проверке четыре группы, как в Compare mode Screaming
+ Frog: added (у URL, который был и раньше, проблема появилась), new (новый URL с
+ проблемой), removed (у оставшегося URL проблема ушла), missing (URL с проблемой
+ пропал). Поля Change Detection — `compare.fields` (из `--profile` / `--set`); обходы
+ сравниваются по URL сайта, при `spider analyze` пороги пересчитываются отдельно.
+
+ URL Mapping — если адреса страниц в обходах разные (staging против production,
+ переезд на другой домен или HTTPS, новая структура URL): `--map` или
+ `compare.url_mapping` переписывают URL прежнего обхода в адреса нового по
+ регулярному выражению, и страницы сравниваются между собой, а не считаются
+ пропавшими и новыми.
+
+ Example: spider compare 12 15
+ Example: spider compare 12 15 --issue page_title_missing --status added
+ Example: spider --json compare 12 15 --field title --limit 1000
+ Example: spider compare 12 15 --urls missing
+ Example: spider compare 12 15 --map 'https://staging\.example\.com=>https://example.com'
+
+ JSON: сводка — `{old, new, urls: {old, new, new_urls, missing_urls}, issues: [{code, name,
+ old, new, added, new_urls, removed, missing}], changes: {поле: число URL}}`; список —
+ `{old, new, total, rows}`: для `--issue` / `--urls` — `[{url}]`, для `--field` —
+ `[{url, old, new}]`. Несколько списков сразу, неизвестное поле или код, `--map` без
+ `=>` или с неверной регуляркой — выход 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    old      <int>  Номер прежнего обхода (`spider crawls list`). [required]                    │
 │ *    new      <int>  Номер нового обхода. [required]                                             │

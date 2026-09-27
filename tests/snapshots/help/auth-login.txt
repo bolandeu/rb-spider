@@ -1,0 +1,25 @@
+
+ Usage: spider auth login [OPTIONS]
+
+ Сохранить секрет в системное хранилище ключей (keychain).
+
+ Значение берётся из переменной окружения `SPIDER_<PROVIDER>_API_KEY`,
+ иначе спрашивается интерактивно (с `--non-interactive` — ошибка, код 2).
+ Провайдеры: `proxy` — пароль для `{password}` в `crawl.proxy_urls`, `site` —
+ пароль сайта при `crawl.auth = basic`, `database` — пароль `SPIDER_DB_URL`.
+
+ Example: spider auth login --provider proxy
+ Example: SPIDER_DATABASE_API_KEY=... spider auth login --provider database --non-interactive
+
+ JSON: `{provider}`.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --provider               <str>  Провайдер: proxy, site или database. [default: default]          │
+│ --non-interactive               Никогда не задавать вопросов: вместо этого завершиться с         │
+│                                 ошибкой.                                                         │
+│ --json                          Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok,   │
+│                                 ...}`).                                                          │
+│ --quiet                         Печатать только основной результат, без пояснений.               │
+│ --help                          Show this message and exit.                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

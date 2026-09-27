@@ -17,3 +17,5 @@ build/
 *.sqlite-shm
 storage/
 .python-version
+# локальные настройки Claude Code (разрешения) — у каждого свои
+.claude/settings.local.json

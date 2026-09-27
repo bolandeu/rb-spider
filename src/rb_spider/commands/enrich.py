@@ -22,9 +22,8 @@ def enrichers(
     `uv tool install rb-spider --with <пакет>`. Плагин, который не загружается,
     показан с причиной. Запустить — `spider enrich`.
 
-    Примеры:
-      spider enrichers
-      spider --json enrichers
+    Example: spider enrichers
+    Example: spider --json enrichers
 
     JSON: `{enrichers: [{name, target, description, error}]}`; `error` — null у
     рабочих плагинов.
@@ -50,10 +49,9 @@ def enrich(
     Метрики видны в `spider url <url>` и доступны в `spider query`
     (`SELECT * FROM url_metrics WHERE crawl_id = …`). Список плагинов — `spider enrichers`.
 
-    Примеры:
-      spider enrich
-      spider enrich 12 --plugin gsc
-      spider --json enrich
+    Example: spider enrich
+    Example: spider enrich 12 --plugin gsc
+    Example: spider --json enrich
 
     JSON: `{crawl_id, stored: {плагин: число метрик}}`. Неизвестный плагин — выход 2;
     плагин упал или не загружается — выход 5 (`PROVIDER_ERROR`, в `provider` — его имя),

@@ -26,10 +26,9 @@ def source(
     title, description, H1, canonical, ссылках — проверки группы JavaScript
     (`spider issues`); эта команда показывает сам код.
 
-    Примеры:
-      spider source https://example.com/ > page.html
-      spider source https://example.com/app --rendered
-      spider source https://example.com/app --diff
+    Example: spider source https://example.com/ > page.html
+    Example: spider source https://example.com/app --rendered
+    Example: spider source https://example.com/app --diff
 
     Человеку — HTML или diff как есть (для перенаправления в файл). JSON: `{crawl_id,
     url, mode, html}` или с `--diff` — `{crawl_id, url, mode, diff: [строки], truncated}`.

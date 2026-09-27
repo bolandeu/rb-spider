@@ -1,0 +1,24 @@
+
+ Usage: spider report headers [OPTIONS] [crawl_id]
+
+ HTTP Header Summary / Cookie Summary: заголовки ответов (или cookies) и сколько URL их отдают.
+
+ Заголовки каждого URL — `spider url`, все построчно — `spider export headers` /
+ `spider export cookies`.
+
+ Example: spider report headers
+ Example: spider --json report headers --cookies
+
+ JSON: `{crawl_id, cookies, rows: [{name, urls, example, attributes?}]}`; attributes — у
+ cookies: какие атрибуты встречались (path, domain, secure, httponly, samesite…).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --cookies          Cookie Summary: cookies вместо заголовков.                                    │
+│ --json             Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).        │
+│ --quiet            Печатать только основной результат, без пояснений.                            │
+│ --help             Show this message and exit.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

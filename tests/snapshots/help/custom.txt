@@ -1,25 +1,24 @@
-                                                                                                    
- Usage: spider custom [OPTIONS] [crawl_id]                                                          
-                                                                                                    
- Результаты своих поисков и извлечений (Custom Search / Custom Extraction).                         
-                                                                                                    
- Правила задаются в разделе `` конфига до обхода: `[]` —                                            
- сколько раз текст или регулярное выражение встречается в HTML, тексте или                          
- элементе; `[]` — значения по CSS, XPath (extra `rb-spider`)                                        
- или регулярному выражению. Без опций — список правил обхода с числом страниц;                      
- `--search` / `--extract` — страницы одного правила.                                                
-                                                                                                    
- Примеры:                                                                                           
-   spider custom                                                                                    
-   spider custom --search GTM --without          # где счётчика нет                                 
-   spider --json custom 12 --extract price --limit 1000                                             
-                                                                                                    
- JSON: без опций — `{crawl_id, rules: [{kind, name, pages, without}]}` (without —                   
- HTML-страниц без совпадений, у извлечений null); с опцией — `{crawl_id, kind, name,                
- total, rows: [{url, value, n}]}`: у поиска n — число совпадений, у извлечения —                    
- номер значения на странице. `--search` и `--extract` вместе, `--without` без                       
- `--search` — выход 2.                                                                              
-                                                                                                    
+
+ Usage: spider custom [OPTIONS] [crawl_id]
+
+ Результаты своих поисков и извлечений (Custom Search / Custom Extraction).
+
+ Правила задаются в разделе `` конфига до обхода: `[]` —
+ сколько раз текст или регулярное выражение встречается в HTML, тексте или
+ элементе; `[]` — значения по CSS, XPath (extra `rb-spider`)
+ или регулярному выражению. Без опций — список правил обхода с числом страниц;
+ `--search` / `--extract` — страницы одного правила.
+
+ Example: spider custom
+ Example: spider custom --search GTM --without          # где счётчика нет
+ Example: spider --json custom 12 --extract price --limit 1000
+
+ JSON: без опций — `{crawl_id, rules: [{kind, name, pages, without}]}` (without —
+ HTML-страниц без совпадений, у извлечений null); с опцией — `{crawl_id, kind, name,
+ total, rows: [{url, value, n}]}`: у поиска n — число совпадений, у извлечения —
+ номер значения на странице. `--search` и `--extract` вместе, `--without` без
+ `--search` — выход 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

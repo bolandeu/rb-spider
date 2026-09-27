@@ -1,8 +1,8 @@
-                                                                                                    
- Usage: spider skill [OPTIONS] COMMAND [ARGS]...                                                    
-                                                                                                    
- Инструкция spider для ИИ-агентов (SKILL.md).                                                       
-                                                                                                    
+
+ Usage: spider skill [OPTIONS] COMMAND [ARGS]...
+
+ Инструкция spider для ИИ-агентов (SKILL.md).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,29 +1,28 @@
-                                                                                                    
- Usage: spider issues [OPTIONS] [crawl_id]                                                          
-                                                                                                    
- Сводка SEO-проблем обхода: какие проверки сработали и на скольких URL.                             
-                                                                                                    
- Первый шаг анализа: сначала сводка, потом `spider urls --issue <code>` — сами                      
- URL. Сверху самое срочное: приоритет high → medium → low, внутри — по числу                        
- URL. Тип и приоритет — как в Screaming Frog: issue — ошибка, исправить;                            
- warning — проверить; opportunity — можно улучшить. Проверки считаются после                        
- обхода; после обновления spider пересчитать — `spider analyze`.                                    
-                                                                                                    
- Примеры:                                                                                           
-   spider issues                                                                                    
-   spider issues 12                                                                                 
-   spider --json issues                                                                             
-                                                                                                    
- Проверки, чьи данные при обходе не собирались (выключен `collect.*`, обход без                     
- рендеринга для группы JavaScript), не считаются «пройденными», а перечислены                       
- отдельно — «не проверялось».                                                                       
-                                                                                                    
- JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls, percent}],       
- not_checked: [{code, name, requires}]}`; `requires` — ключи настроек, которые для                  
- проверки должны быть включены, или условия `ключ=значение` / `ключ!=значение`                      
- (`crawl.render!=never`); `percent` — доля от URL сайта в обходе.                                   
- Нет такого обхода или обходов нет вообще — код выхода 2.                                           
-                                                                                                    
+
+ Usage: spider issues [OPTIONS] [crawl_id]
+
+ Сводка SEO-проблем обхода: какие проверки сработали и на скольких URL.
+
+ Первый шаг анализа: сначала сводка, потом `spider urls --issue <code>` — сами
+ URL. Сверху самое срочное: приоритет high → medium → low, внутри — по числу
+ URL. Тип и приоритет — как в Screaming Frog: issue — ошибка, исправить;
+ warning — проверить; opportunity — можно улучшить. Проверки считаются после
+ обхода; после обновления spider пересчитать — `spider analyze`.
+
+ Example: spider issues
+ Example: spider issues 12
+ Example: spider --json issues
+
+ Проверки, чьи данные при обходе не собирались (выключен `collect.*`, обход без
+ рендеринга для группы JavaScript), не считаются «пройденными», а перечислены
+ отдельно — «не проверялось».
+
+ JSON: `{crawl_id, issues: [{code, group, name, type, priority, description, urls, percent}],
+ not_checked: [{code, name, requires}]}`; `requires` — ключи настроек, которые для
+ проверки должны быть включены, или условия `ключ=значение` / `ключ!=значение`
+ (`crawl.render!=never`); `percent` — доля от URL сайта в обходе.
+ Нет такого обхода или обходов нет вообще — код выхода 2.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

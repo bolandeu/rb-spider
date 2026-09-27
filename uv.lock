@@ -939,7 +939,7 @@ wheels = [
 [[package]]
 name = "gsc"
 version = "0.3.0"
-source = { editable = "../google-search-console" }
+source = { git = "https://github.com/bolandeu/google-search-console?tag=v0.3.0#29329ca5efc604476ed2b17d587ce3d405956dd1" }
 dependencies = [
     { name = "google-oauth" },
     { name = "httpx" },
@@ -949,26 +949,6 @@ dependencies = [
     { name = "rich" },
     { name = "tomli-w" },
     { name = "typer" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "google-oauth", git = "https://github.com/bolandeu/google-oauth.git" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "packaging", specifier = ">=24.0" },
-    { name = "platformdirs", specifier = ">=4.2" },
-    { name = "pydantic", specifier = ">=2.6" },
-    { name = "rich", specifier = ">=13.7" },
-    { name = "tomli-w", specifier = ">=1.0" },
-    { name = "typer", specifier = ">=0.12" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-cov", specifier = ">=5.0" },
-    { name = "ruff", specifier = ">=0.6" },
-    { name = "ty", specifier = ">=0.0.80" },
 ]
 
 [[package]]
@@ -1136,6 +1116,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7b/6f/357efd7602486741aa73ffc0617fb310a29b588ed0fd69c2399acbb85b0c/jeepney-0.9.0.tar.gz", hash = "sha256:cf0e9e845622b81e4a28df94c40345400256ec608d0e55bb8a3feaa9163f5732", size = 106758, upload-time = "2025-02-27T18:51:01.684Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/a3/e137168c9c44d18eff0376253da9f1e9234d0239e0ee230d2fee6cea8e55/jeepney-0.9.0-py3-none-any.whl", hash = "sha256:97e5714520c16fc0a45695e5365a2e11b81ea79bba796e26f9f1d178cb182683", size = 49010, upload-time = "2025-02-27T18:51:00.104Z" },
+]
+
+[[package]]
+name = "jinja2"
+version = "3.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
 ]
 
 [[package]]
@@ -2129,8 +2121,8 @@ wheels = [
 
 [[package]]
 name = "rb-sitemap-xml"
-version = "0.1.0"
-source = { editable = "../sitemap-xml" }
+version = "0.1.1"
+source = { git = "https://github.com/bolandeu/sitemap-xml?tag=v0.1.1#0d9679efad5daded146316f3ca856be9edbe2a63" }
 dependencies = [
     { name = "defusedxml" },
     { name = "httpx" },
@@ -2143,28 +2135,8 @@ dependencies = [
     { name = "typer" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "defusedxml", specifier = ">=0.7" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "loguru", specifier = ">=0.7" },
-    { name = "packaging", specifier = ">=24.0" },
-    { name = "platformdirs", specifier = ">=4.2" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "rich", specifier = ">=13.7" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "tomli-w", specifier = ">=1.0" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.80" },
-    { name = "typer", specifier = ">=0.12" },
-]
-provides-extras = ["dev"]
-
 [[package]]
 name = "rb-spider"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -2216,6 +2188,8 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "syrupy" },
+    { name = "towncrier" },
     { name = "trustme" },
     { name = "ty" },
 ]
@@ -2228,7 +2202,7 @@ requires-dist = [
     { name = "crawlee", extras = ["playwright"], marker = "extra == 'render'", specifier = ">=1.10,<1.11" },
     { name = "datasketch", marker = "extra == 'near'", specifier = ">=2.0" },
     { name = "extruct", marker = "extra == 'structured'", specifier = ">=0.18" },
-    { name = "gsc", marker = "extra == 'gsc'", editable = "../google-search-console" },
+    { name = "gsc", marker = "extra == 'gsc'", git = "https://github.com/bolandeu/google-search-console?tag=v0.3.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "imagesize", specifier = ">=2.0.1" },
     { name = "keyring", specifier = ">=25.0" },
@@ -2238,7 +2212,7 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
-    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", editable = "../sitemap-xml" },
+    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", git = "https://github.com/bolandeu/sitemap-xml?tag=v0.1.1" },
     { name = "rich", specifier = ">=13.7" },
     { name = "selectolax", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },
@@ -2246,7 +2220,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "zstandard", specifier = ">=0.23" },
 ]
-provides-extras = ["render", "curl", "near", "structured", "xpath", "sitemaps", "postgres", "gsc"]
+provides-extras = ["curl", "gsc", "near", "postgres", "render", "sitemaps", "structured", "xpath"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2254,6 +2228,8 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
+    { name = "syrupy", specifier = ">=4.8" },
+    { name = "towncrier", specifier = ">=24.8" },
     { name = "trustme", specifier = ">=1.2.1" },
     { name = "ty", specifier = ">=0.0.80" },
 ]
@@ -2563,6 +2539,18 @@ wheels = [
 ]
 
 [[package]]
+name = "syrupy"
+version = "6.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/2c/8ffc1414d1951895d0d5b7dc83c0b079ebc48c3bf27ffbb0064646367500/syrupy-6.1.1.tar.gz", hash = "sha256:7e584a8df4ede6dd3c1c44a77f9edc46186b6767a73dea6f0083044946839a59", size = 109705, upload-time = "2026-09-13T20:25:21.599Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/b5/bf2a8a335a6a813869dd482cedbcde252f582b5afbfe50eb78ec09962800/syrupy-6.1.1-py3-none-any.whl", hash = "sha256:6ac9ac6a42d70ae44156f5f157a9563b9bb8cc96dcf9364327f330463bff889a", size = 63436, upload-time = "2026-09-13T20:25:20.294Z" },
+]
+
+[[package]]
 name = "tldextract"
 version = "5.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2584,6 +2572,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184, upload-time = "2025-01-15T12:07:24.262Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675, upload-time = "2025-01-15T12:07:22.074Z" },
+]
+
+[[package]]
+name = "towncrier"
+version = "26.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "jinja2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/d4/e85ce614bf45b1a7fe13b82cc687819c2eaac5a1dd94b84834322095fd98/towncrier-26.9.0.tar.gz", hash = "sha256:ace9031631c718cc0709107b8755e6e31350eb8acdc877af43df3177addb9a55", size = 79338, upload-time = "2026-09-04T12:57:25.341Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/88/f9340b545dafa64de053798e760515a2736fbb60092cf9aa6b146ccf3ede/towncrier-26.9.0-py3-none-any.whl", hash = "sha256:ae4d223e6aadaff98d29b7f09e58d9c9ccf4cd3b455a2d2e0486d432cd8bf660", size = 67030, upload-time = "2026-09-04T12:57:23.986Z" },
 ]
 
 [[package]]

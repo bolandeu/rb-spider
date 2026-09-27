@@ -1,69 +1,69 @@
-                                                                                                    
- Usage: spider crawl [OPTIONS] [url]                                                                
-                                                                                                    
- Обойти сайт по ссылкам (или список URL) и сохранить каждую страницу в базу обходов.                
-                                                                                                    
- Обход в ширину от стартового URL, только внутри его хоста. Редиректы не                            
- проходятся автоматически: каждый шаг цепочки сохраняется как отдельная                             
- страница, цель редиректа обходится следом. Коды 3xx/4xx/5xx — это данные,                          
- а не ошибки. robots.txt читается от имени нашего User-Agent: запрещённые URL                       
- не скачиваются, но попадают в отчёт, Crawl-delay соблюдается (режимы —                             
- ключ crawl.robots). Что обходить (include/exclude, поддомены, папка, лимиты),                      
- скорость, заголовки и прокси — ключи раздела crawl, см. `spider config show`.                      
- После обхода сразу считаются проверки с порогами из                                                
- раздела `thresholds` — смотреть в `spider issues`.                                                 
-                                                                                                    
- Настройки — слоями: встроенные → глобальный конфиг → проект → `--profile` →                        
- `--config` → переменные `SPIDER_<РАЗДЕЛ>__<КЛЮЧ>` → флаги → `--set`. Итог                          
- сохраняется вместе с обходом (`spider crawls show`), проверить заранее —                           
- `spider config show` с теми же флагами. Проект — из `.spider/config.toml`,                         
- если команда запущена в проекте, иначе хост сайта.                                                 
-                                                                                                    
- Примеры:                                                                                           
-   spider crawl https://example.com/                                                                
-   spider crawl https://example.com/ --profile googlebot --max-urls 1000                            
-   spider crawl https://example.com/ --user-agent googlebot --max-depth 3                           
-   spider crawl https://example.com/ --set 'crawl.exclude=["\?sort="]' --set crawl.max_rps=5        
-   spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с базой     
-   spider --json crawl https://example.com/                                                         
-   spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000                
-   spider crawl --list old-urls.txt              # аудит списка, например после миграции            
-   cat urls.txt | spider crawl --list - --detach                                                    
-   spider crawl https://example.com/ --set sitemaps.crawl=true   # и сравнить с sitemap             
-                                                                                                    
- Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL                       
- без перехода по ссылкам, например перед миграцией или после неё: каждый URL                        
- скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до                        
- конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из                           
- списка. Список — URL построчно, CSV или Excel (.xlsx) с колонкой url / address / loc               
- (выгрузка Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —            
- обычный обход: issues, urls, redirects, links работают.                                            
-                                                                                                    
- XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider`) читается в                                 
- начале обхода: его URL тоже обходятся, а проверки группы Sitemaps сравнивают                       
- его с найденным по ссылкам — `spider sitemaps show`.                                               
-                                                                                                    
- JS-сайт (контент, ссылки или title появляются только после скриптов) —                             
- `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и                          
- открываются в браузере, SEO-данные берутся из готового DOM, а коды ответа,                         
- редиректы и ресурсы проверяются как обычно. Нужен `rb-spider`; браузер                             
- находится сам — сборка Playwright, любой Chromium из кэша Playwright или Google                    
- Chrome (свой путь — crawl.render_browser). Вкладок — crawl.render_tabs, ожидание                   
- скриптов — crawl.render_wait_ms, окно — crawl.render_viewport. Медленнее обычного                  
- обхода в разы. `--render auto` — рендерит первые crawl.render_auto_sample страниц                  
- и продолжает, только если JS на них что-то поменял. С рендерингом работают                         
- проверки группы JavaScript (исходный HTML против отрендеренного, JS-редиректы,                     
- ошибки консоли — `spider report javascript`).                                                      
-                                                                                                    
- Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:                               
- `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.             
-                                                                                                    
- Человеку — прогресс в stderr каждые 5 с и итог. JSON:                                              
- `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —                             
- finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,                         
- detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код                       
- выхода 2; `--render always|auto` без Playwright — код 1, `RENDER_UNAVAILABLE`.                     
-                                                                                                    
+
+ Usage: spider crawl [OPTIONS] [url]
+
+ Обойти сайт по ссылкам (или список URL) и сохранить каждую страницу в базу обходов.
+
+ Обход в ширину от стартового URL, только внутри его хоста. Редиректы не
+ проходятся автоматически: каждый шаг цепочки сохраняется как отдельная
+ страница, цель редиректа обходится следом. Коды 3xx/4xx/5xx — это данные,
+ а не ошибки. robots.txt читается от имени нашего User-Agent: запрещённые URL
+ не скачиваются, но попадают в отчёт, Crawl-delay соблюдается (режимы —
+ ключ crawl.robots). Что обходить (include/exclude, поддомены, папка, лимиты),
+ скорость, заголовки и прокси — ключи раздела crawl, см. `spider config show`.
+ После обхода сразу считаются проверки с порогами из
+ раздела `thresholds` — смотреть в `spider issues`.
+
+ Настройки — слоями: встроенные → глобальный конфиг → проект → `--profile` →
+ `--config` → переменные `SPIDER_<РАЗДЕЛ>__<КЛЮЧ>` → флаги → `--set`. Итог
+ сохраняется вместе с обходом (`spider crawls show`), проверить заранее —
+ `spider config show` с теми же флагами. Проект — из `.spider/config.toml`,
+ если команда запущена в проекте, иначе хост сайта.
+
+ Example: spider crawl https://example.com/
+ Example: spider crawl https://example.com/ --profile googlebot --max-urls 1000
+ Example: spider crawl https://example.com/ --user-agent googlebot --max-depth 3
+ Example: spider crawl https://example.com/ --set 'crawl.exclude=["\?sort="]' --set crawl.max_rps=5
+ Example: spider crawl https://example.com/ --store-html   # HTML — в spider-html.sqlite рядом с
+ базой
+ Example: spider --json crawl https://example.com/
+ Example: spider crawl https://spa.example/ --render always --set crawl.render_wait_ms=1000
+ Example: spider crawl --list old-urls.txt              # аудит списка, например после миграции
+ Example: cat urls.txt | spider crawl --list - --detach
+ Example: spider crawl https://example.com/ --set sitemaps.crawl=true   # и сравнить с sitemap
+
+ Режим списка (`--list`, как List mode в Screaming Frog) — аудит заданных URL
+ без перехода по ссылкам, например перед миграцией или после неё: каждый URL
+ скачивается (глубина 0), редиректы (3xx, meta и HTTP Refresh) проходятся до
+ конца, на какой бы хост они ни вели. «Свой сайт» для проверок — хосты из
+ списка. Список — URL построчно, CSV или Excel (.xlsx) с колонкой url / address / loc
+ (выгрузка Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —
+ обычный обход: issues, urls, redirects, links работают.
+
+ XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider`) читается в
+ начале обхода: его URL тоже обходятся, а проверки группы Sitemaps сравнивают
+ его с найденным по ссылкам — `spider sitemaps show`.
+
+ JS-сайт (контент, ссылки или title появляются только после скриптов) —
+ `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и
+ открываются в браузере, SEO-данные берутся из готового DOM, а коды ответа,
+ редиректы и ресурсы проверяются как обычно. Нужен `rb-spider`; браузер
+ находится сам — сборка Playwright, любой Chromium из кэша Playwright или Google
+ Chrome (свой путь — crawl.render_browser). Вкладок — crawl.render_tabs, ожидание
+ скриптов — crawl.render_wait_ms, окно — crawl.render_viewport. Медленнее обычного
+ обхода в разы. `--render auto` — рендерит первые crawl.render_auto_sample страниц
+ и продолжает, только если JS на них что-то поменял. С рендерингом работают
+ проверки группы JavaScript (исходный HTML против отрендеренного, JS-редиректы,
+ ошибки консоли — `spider report javascript`).
+
+ Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
+ `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
+
+ Человеку — прогресс в stderr каждые 5 с и итог. JSON:
+ `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
+ finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
+ detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код
+ выхода 2; `--render always|auto` без Playwright — код 1, `RENDER_UNAVAILABLE`.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   url      <str>  Стартовый URL, например https://example.com/. Обходится только его хост. Не    │
 │                   нужен с --list.                                                                │

@@ -1,18 +1,17 @@
-                                                                                                    
- Usage: spider init [OPTIONS]                                                                       
-                                                                                                    
- Создать проект spider в каталоге: файл `.spider/config.toml`.                                      
-                                                                                                    
- Проект хранит настройки и данные обходов одного или нескольких сайтов.                             
- Каталог — текущий или заданный через `--project`. Повторный вызов ничего                           
- не меняет (`already_initialized: true`), `--force` пересоздаёт конфиг.                             
-                                                                                                    
- Примеры:                                                                                           
-   spider init                                                                                      
-   spider --project ~/audits/shop init --name shop                                                  
-                                                                                                    
- JSON: `{project, path, already_initialized}`.                                                      
-                                                                                                    
+
+ Usage: spider init [OPTIONS]
+
+ Создать проект spider в каталоге: файл `.spider/config.toml`.
+
+ Проект хранит настройки и данные обходов одного или нескольких сайтов.
+ Каталог — текущий или заданный через `--project`. Повторный вызов ничего
+ не меняет (`already_initialized: true`), `--force` пересоздаёт конфиг.
+
+ Example: spider init
+ Example: spider --project ~/audits/shop init --name shop
+
+ JSON: `{project, path, already_initialized}`.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --name           <str>  Имя проекта; по умолчанию — имя каталога.                                │
 │ --force                 Перезаписать конфиг уже инициализированного проекта.                     │
