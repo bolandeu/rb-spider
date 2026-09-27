@@ -52,8 +52,8 @@ class Rule:
 
 # Rules look at the site's own URLs unless they say otherwise; on-page checks at the site's HTML pages
 # that answered 200 and were read (not only checked); duplicates among indexable ones (thresholds.duplicates_indexable_only).
-INTERNAL = "NOT coalesce(external, 0)"
-EXTERNAL = "coalesce(external, 0)"
+INTERNAL = "NOT coalesce(external, FALSE)"
+EXTERNAL = "coalesce(external, FALSE)"
 RENDERED = "crawl.render!=never"  # the JavaScript rules: pages were opened in a browser
 HTML_OK = f"{INTERNAL} AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 # on-page and content checks: HTML_OK, and indexable too while thresholds.issues_indexable_only
@@ -467,7 +467,7 @@ def _soft_404(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings)
     patterns = [re.compile(p, re.IGNORECASE) for p in thresholds.soft_404_patterns]
     if not patterns:
         return
-    rows = conn.execution_options(yield_per=1000).execute(
+    rows = storage.streamed(conn, 1000).execute(
         sa.text(f"SELECT url, title, h1 FROM pages WHERE crawl_id = :crawl_id AND {ONPAGE} ORDER BY url"),  # noqa: S608
         {"crawl_id": crawl_id, "issues_indexable_only": thresholds.issues_indexable_only},
     )
@@ -523,7 +523,7 @@ _LOCALHOST = " OR ".join(
 )
 
 
-def _by_target(detail: str, where: str, having: str = "1") -> str:
+def _by_target(detail: str, where: str, having: str = "TRUE") -> str:
     """Link rows grouped by target: aggregated over URL ids (index order, no string sort), reported by URL."""
     return (
         f"SELECT u.url, g.detail FROM (SELECT target_id, {detail} AS detail FROM link_rows"  # noqa: S608 — fixed rule text
@@ -577,7 +577,7 @@ def _link_rules() -> list[Rule]:
         r("links_non_indexable_inlinks_only", "Non-Indexable Page Inlinks Only", "warning", "high",
           "На индексируемую страницу ссылаются только неиндексируемые: поисковик может её не найти.",
           _links_sql(
-              "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, 0)"
+              "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
               " AND t.indexable"
               " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
               "   AND l.kind = 'hyperlink')"
@@ -624,7 +624,7 @@ def _link_rules() -> list[Rule]:
         Rule("canonical_unlinked", "Canonicals", "Canonicals: Unlinked", "warning", "medium",
              "URL найден только через canonical: обычные ссылки на него не ведут.",
              _links_sql(
-                 "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, 0)"
+                 "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
                  " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
                  "   AND l.kind = 'canonical')"
                  " AND NOT EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
@@ -846,7 +846,7 @@ def _hreflang_rules() -> list[Rule]:
           "URL найден только через hreflang: обычные ссылки на него не ведут.",
           _links_sql("SELECT u.url, NULL FROM (SELECT DISTINCT target_id FROM link_rows WHERE crawl_id = :crawl_id"
                      " AND kind = 'hreflang') h JOIN urls u ON u.id = h.target_id"
-                     " JOIN pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, 0)"
+                     " JOIN pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, FALSE)"
                      " WHERE NOT EXISTS (SELECT 1 FROM link_rows l WHERE l.crawl_id = :crawl_id"
                      " AND l.target_id = h.target_id AND l.kind = 'hyperlink') ORDER BY u.url"),
           (STORE_HREFLANG, STORE_INTERNAL)),
@@ -903,7 +903,7 @@ def _pagination_rules() -> list[Rule]:
           "Несколько разных rel=next или rel=prev на странице: поисковик не поймёт, какая следующая.",
           _links_sql("SELECT s.url, group_concat(g.kind || ' ×' || g.n, ', ') FROM (SELECT source_id, kind,"
                      " count(DISTINCT target_id) AS n FROM link_rows l WHERE crawl_id = :crawl_id"
-                     " AND l.kind IN ('next', 'prev') GROUP BY source_id, kind HAVING n > 1) g"
+                     " AND l.kind IN ('next', 'prev') GROUP BY source_id, kind HAVING count(DISTINCT target_id) > 1) g"
                      " JOIN urls s ON s.id = g.source_id GROUP BY s.url ORDER BY s.url")),
         r("pagination_loop", "Pagination Loop", "issue", "low",
           "Цепочка rel=next (или rel=prev) возвращается на уже пройденную страницу.", _pagination_loops),
@@ -1020,7 +1020,7 @@ def _sitemap_rules() -> list[Rule]:
           "В sitemap неиндексируемый URL (редирект, ошибка, noindex, canonical на другой): sitemap должен "
           "перечислять только то, что стоит индексировать.",
           "SELECT s.url, min(p.indexability_status) FROM sitemap_urls s JOIN pages p ON p.crawl_id = s.crawl_id"
-          " AND p.url = s.url WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, 0) AND NOT p.indexable"
+          " AND p.url = s.url WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE) AND NOT p.indexable"
           " GROUP BY s.url ORDER BY s.url"),
         r("sitemaps_multiple", "URLs In Multiple Sitemaps", "warning", "low",
           "URL указан в нескольких файлах sitemap.",
@@ -1165,7 +1165,7 @@ def _image_rules() -> list[Rule]:
         return Rule(code, "Images", f"Images: {name}", kind, priority, description, _links_sql(query), requires)
 
     def blocked(code, name, priority, external) -> Rule:
-        where = "coalesce(p.external, 0)" if external else "NOT coalesce(p.external, 0)"
+        where = "coalesce(p.external, FALSE)" if external else "NOT coalesce(p.external, FALSE)"
         return Rule(code, "Response Codes", name, "warning", priority,
                     ("Внешний" if external else "Внутренний") + " ресурс (картинка, CSS, JS…) недоступен: "
                     "запрещён robots.txt, не отвечает или отдаёт ошибку — страница может отображаться неполно.",
@@ -1275,7 +1275,8 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
     with engine.begin() as conn:
         # Planner statistics: without them SQLite may scan all of a crawl's links for every page instead of
         # finding the URL's id first (minutes instead of seconds). Sampled, so quick however big the database.
-        conn.exec_driver_sql("PRAGMA analysis_limit = 1000")
+        if storage.is_sqlite(conn):
+            conn.exec_driver_sql("PRAGMA analysis_limit = 1000")
         conn.exec_driver_sql("ANALYZE")
         steps: list[tuple[str, Callable[[], object]]] = [
             ("indexability", lambda: compute_indexability(conn, crawl_id, thresholds)),

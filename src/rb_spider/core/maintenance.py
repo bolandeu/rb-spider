@@ -150,8 +150,8 @@ def delete_project(engine: sa.Engine, name: str) -> tuple[int, int]:
 
 @dataclass
 class DbInfo:
-    path: str
-    size_bytes: int  # the database file with its WAL
+    path: str  # the SQLite file, or the PostgreSQL URL without its password
+    size_bytes: int  # the database file with its WAL (PostgreSQL: pg_database_size)
     html_path: str | None
     html_size_bytes: int
     free_bytes: int  # unused pages inside the file: what `vacuum` would give back
@@ -164,6 +164,8 @@ class DbInfo:
     pages: int
     links: int
     issues: int
+    engine: str = "sqlite"  # sqlite | postgresql
+    server_version: str | None = None  # PostgreSQL's
 
 
 def _file_size(path: Path) -> int:
@@ -191,27 +193,38 @@ def db_info(engine: sa.Engine) -> DbInfo:
             source = next((t for t in {"links": ("link_rows", "links")}.get(name, (name,)) if t in tables), None)
             if source is not None:
                 counts[name] = conn.exec_driver_sql(f"SELECT count(*) FROM {source}").scalar_one()  # noqa: S608 — fixed names
-        free = conn.exec_driver_sql("PRAGMA freelist_count").scalar_one()
-        page_size = conn.exec_driver_sql("PRAGMA page_size").scalar_one()
+        if storage.is_sqlite(conn):
+            free = conn.exec_driver_sql("PRAGMA freelist_count").scalar_one()
+            free *= conn.exec_driver_sql("PRAGMA page_size").scalar_one()
+            size, server = _file_size(path), None
+        else:  # PostgreSQL: its space is its own business; VACUUM reclaims what deleted crawls leave
+            free = 0
+            size = conn.exec_driver_sql("SELECT pg_database_size(current_database())").scalar_one()
+            server = conn.exec_driver_sql("SHOW server_version").scalar_one()
     html = storage.html_db_path()
     return DbInfo(
-        path=str(path),
-        size_bytes=_file_size(path),
+        path=str(path) if storage.is_sqlite(engine) else engine.url.render_as_string(hide_password=True),
+        size_bytes=size,
         html_path=str(html) if html.is_file() else None,
         html_size_bytes=_file_size(html) if html.is_file() else 0,
-        free_bytes=free * page_size,
+        free_bytes=free,
         sqlite_version=sqlite3.sqlite_version,
         schema_revision=current,
         schema_head=head,
         pending_migrations=pending,
         **counts,
+        engine=engine.dialect.name,
+        server_version=server,
     )
 
 
 def migrate(engine: sa.Engine) -> list[str]:
     """Apply pending migrations; returns the revisions applied (every command does this on its own too)."""
     _, _, pending = _revisions(engine)
-    if pending:
+    if pending and not storage.is_sqlite(engine):  # a new PostgreSQL database gets the schema at once
+        with engine.begin() as connection:
+            storage.prepare_remote(connection)
+    elif pending:
         from alembic import command
 
         config = storage.alembic_config()
@@ -222,20 +235,36 @@ def migrate(engine: sa.Engine) -> list[str]:
 
 
 def vacuum(engine: sa.Engine) -> tuple[int, int]:
-    """Rewrite the database (and the stored-HTML one) without free pages; returns total bytes (before, after)."""
-    main = Path(engine.url.database or "")
+    """Rewrite the database (and the stored-HTML one) without free pages; returns total bytes (before, after).
+
+    PostgreSQL: VACUUM FULL — it rewrites the tables and locks them meanwhile."""
     html = storage.html_db_path()
+    if not storage.is_sqlite(engine):
+        size = "SELECT pg_database_size(current_database())"
+        html_before = _file_size(html) if html.is_file() else 0
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            before = conn.exec_driver_sql(size).scalar_one() + html_before
+            conn.exec_driver_sql("VACUUM FULL")
+            after_db = conn.exec_driver_sql(size).scalar_one()
+        if html.is_file():
+            _vacuum_file(html)
+        return before, after_db + (_file_size(html) if html.is_file() else 0)
+    main = Path(engine.url.database or "")
     files = [main, *([html] if html.is_file() else [])]
     before = sum(_file_size(f) for f in files)
     for path in files:
-        conn = sqlite3.connect(path)
-        try:
-            conn.execute("VACUUM")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except sqlite3.OperationalError as exc:  # "database is locked": a crawl is writing
-            raise InvalidArguments(
-                f"Cannot vacuum {path.name} while it is in use ({exc}) — wait for crawls to end."
-            ) from exc
-        finally:
-            conn.close()
+        _vacuum_file(path)
     return before, sum(_file_size(f) for f in files)
+
+
+def _vacuum_file(path: Path) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("VACUUM")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except sqlite3.OperationalError as exc:  # "database is locked": a crawl is writing
+        raise InvalidArguments(
+            f"Cannot vacuum {path.name} while it is in use ({exc}) — wait for crawls to end."
+        ) from exc
+    finally:
+        conn.close()

@@ -11,7 +11,7 @@ from .errors import InvalidArguments
 from .settings import Settings
 
 HTML_PAGES = (
-    "SELECT url FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0) AND parsed AND status_code = 200"
+    "SELECT url FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200"
     " AND content_type LIKE '%html%'"
 )
 
@@ -39,7 +39,7 @@ def rows(
     an extraction — each value (`n` — its order on the page)."""
     if without and kind != "search":
         raise InvalidArguments("--without lists pages a search found nothing on: use it with --search.")
-    params = {"crawl_id": crawl_id, "kind": kind, "name": name, "limit": -1 if limit is None else limit}
+    params = {"crawl_id": crawl_id, "kind": kind, "name": name, "limit": storage.NO_LIMIT if limit is None else limit}
     if without:
         query = (f"SELECT url FROM ({HTML_PAGES}) h WHERE NOT EXISTS (SELECT 1 FROM custom_values c"  # noqa: S608
                  " WHERE c.crawl_id = :crawl_id AND c.kind = :kind AND c.name = :name AND c.url = h.url)")  # fmt: skip

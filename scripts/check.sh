@@ -5,11 +5,12 @@
 #   --py312  also the tests on the oldest supported Python (3.12), in a throwaway environment
 #   --linux  also the tests on Linux (Docker), Python 3.12 and 3.14; `scripts/release.py` runs it.
 #            JS rendering is left to the macOS run: a browser in the container costs hundreds of MB a run.
+#   --pg     also the tests against PostgreSQL (SPIDER_DB_URL, #41): a throwaway postgres container (Docker).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 uv lock --check
-uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath
+uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -19,7 +20,7 @@ for flag in "$@"; do
   case "$flag" in
     --py312)
       env312="$(mktemp -d)"
-      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath pytest -q -p no:cacheprovider
+      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath --extra postgres pytest -q -p no:cacheprovider
       rm -rf "$env312"
       ;;
     --linux)
@@ -37,8 +38,19 @@ for flag in "$@"; do
           sh -c 'mkdir /work && cd /work && tar -xf - 2>/dev/null && cd spider && uv sync --quiet --frozen && uv run pytest -q -p no:cacheprovider'
       done
       ;;
+    --pg)
+      # data on tmpfs: nothing stays on disk; the container goes away with the run
+      name="spider-check-pg-$$"
+      docker run -d --rm --name "$name" -e POSTGRES_USER=pg -e POSTGRES_PASSWORD=pg -p 127.0.0.1::5432 \
+        --tmpfs /var/lib/postgresql/data postgres:17-alpine >/dev/null
+      trap 'docker stop "$name" >/dev/null 2>&1 || true' EXIT
+      port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
+      until docker exec "$name" pg_isready -U pg >/dev/null 2>&1; do sleep 0.5; done
+      echo "--- PostgreSQL"
+      SPIDER_TEST_PG="postgresql://pg:pg@127.0.0.1:$port/pg" uv run pytest -q --no-cov -p no:cacheprovider
+      ;;
     *)
-      echo "check.sh: unknown flag $flag (--py312, --linux)" >&2
+      echo "check.sh: unknown flag $flag (--py312, --linux, --pg)" >&2
       exit 2
       ;;
   esac

@@ -14,6 +14,7 @@ from rb_spider.core import crawl as crawl_service
 from rb_spider.core.crawl import crawl_site
 
 from . import polygon
+from .conftest import use_db
 
 CHANGES = {
     "/a": (
@@ -78,7 +79,7 @@ def test_details(base_url: str, two_crawls) -> None:
 
 def test_cli_compare(two_crawls, monkeypatch) -> None:
     engine, old, new = two_crawls
-    monkeypatch.setenv("SPIDER_DB_PATH", str(engine.url.database))
+    use_db(monkeypatch, engine)
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "compare", str(old), str(new), "--set", 'compare.fields=["title"]'])
     assert result.exit_code == 0

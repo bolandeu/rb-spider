@@ -16,6 +16,7 @@ from rb_spider.core.crawl import AutoRender, crawl_site
 from rb_spider.core.settings import CrawlSettings, Settings
 
 from . import polygon
+from .conftest import db_env
 
 needs_playwright = pytest.mark.skipif(
     importlib.util.find_spec("playwright") is None, reason="the `render` extra is not installed"
@@ -106,7 +107,7 @@ def test_console_and_blocked_resources_are_reported(base_url: str, rendered) -> 
 
     def report(*args: str) -> dict:
         result = CliRunner().invoke(app, ["--json", "report", "javascript", str(crawl_id), *args],
-                                    env={"SPIDER_DB_PATH": str(engine.url.database)})  # fmt: skip
+                                    env=db_env(engine))  # fmt: skip
         assert result.exit_code == 0, result.stdout
         return json.loads(result.stdout)
 
@@ -181,7 +182,7 @@ def test_incorrectly_sized_images_need_images_loaded(base_url: str, engine) -> N
     ]
     runner = CliRunner()
     result = runner.invoke(app, ["--json", "url", f"{base_url}/js/images", "--crawl", str(crawl_id)],
-                           env={"SPIDER_DB_PATH": str(engine.url.database)})  # fmt: skip
+                           env=db_env(engine))  # fmt: skip
     [image] = [r for r in json.loads(result.stdout)["resources"] if r["target"].endswith("/img/real.png")]
     assert (image["real_width"], image["real_height"], image["display_width"], image["display_height"]) == (
         800, 600, 100, 75)  # fmt: skip

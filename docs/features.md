@@ -811,7 +811,8 @@
 - [x] `MVP` **`--store-html`** — хранить HTML (zstd) в отдельном SQLite-файле; по умолчанию только md5
 - [x] `MVP` **Статус «не проверялось»** — проверка без нужных данных (сбор выключен) не выдаёт ложное «ок»
 - [x] `MVP` **Переключаемый HTTP-клиент** → `crawl.http_client = "impit" | "curl"` (curl — extra `rb-spider[curl]`)
-- [ ] `v2` **Удалённые БД Postgres / MySQL** — DSN в keychain
+- [x] `v2` **Удалённая БД PostgreSQL** (#41) — `SPIDER_DB_URL`, пароль в keychain (`spider auth login --provider database`), extra `rb-spider[postgres]`
+- [ ] `backlog` **Удалённая БД MySQL** — отдельная схема: индекс по длинным URL, `||`, `CAST AS TEXT` (см. spec.md)
 
 ### Конфиг и профили
 

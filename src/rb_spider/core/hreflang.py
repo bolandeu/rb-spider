@@ -12,6 +12,8 @@ from typing import Literal, get_args
 
 import sqlalchemy as sa
 
+from . import storage
+
 # ISO 639-1 languages and ISO 3166-1 alpha-2 regions (pycountry 26.2.16). Google reads hreflang as
 # language[-region]; "UK" is not a region (GB is), "iw"/"in"/"ji" are retired codes.
 _LANGUAGE_TABLE = (
@@ -64,9 +66,9 @@ _ROWS = """
     WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang'
 """
 FILTERS = {
-    "all": "1",
+    "all": "TRUE",
     "non_200": "p.url IS NOT NULL AND (p.status_code <> 200 OR p.blocked IS NOT NULL)",
-    "unlinked": "NOT coalesce(p.external, 1) AND NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id"
+    "unlinked": "NOT coalesce(p.external, TRUE) AND NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id"
     " AND h.target_id = l.target_id AND h.kind = 'hyperlink')",
     "missing_return": "l.source_id <> l.target_id AND p.parsed AND p.status_code = 200 AND NOT EXISTS (SELECT 1"
     " FROM link_rows r WHERE r.crawl_id = l.crawl_id AND r.kind = 'hreflang' AND r.source_id = l.target_id"
@@ -84,7 +86,7 @@ FILTERS = {
 _MISSING = """
     SELECT p.url AS source, NULL AS hreflang, NULL AS target, NULL AS target_status, NULL AS target_blocked,
            NULL AS target_indexability, NULL AS return_link
-    FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, 0) AND p.parsed AND p.status_code = 200
+    FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE) AND p.parsed AND p.status_code = 200
     AND p.content_type LIKE '%html%' AND NOT EXISTS (SELECT 1 FROM urls u JOIN link_rows l ON l.crawl_id = u.crawl_id
         AND l.source_id = u.id AND l.kind = 'hreflang' WHERE u.crawl_id = p.crawl_id AND u.url = p.url)
 """
@@ -101,7 +103,7 @@ def report(engine: sa.Engine, crawl_id: int, only: str = "all", limit: int | Non
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), {"crawl_id": crawl_id}).scalar_one()  # noqa: S608 — fixed text
         rows = conn.execute(
             sa.text(f"{query} ORDER BY source, target LIMIT :limit"),
-            {"crawl_id": crawl_id, "limit": -1 if limit is None else limit},
+            {"crawl_id": crawl_id, "limit": storage.NO_LIMIT if limit is None else limit},
         ).mappings()
         found = [
             {**row, "return_link": None if row["return_link"] is None else bool(row["return_link"])} for row in rows
@@ -113,7 +115,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     """HTML pages of the site with / without hreflang — Screaming Frog's Contains Hreflang / Missing."""
     total = conn.execute(
         sa.text(
-            "SELECT count(*) FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0) AND parsed"
+            "SELECT count(*) FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND parsed"
             " AND status_code = 200 AND content_type LIKE '%html%'"
         ),
         {"crawl_id": crawl_id},

@@ -63,7 +63,7 @@ class CrawlInfo:
             .order_by(pages.c.url)
         )
         with self._engine.connect() as conn:
-            for (url,) in conn.execution_options(yield_per=BATCH).execute(query):
+            for (url,) in storage.streamed(conn, BATCH).execute(query):
                 yield url
 
 
@@ -130,25 +130,31 @@ def _store(engine: sa.Engine, crawl: CrawlInfo, plugin: Plugin) -> int:
     if enricher is None:
         raise ProviderError(plugin.name, f"cannot be loaded ({plugin.error})")
     metrics = storage.url_metrics
-    insert = sa.insert(metrics).prefix_with("OR REPLACE")
     count = 0
     with engine.begin() as conn:
+        insert = storage.insert_or_replace(conn, metrics)
         conn.execute(sa.delete(metrics).where(metrics.c.crawl_id == crawl.crawl_id, metrics.c.source == plugin.name))
-        batch: list[dict] = []
+        batch: dict[tuple[str, str], dict] = {}
         try:
             for metric in enricher.enrich(crawl):
                 url, name, value, text = _checked(metric, plugin.name)
-                batch.append({"crawl_id": crawl.crawl_id, "url": url, "source": plugin.name, "name": name,
-                              "value": value, "text": text})  # fmt: skip
+                batch[(url, name)] = {
+                    "crawl_id": crawl.crawl_id,
+                    "url": url,
+                    "source": plugin.name,
+                    "name": name,
+                    "value": value,
+                    "text": text,
+                }  # the same metric twice: the last one wins
                 if len(batch) >= BATCH:
-                    conn.execute(insert, batch)
-                    count, batch = count + len(batch), []
+                    conn.execute(insert, list(batch.values()))
+                    count, batch = count + len(batch), {}
         except ProviderError:
             raise
         except Exception as exc:  # the plugin's own failure (network, API, bug): name it, keep old metrics
             raise ProviderError(plugin.name, f"{type(exc).__name__}: {exc}") from exc
         if batch:
-            conn.execute(insert, batch)
+            conn.execute(insert, list(batch.values()))
             count += len(batch)
     log.debug("enricher %s stored %d metrics", plugin.name, count)
     return count

@@ -37,7 +37,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 
 | Что | Где | В git? |
 |---|---|---|
-| База обходов (все проекты) | `platformdirs.user_data_dir("spider")/spider.sqlite` — на macOS `~/Library/Application Support/spider/`; переопределяется `SPIDER_DB_PATH` | нет |
+| База обходов (все проекты) | `platformdirs.user_data_dir("spider")/spider.sqlite` — на macOS `~/Library/Application Support/spider/`; переопределяется `SPIDER_DB_PATH`; `SPIDER_DB_URL` — PostgreSQL (#41) | нет |
 | Сжатый HTML (`--store-html`) | рядом с базой: `spider-html.sqlite`, zstd (библиотека `zstandard`; встроенный `compression.zstd` есть только с Python 3.14) — на стенде сжатие ~5× | нет |
 | Конфиг проекта и профили | `.spider/` в каталоге проекта (`config.toml`, `profiles/*.toml`) | да |
 | Секреты (прокси, DSN) | системное хранилище ключей или `SPIDER_<PROVIDER>_<FIELD>` | никогда |
@@ -75,7 +75,15 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 
 По сети скорость растёт линейно с параллельностью (задержка ответа не меняется) — предел задаёт сервер сайта, а не краулер. Разбор HTML selectolax — ~0,55 мс на страницу.
 
-Удалённые БД (Postgres/MySQL) — v2; DSN хранится в keychain.
+**PostgreSQL (#41).** `SPIDER_DB_URL=postgresql://пользователь@хост/база` — обходы в PostgreSQL (extra `rb-spider[postgres]`, драйвер psycopg 3); пароль — в keychain (`spider auth login --provider database`) или в самом URL. Не вся строка DSN в keychain, а только пароль: адрес базы не секрет, его удобно видеть в `doctor` и `db info`, а выбор базы переменной окружения не заставляет каждую команду ходить в keychain. Решения:
+
+- SQL проверок и отчётов один на обе СУБД: в PostgreSQL при создании схемы добавляются функции, которые есть в SQLite (`casefold`, `instr`, `group_concat`, `round(double, int)`, `sum/min/max` по boolean), и колонка `rowid` там, где по ней идёт постраничное чтение; `x GLOB 'префикс*'` (в SQLite ради индекса) переписывается в `LIKE` обработчиком запросов движка PostgreSQL. Что так не закрыть — написано в общем подмножестве: `coalesce(флаг, FALSE)`, `TRUE` вместо `1`, `IS DISTINCT FROM`, HAVING без псевдонимов, `NO_LIMIT` вместо `LIMIT -1`, upsert через `storage.insert_or_replace`.
+- Запись пачками та же — одна команда на пачку: в SQLite `json_each`, в PostgreSQL `json_array_elements` с приведением типов и `ON CONFLICT`.
+- Новая база PostgreSQL получает схему целиком (`metadata.create_all` + представление `links`) и помечается последней ревизией; история миграций SQLite на ней не проигрывается. Следующие миграции обязаны работать на обеих СУБД.
+- `spider query` в PostgreSQL — транзакция только для чтения и подготовленный запрос (несколько команд через `;` не проходят); для полной гарантии — пользователь с правом только на SELECT.
+- Сохранённый HTML остаётся локальным файлом SQLite (по файлу на имя удалённой базы) — это кэш для выгрузок, не данные обхода.
+- Тесты: весь набор гоняется и на PostgreSQL (`SPIDER_TEST_PG`, `scripts/check.sh --pg` — одноразовый контейнер), каждая проверка — на той же базе-ловушке.
+- **MySQL — в backlog**: уникальный индекс по URL упирается в предел ключа (3072 байта, URL бывают длиннее), `||` там логическое ИЛИ, нет `CAST(… AS TEXT)` и `FILTER`, у TEXT-колонок нет индексов без длины префикса — это отдельная схема, а не прослойка.
 
 ---
 

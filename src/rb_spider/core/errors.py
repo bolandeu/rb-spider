@@ -198,3 +198,20 @@ class XPathUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class RemoteDatabaseUnavailable(CliError):
+    """`SPIDER_DB_URL` that can't be used: not PostgreSQL, no driver, no password, or the server doesn't answer."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            "REMOTE_DATABASE_UNAVAILABLE",
+            message,
+            action=(
+                "SPIDER_DB_URL — postgresql://user@host:5432/db; the password goes to the keychain: spider auth "
+                f'login --provider database. The driver: uv tool install --reinstall "{DIST_NAME}[postgres] @ '
+                'git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra postgres). '
+                "Without SPIDER_DB_URL crawls go to the local SQLite file."
+            ),
+            exit_code=1,
+        )

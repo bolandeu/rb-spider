@@ -17,7 +17,7 @@ from typing import Literal, get_args
 
 import sqlalchemy as sa
 
-from . import issues
+from . import issues, storage
 from .errors import InvalidArguments
 
 # field -> SQL expression over a pages row (alias p)
@@ -42,7 +42,7 @@ FIELDS = {
 }
 Status = Literal["added", "new", "removed", "missing"]
 STATUSES: tuple[str, ...] = get_args(Status)
-_OWN = "NOT coalesce(external, 0)"
+_OWN = "NOT coalesce(external, FALSE)"
 
 
 def _urls(crawl: str) -> str:
@@ -95,9 +95,9 @@ def _changed(field: str) -> str:
     expression = FIELDS[field]
     return (
         f"SELECT n.url, {expression.replace('p.', 'o.')} AS old, {expression.replace('p.', 'n.')} AS new"  # noqa: S608
-        f" FROM pages n JOIN pages o ON o.crawl_id = :old AND o.url = n.url AND NOT coalesce(o.external, 0)"
-        f" WHERE n.crawl_id = :new AND NOT coalesce(n.external, 0) AND n.parsed AND o.parsed"
-        f" AND {expression.replace('p.', 'o.')} IS NOT {expression.replace('p.', 'n.')}"
+        f" FROM pages n JOIN pages o ON o.crawl_id = :old AND o.url = n.url AND NOT coalesce(o.external, FALSE)"
+        f" WHERE n.crawl_id = :new AND NOT coalesce(n.external, FALSE) AND n.parsed AND o.parsed"
+        f" AND {expression.replace('p.', 'o.')} IS DISTINCT FROM {expression.replace('p.', 'n.')}"
     )
 
 
@@ -138,7 +138,7 @@ def details(
         query = f"SELECT url FROM ({_urls('old')}) WHERE url NOT IN ({_urls('new')})"  # noqa: S608
     else:
         raise InvalidArguments("--urls: new or missing.")
-    params = {"old": old, "new": new, "code": issue, "limit": -1 if limit is None else limit}
+    params = {"old": old, "new": new, "code": issue, "limit": storage.NO_LIMIT if limit is None else limit}
     with engine.connect() as conn:
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), params).scalar_one()  # noqa: S608
         rows = conn.execute(sa.text(f"SELECT * FROM ({query}) ORDER BY url LIMIT :limit"), params).mappings()  # noqa: S608

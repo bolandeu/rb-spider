@@ -15,21 +15,21 @@ from rb_spider.core import storage
 from rb_spider.core.crawl import crawl_site
 
 from . import polygon
+from .conftest import db_env, use_db
 
 
 @pytest.fixture(scope="module")
 def _crawl_db(tmp_path_factory):
     """One full polygon crawl in a database of its own, shared by the tests here: (base_url, crawl_id, db path)."""
-    path = tmp_path_factory.mktemp("export-db") / "spider.sqlite"
-    with polygon.serve() as base_url, storage.database(path) as engine:
-        yield base_url, crawl_site(engine, f"{base_url}/", "polygon").crawl_id, path
+    with polygon.serve() as base_url, storage.database() as engine:
+        yield base_url, crawl_site(engine, f"{base_url}/", "polygon").crawl_id, db_env(engine)
 
 
 @pytest.fixture
 def crawled(_crawl_db, monkeypatch):
     """(base_url, crawl_id); the commands under test read the shared crawl's database."""
-    base_url, crawl_id, path = _crawl_db
-    monkeypatch.setenv("SPIDER_DB_PATH", str(path))
+    base_url, crawl_id, env = _crawl_db
+    use_db(monkeypatch, env=env)
     return base_url, crawl_id
 
 
@@ -148,6 +148,7 @@ def test_query_reads(crawled) -> None:
         "UPDATE pages SET title = 'x'",
         "DROP TABLE pages",
         "ATTACH DATABASE 'x.sqlite' AS x",
+        "COMMIT; DELETE FROM pages",  # a second statement never runs (PostgreSQL: not past a read-only transaction)
         "PRAGMA journal_mode = DELETE",
         "SELECT * FROM nope",
         "not sql",

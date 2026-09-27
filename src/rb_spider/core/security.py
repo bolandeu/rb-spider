@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 
+from . import storage
+
 RESOURCES = "('image', 'css', 'js', 'media', 'iframe')"
 # http:// URLs of the crawl, when it has https:// pages to link to them from (GLOB: case-sensitive, uses the index)
 HTTP_TARGETS = (
@@ -35,7 +37,7 @@ def insecure_content(engine: sa.Engine, crawl_id: int, limit: int | None = None)
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), {"crawl_id": crawl_id}).scalar_one()  # noqa: S608
         rows = conn.execute(
             sa.text(f"{query} ORDER BY source, target LIMIT :limit"),
-            {"crawl_id": crawl_id, "limit": -1 if limit is None else limit},
+            {"crawl_id": crawl_id, "limit": storage.NO_LIMIT if limit is None else limit},
         ).mappings()
         return total, [dict(row) for row in rows]
 
@@ -45,7 +47,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     rows = conn.execute(
         sa.text(
             "SELECT substr(url, 1, instr(url, ':') - 1) AS scheme, count(*) FROM pages WHERE crawl_id = :crawl_id"
-            " AND NOT coalesce(external, 0) GROUP BY scheme ORDER BY scheme"
+            " AND NOT coalesce(external, FALSE) GROUP BY scheme ORDER BY scheme"
         ),
         {"crawl_id": crawl_id},
     )

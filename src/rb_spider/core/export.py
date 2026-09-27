@@ -15,6 +15,7 @@ import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 
@@ -40,10 +41,10 @@ LINK_ISSUES = {
     "images_missing_alt_text": "l.kind = 'image' AND l.alt_attr AND trim(coalesce(l.alt, '')) = ''",
     "images_missing_alt_attribute": "l.kind = 'image' AND NOT l.alt_attr",
     "images_missing_size": "l.kind = 'image' AND NOT l.sized",
-    "internal_client_error": "t.status_code BETWEEN 400 AND 499 AND NOT coalesce(t.external, 0)",
-    "internal_server_error": "t.status_code >= 500 AND NOT coalesce(t.external, 0)",
-    "external_client_error": "t.status_code BETWEEN 400 AND 499 AND coalesce(t.external, 0)",
-    "external_server_error": "t.status_code >= 500 AND coalesce(t.external, 0)",
+    "internal_client_error": "t.status_code BETWEEN 400 AND 499 AND NOT coalesce(t.external, FALSE)",
+    "internal_server_error": "t.status_code >= 500 AND NOT coalesce(t.external, FALSE)",
+    "external_client_error": "t.status_code BETWEEN 400 AND 499 AND coalesce(t.external, FALSE)",
+    "external_server_error": "t.status_code >= 500 AND coalesce(t.external, FALSE)",
     "security_mixed_content": "l.source LIKE 'https://%' AND l.target LIKE 'http://%'"
     " AND l.kind IN ('image', 'css', 'js', 'media', 'iframe')",
     "security_form_url_insecure": "l.source LIKE 'https://%' AND l.target LIKE 'http://%' AND l.kind = 'form'",
@@ -70,7 +71,7 @@ def _status_filter(value: str, column: str = "t.status_code") -> tuple[str, dict
 
 
 def _rows(conn: sa.Connection, sql: str, params: dict) -> Iterator[tuple]:
-    result = conn.execution_options(yield_per=1000).execute(sa.text(sql), params)
+    result = storage.streamed(conn, 1000).execute(sa.text(sql), params)
     for row in result:
         yield tuple(row)
 
@@ -101,14 +102,15 @@ def dataset(
             where += f" AND ({CONTENT_KIND_SQL}) = :kind"
             params["kind"] = kind
         if scheme is not None:
-            where += " AND p.url GLOB :scheme_prefix"
-            params["scheme_prefix"] = f"{scheme}://*"
+            if scheme not in ("http", "https"):
+                raise InvalidArguments("--scheme: http or https.")
+            where += f" AND p.url GLOB '{scheme}://*'"  # a literal: GLOB uses the index
         if issue is not None:
             issues.rule(issue)
             where += " AND p.url IN (SELECT url FROM issues WHERE crawl_id = :crawl_id AND code = :code)"
             params["code"] = issue
         if external:
-            where += " AND coalesce(p.external, 0)"
+            where += " AND coalesce(p.external, FALSE)"
         if target_status is not None:
             clause, extra = _status_filter(target_status, "p.status_code")
             where, params = f"{where} AND {clause}", params | extra
@@ -147,7 +149,7 @@ def dataset(
 
 
 def _sql_table(conn: sa.Connection, crawl_id: int, sql: str) -> Table:
-    result = conn.execution_options(yield_per=1000).execute(sa.text(sql), {"crawl_id": crawl_id})
+    result = storage.streamed(conn, 1000).execute(sa.text(sql), {"crawl_id": crawl_id})
     return Table(list(result.keys()), (tuple(row) for row in result))
 
 
@@ -156,7 +158,7 @@ def _pages_json(conn: sa.Connection, crawl_id: int, columns: list[str], rows_of)
     sql = sa.text("SELECT url, headers FROM pages WHERE crawl_id = :crawl_id AND headers IS NOT NULL ORDER BY url")
 
     def rows() -> Iterator[tuple]:
-        for url, raw in conn.execution_options(yield_per=500).execute(sql, {"crawl_id": crawl_id}):
+        for url, raw in storage.streamed(conn, 500).execute(sql, {"crawl_id": crawl_id}):
             yield from rows_of(url, json.loads(raw))
 
     return Table(columns, rows())
@@ -202,7 +204,7 @@ def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool) -> Table:
     )
 
     def rows() -> Iterator[tuple]:
-        for (url,) in conn.execution_options(yield_per=500).execute(sql, {"crawl_id": crawl_id}):
+        for (url,) in storage.streamed(conn, 500).execute(sql, {"crawl_id": crawl_id}):
             body = storage.get_html(crawl_id, url)
             if body is not None:
                 yield url, visible_text(body) if as_text else body.decode("utf-8", "replace")
@@ -285,6 +287,15 @@ def preset_tables(conn: sa.Connection, crawl_id: int, specs: list[str]) -> Itera
 XLSX_CELL = 32_767  # Excel's limit on one cell's text
 
 
+def _cell(value):
+    """An Excel cell: text cut to Excel's limit; a time without its zone (Excel has none — PostgreSQL gives UTC)."""
+    if isinstance(value, str):
+        return value[:XLSX_CELL]
+    if isinstance(value, datetime) and value.tzinfo is not None:
+        return value.astimezone(UTC).replace(tzinfo=None)
+    return value
+
+
 def write_xlsx(sheets: Iterable[tuple[str, Table]], path: Path) -> dict[str, int]:
     """Tables as sheets of one .xlsx, streamed (openpyxl write-only: rows go to disk as they come).
     Returns rows per sheet; text over Excel's cell limit is cut."""
@@ -298,7 +309,7 @@ def write_xlsx(sheets: Iterable[tuple[str, Table]], path: Path) -> dict[str, int
         sheet.append(table.columns)
         n = 0
         for row in table.rows:
-            sheet.append([v[:XLSX_CELL] if isinstance(v, str) else v for v in row])
+            sheet.append([_cell(v) for v in row])
             n += 1
         counts[name] = n
     book.save(path)
@@ -314,9 +325,47 @@ def _authorize(action: int, *_args) -> int:
     return sqlite3.SQLITE_OK if action in _ALLOWED else sqlite3.SQLITE_DENY
 
 
+_QUERY_FAILED = "Query failed: {}. Only SELECT is allowed; tables: `spider db info`."
+
+
+class _PgReadOnly:
+    """PostgreSQL for `spider query`: a read-only transaction, one statement per call (a prepared statement can't
+    hold several — `COMMIT; DELETE …` never gets past the parser). For a hard guarantee, give SPIDER_DB_URL a user
+    with SELECT rights only."""
+
+    def __init__(self, url: str) -> None:
+        import psycopg
+        from psycopg import sql as pg_sql
+
+        self.error, self.sql = psycopg.Error, pg_sql.SQL
+        target = storage.remote_url(url).set(drivername="postgresql")
+        self.conn = psycopg.connect(target.render_as_string(hide_password=False))
+        self.conn.read_only = True
+
+    def execute(self, sql: str):
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(self.sql(sql), prepare=True)  # ty: ignore[invalid-argument-type] — the user's text, not a literal
+        except self.error as exc:
+            raise InvalidArguments(_QUERY_FAILED.format(str(exc).strip())) from exc
+        return cursor
+
+    def close(self) -> None:
+        self.conn.rollback()
+        self.conn.close()
+
+
 @contextmanager
-def read_only(path: Path | None = None) -> Iterator[sqlite3.Connection]:
-    """A connection that can only read: opened read-only, and SQLite refuses anything but SELECT."""
+def read_only(path: Path | None = None) -> Iterator:
+    """A connection that can only read: SQLite opened read-only with an authorizer that refuses anything but SELECT,
+    or (SPIDER_DB_URL) a read-only PostgreSQL transaction."""
+    if path is None and (url := storage.db_url()):
+        pg = _PgReadOnly(url)
+        try:
+            yield pg
+        finally:
+            pg.close()
+        return
     path = path or storage.db_path()
     if not path.is_file():
         raise InvalidArguments("No crawl database yet — run 'spider crawl <url>' first.")
@@ -329,11 +378,11 @@ def read_only(path: Path | None = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def query(conn: sqlite3.Connection, sql: str) -> Table:
+def query(conn, sql: str) -> Table:
     try:
         cursor = conn.execute(sql)
     except sqlite3.DatabaseError as exc:  # syntax error, unknown table, or a write the authorizer refused
-        raise InvalidArguments(f"Query failed: {exc}. Only SELECT is allowed; tables: `spider db info`.") from exc
+        raise InvalidArguments(_QUERY_FAILED.format(exc)) from exc
     if cursor.description is None:
         raise InvalidArguments("Not a query: only SELECT (and WITH … SELECT) is allowed.")
     return Table([d[0] for d in cursor.description], cursor)

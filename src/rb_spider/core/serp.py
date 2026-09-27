@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlsplit
 
 import sqlalchemy as sa
 
+from . import storage
 from .settings import ThresholdSettings
 
 ELLIPSIS = " …"
@@ -55,7 +56,7 @@ def truncate(text: str, max_px: float, font_px: float) -> tuple[str, bool]:
 def compute(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> None:
     """Fill pages.title_px / description_px of the site's HTML pages, a batch at a time."""
     select = sa.text(
-        "SELECT rowid, title, meta_description FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0)"
+        "SELECT rowid, title, meta_description FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
         " AND parsed AND (title IS NOT NULL OR meta_description IS NOT NULL) AND rowid > :after ORDER BY rowid"
         " LIMIT :limit"
     )
@@ -96,7 +97,7 @@ def snippet(url: str, title: str | None, description: str | None, thresholds: Th
 SUMMARY = (
     "SELECT url, title, length(title) AS title_chars, title_px, meta_description AS description,"
     " length(meta_description) AS description_chars, description_px FROM pages WHERE crawl_id = :crawl_id"
-    " AND NOT coalesce(external, 0) AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
+    " AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 )
 
 
@@ -106,6 +107,6 @@ def summary(engine: sa.Engine, crawl_id: int, limit: int | None = None) -> tuple
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({SUMMARY})"), {"crawl_id": crawl_id}).scalar_one()  # noqa: S608
         rows = conn.execute(
             sa.text(f"{SUMMARY} ORDER BY url LIMIT :limit"),
-            {"crawl_id": crawl_id, "limit": -1 if limit is None else limit},
+            {"crawl_id": crawl_id, "limit": storage.NO_LIMIT if limit is None else limit},
         ).mappings()
         return total, [dict(row) for row in rows]

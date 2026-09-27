@@ -259,7 +259,7 @@ def extract(
 # --- reports over a stored crawl ---------------------------------------------------------------
 
 _WITH_DATA = (
-    "SELECT url, sd_messages, sd_features FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0)"
+    "SELECT url, sd_messages, sd_features FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
     " AND sd_formats IS NOT NULL ORDER BY url"
 )
 
@@ -272,7 +272,9 @@ def summary(conn: sa.Connection, crawl_id: int, report: str) -> list[dict]:
     """
     import sqlalchemy as sa  # here, not at the top: the parser workers import this module and must stay small
 
-    rows = conn.execution_options(yield_per=1000).execute(sa.text(_WITH_DATA), {"crawl_id": crawl_id})
+    from . import storage
+
+    rows = storage.streamed(conn, 1000).execute(sa.text(_WITH_DATA), {"crawl_id": crawl_id})
     if report == "features":
         features: dict[str, dict[str, int]] = {}
         for _, _, raw in rows:
@@ -301,7 +303,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
         sa.text(
             "SELECT count(*), sum(sd_formats <> ''), sum(sd_formats LIKE '%,json-ld,%'),"
             " sum(sd_formats LIKE '%,microdata,%'), sum(sd_formats LIKE '%,rdfa,%') FROM pages"
-            " WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0) AND sd_formats IS NOT NULL"
+            " WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND sd_formats IS NOT NULL"
         ),
         {"crawl_id": crawl_id},
     ).one()

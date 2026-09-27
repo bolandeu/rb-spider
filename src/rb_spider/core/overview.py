@@ -22,7 +22,7 @@ CONTENT_KIND_SQL = """CASE
     WHEN content_type LIKE 'image/%' THEN 'image'
     WHEN content_type LIKE '%pdf%' THEN 'pdf'
     ELSE 'other' END"""
-_OWN = "NOT coalesce(external, 0)"
+_OWN = "NOT coalesce(external, FALSE)"
 
 
 def _counts(conn: sa.Connection, crawl_id: int, expression: str, where: str = _OWN) -> dict[str, int]:
@@ -41,8 +41,8 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
     with engine.connect() as conn:
         totals = conn.execute(
             sa.text(
-                f"SELECT count(*), sum({_OWN}), sum(coalesce(external, 0)), sum(blocked IS NOT NULL),"  # noqa: S608
-                f" sum(status_code = 0 AND blocked IS NULL), sum({_OWN} AND coalesce(indexable, 0)) FROM pages"
+                f"SELECT count(*), sum({_OWN}), sum(coalesce(external, FALSE)), sum(blocked IS NOT NULL),"  # noqa: S608
+                f" sum(status_code = 0 AND blocked IS NULL), sum({_OWN} AND coalesce(indexable, FALSE)) FROM pages"
                 " WHERE crawl_id = :crawl_id"
             ),
             {"crawl_id": crawl_id},
@@ -74,7 +74,7 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
                 "still_queued": queued[1] or 0,
             },
             "content_types": _counts(conn, crawl_id, CONTENT_KIND_SQL),
-            "external_content_types": _counts(conn, crawl_id, CONTENT_KIND_SQL, "coalesce(external, 0)"),
+            "external_content_types": _counts(conn, crawl_id, CONTENT_KIND_SQL, "coalesce(external, FALSE)"),
             "status": _counts(conn, crawl_id, status_class),
             "indexability": _counts(conn, crawl_id, "coalesce(indexability_status, 'Indexable')"),
             "canonicals": _counts(conn, crawl_id, canonical, html_ok),

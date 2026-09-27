@@ -11,17 +11,20 @@ from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 
+from . import storage
 from .errors import InvalidArguments
 from .export import cookies_of
 
-OWN = "NOT coalesce(p.external, 0)"
+OWN = "NOT coalesce(p.external, FALSE)"
 HTML_OK = f"{OWN} AND p.parsed AND p.status_code = 200 AND p.content_type LIKE '%html%'"
 
 
 def _rows(engine: sa.Engine, query: str, params: dict, limit: int | None) -> tuple[int, list[dict]]:
     with engine.connect() as conn:
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), params).scalar_one()  # noqa: S608
-        found = conn.execute(sa.text(f"{query} LIMIT :limit"), params | {"limit": -1 if limit is None else limit})
+        found = conn.execute(
+            sa.text(f"{query} LIMIT :limit"), params | {"limit": storage.NO_LIMIT if limit is None else limit}
+        )
         return total, [dict(row) for row in found.mappings()]
 
 
@@ -64,7 +67,7 @@ def structure(engine: sa.Engine, crawl_id: int, depth: int = 2) -> dict:
     indexable: Counter[str] = Counter()
     query = sa.text(f"SELECT p.url, p.indexable FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN}")  # noqa: S608
     with engine.connect() as conn:
-        for url, is_indexable in conn.execution_options(yield_per=2000).execute(query, {"crawl_id": crawl_id}):
+        for url, is_indexable in storage.streamed(conn, 2000).execute(query, {"crawl_id": crawl_id}):
             segments = [s for s in urlsplit(url).path.split("/")[1:-1] if s][:depth]  # folders, not the page
             folder = "/" + "".join(f"{s}/" for s in segments)
             folders[folder] += 1
@@ -195,7 +198,7 @@ def headers_summary(engine: sa.Engine, crawl_id: int, cookies: bool = False) -> 
         f"SELECT p.url, p.headers FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN} AND p.headers IS NOT NULL"  # noqa: S608
     )
     with engine.connect() as conn:
-        for url, raw in conn.execution_options(yield_per=1000).execute(query, {"crawl_id": crawl_id}):
+        for url, raw in storage.streamed(conn, 1000).execute(query, {"crawl_id": crawl_id}):
             headers = json.loads(raw)
             items = cookies_of(headers) if cookies else [{"name": name} for name in headers]
             for item in items:

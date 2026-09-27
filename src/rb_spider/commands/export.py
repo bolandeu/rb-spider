@@ -198,7 +198,9 @@ def query(
     """Выполнить свой SQL-запрос к базе обходов — только чтение.
 
     Для вопросов, на которые нет готовой команды. База открывается только для
-    чтения, а SQLite сам отклоняет всё, кроме SELECT: запись, ATTACH, PRAGMA.
+    чтения, а SQLite сам отклоняет всё, кроме SELECT: запись, ATTACH, PRAGMA. С
+    PostgreSQL (`SPIDER_DB_URL`) — транзакция только для чтения и одна команда за
+    раз; надёжнее всего — пользователь базы с правом только на SELECT.
     Таблицы: pages, links, issues, url_metrics, crawls, projects, frontier; у строк
     обхода — `crawl_id` (`spider crawls list`). `links` — представление с URL
     текстом (source, target); хранятся ссылки в link_rows по id из urls — для

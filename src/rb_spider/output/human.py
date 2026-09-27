@@ -456,10 +456,12 @@ def db_info(data: dict) -> None:
         schema += f" (ждут миграции: {', '.join(data['pending_migrations'])} — `spider db migrate`)"
     key_values(
         "База обходов",
-        {"файл": data["path"], "размер": _mb(data["size_bytes"]),
+        {"файл" if data.get("engine", "sqlite") == "sqlite" else "PostgreSQL": data["path"],
+         "размер": _mb(data["size_bytes"]),
          "свободно внутри": f"{_mb(data['free_bytes'])} (вернёт `spider db vacuum`)",
          "HTML": f"{data['html_path']} ({_mb(data['html_size_bytes'])})" if data["html_path"] else "—",
          "схема": schema, "SQLite": data["sqlite_version"],
+         **({"сервер": data["server_version"]} if data.get("server_version") else {}),
          "проектов / обходов": f"{data['projects']} / {data['crawls']}",
          "страниц / ссылок / находок": f"{data['pages']} / {data['links']} / {data['issues']}"},
     )  # fmt: skip

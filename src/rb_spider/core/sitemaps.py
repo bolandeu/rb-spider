@@ -81,13 +81,13 @@ QUERIES = {
     # in a sitemap, no <a href> to it anywhere on the site (and, with sitemaps.follow off, maybe never crawled)
     "orphans": (
         "SELECT s.url, min(s.source) AS source, p.status_code, p.indexability_status FROM sitemap_urls s "  # noqa: S608
-        f"{_OWN_PAGE} WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, 0) AND NOT EXISTS ("
+        f"{_OWN_PAGE} WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE) AND NOT EXISTS ("
         " SELECT 1 FROM urls u JOIN link_rows l ON l.crawl_id = u.crawl_id AND l.target_id = u.id"
-        " AND l.kind = 'hyperlink' WHERE u.crawl_id = s.crawl_id AND u.url = s.url) GROUP BY s.url"
+        " AND l.kind = 'hyperlink' WHERE u.crawl_id = s.crawl_id AND u.url = s.url) GROUP BY s.url, p.status_code, p.indexability_status"
     ),
     # indexable HTML pages of the site that no sitemap lists
     "not_in_sitemap": (
-        "SELECT p.url, p.depth, p.inlinks FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, 0)"
+        "SELECT p.url, p.depth, p.inlinks FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"
         " AND p.parsed AND p.status_code = 200 AND p.content_type LIKE '%html%' AND p.indexable AND NOT EXISTS ("
         " SELECT 1 FROM sitemap_urls s WHERE s.crawl_id = p.crawl_id AND s.url = p.url)"
     ),
@@ -100,7 +100,7 @@ def report(engine: sa.Engine, crawl_id: int, only: str, limit: int | None = None
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), {"crawl_id": crawl_id}).scalar_one()  # noqa: S608
         rows = conn.execute(
             sa.text(f"SELECT * FROM ({query}) ORDER BY url LIMIT :limit"),  # noqa: S608
-            {"crawl_id": crawl_id, "limit": -1 if limit is None else limit},
+            {"crawl_id": crawl_id, "limit": storage.NO_LIMIT if limit is None else limit},
         ).mappings()
         return total, [dict(row) for row in rows]
 
@@ -137,7 +137,7 @@ def _pages_query(include: set[str]) -> str:
         allowed.append("p.indexability_status = 'Canonicalised'")
     paginated = "" if "paginated" in include else " AND coalesce(p.pagination, '') <> 'paginated'"
     return (
-        "SELECT p.url, p.last_modified, p.depth FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, 0)"  # noqa: S608
+        "SELECT p.url, p.last_modified, p.depth FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"  # noqa: S608
         f" AND p.status_code = 200 AND ({kinds}) AND ({' OR '.join(allowed)}){paginated} ORDER BY p.url"
     )
 
@@ -197,7 +197,7 @@ def build(
 
     def entries(conn: sa.Connection) -> Iterator[SitemapEntry]:
         nonlocal count
-        rows = conn.execution_options(yield_per=1000).execute(sa.text(_pages_query(include)), {"crawl_id": crawl_id})
+        rows = storage.streamed(conn, 1000).execute(sa.text(_pages_query(include)), {"crawl_id": crawl_id})
         for url, last_modified, depth in rows:
             pictures: list[str] = []
             if images:

@@ -15,7 +15,7 @@ uv sync                                   # пишет uv.lock — он комм
 uv run spider                             # список команд; `uv run spider <команда> --help`
 uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
 SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest   # после намеренной правки справки или настроек: снимки --help и таблица docs/profiles.md
-scripts/check.sh [--py312] [--linux]      # всё, что гоняет CI (хук pre-push); --linux — ещё и в Docker, релиз его требует
+scripts/check.sh [--py312] [--linux] [--pg] # всё, что гоняет CI (хук pre-push); --linux — ещё и в Docker, релиз его требует; --pg — тесты на PostgreSQL
 scripts/install_hooks.sh                  # один раз после клонирования: commit-msg и pre-push
 ```
 

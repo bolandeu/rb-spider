@@ -20,7 +20,7 @@ from .settings import ThresholdSettings
 
 WINDOW = 50
 _BATCH = 5000
-HTML_OK = "NOT coalesce(external, 0) AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
+HTML_OK = "NOT coalesce(external, FALSE) AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 # the pages duplicate checks compare — thresholds.duplicates_indexable_only / ignore_paginated_duplicates
 AMONG = (
     f"{HTML_OK} AND (indexable OR NOT :duplicates_indexable_only)"
@@ -47,8 +47,11 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
         return
     threshold = thresholds.near_duplicate_similarity / 100
     bands, rows = content.bands_for(threshold)
-    conn.exec_driver_sql("DROP TABLE IF EXISTS temp.near_bands")
-    conn.exec_driver_sql("CREATE TEMP TABLE near_bands (band INTEGER, h INTEGER, page INTEGER)")
+    sqlite = storage.is_sqlite(conn)
+    temp = "temp" if sqlite else "pg_temp"  # the schema of temporary tables
+    conn.exec_driver_sql(f"DROP TABLE IF EXISTS {temp}.near_bands")
+    conn.exec_driver_sql("CREATE TEMP TABLE near_bands (band BIGINT, h BIGINT, page BIGINT)")
+    insert = "INSERT INTO near_bands (band, h, page) VALUES " + ("(?, ?, ?)" if sqlite else "(%s, %s, %s)")  # noqa: S608 — fixed text
     select = sa.text(
         f"SELECT rowid, minhash FROM pages WHERE crawl_id = :crawl_id AND {AMONG} AND minhash IS NOT NULL"  # noqa: S608
         " AND rowid > :after ORDER BY rowid LIMIT :limit"
@@ -56,7 +59,7 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
     after = 0
     while batch := conn.execute(select, params | {"after": after, "limit": _BATCH}).all():
         conn.exec_driver_sql(
-            "INSERT INTO near_bands (band, h, page) VALUES (?, ?, ?)",
+            insert,
             [
                 (band, h, rowid)
                 for rowid, sig in batch
@@ -64,25 +67,29 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
             ],
         )
         after = batch[-1][0]
-    conn.exec_driver_sql("CREATE INDEX temp.near_bands_by_bucket ON near_bands (band, h, page)")
+    conn.exec_driver_sql(f"CREATE INDEX {'temp.' if sqlite else ''}near_bands_by_bucket ON near_bands (band, h, page)")
     # candidate pairs: pages sharing a band bucket, each page with its next WINDOW neighbours in the bucket;
     # a temporary table too — however many there are, they are read back a batch at a time
-    conn.exec_driver_sql("DROP TABLE IF EXISTS temp.near_pairs")
+    conn.exec_driver_sql(f"DROP TABLE IF EXISTS {temp}.near_pairs")
     conn.execute(
         sa.text(
-            "CREATE TEMP TABLE near_pairs AS"
+            # PostgreSQL has no implicit rowid to page by: the pairs get one
+            f"CREATE TEMP TABLE near_pairs AS {'' if sqlite else 'SELECT row_number() OVER () AS rowid, a, b FROM ('}"  # noqa: S608
             " WITH b AS (SELECT band, h, page, row_number() OVER (PARTITION BY band, h ORDER BY page) AS n"
             "  FROM near_bands)"
             " SELECT DISTINCT x.page AS a, y.page AS b FROM b x JOIN b y ON y.band = x.band AND y.h = x.h"
             "  AND y.n > x.n AND y.n <= x.n + :window"
+            f"{'' if sqlite else ') AS pairs'}"
         ),
         {"window": WINDOW},
     )
-    conn.exec_driver_sql("DROP TABLE temp.near_bands")
+    if not sqlite:
+        conn.exec_driver_sql("CREATE UNIQUE INDEX near_pairs_rowid ON near_pairs (rowid)")
+    conn.exec_driver_sql(f"DROP TABLE {temp}.near_bands")
     lookup = sa.text("SELECT rowid, url, minhash FROM pages WHERE rowid IN :ids").bindparams(
         sa.bindparam("ids", expanding=True)
     )
-    next_pairs = sa.text("SELECT rowid, a, b FROM temp.near_pairs WHERE rowid > :after ORDER BY rowid LIMIT :limit")
+    next_pairs = sa.text(f"SELECT rowid, a, b FROM {temp}.near_pairs WHERE rowid > :after ORDER BY rowid LIMIT :limit")  # noqa: S608
     after = 0
     while chunk := conn.execute(next_pairs, {"after": after, "limit": _BATCH}).all():
         after = chunk[-1][0]
@@ -95,7 +102,7 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
                 found.append({"crawl_id": crawl_id, "url_a": url_a, "url_b": url_b, "similarity": round(score, 3)})
         if found:
             conn.execute(sa.insert(storage.near_duplicates), found)
-    conn.exec_driver_sql("DROP TABLE temp.near_pairs")
+    conn.exec_driver_sql(f"DROP TABLE {temp}.near_pairs")
 
 
 NEAR_FINDINGS = (
@@ -136,7 +143,7 @@ def report(
     parts = {"all": [exact, near], "exact": [exact], "near": [near]}[kind]
     query = " UNION ALL ".join(f"SELECT * FROM ({part})" for part in parts)  # noqa: S608
     where = " WHERE url = :url OR other = :url" if url else ""
-    params = _params(crawl_id, thresholds) | {"url": url, "limit": -1 if limit is None else limit}
+    params = _params(crawl_id, thresholds) | {"url": url, "limit": storage.NO_LIMIT if limit is None else limit}
     with engine.connect() as conn:
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query}){where}"), params).scalar_one()  # noqa: S608
         rows = conn.execute(

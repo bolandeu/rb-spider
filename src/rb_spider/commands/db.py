@@ -19,17 +19,25 @@ def info(
 ) -> None:
     """Показать базу обходов: где лежит, сколько весит, версия схемы, сколько данных.
 
+    По умолчанию база — файл SQLite в папке данных (`SPIDER_DB_PATH` — другой
+    путь). `SPIDER_DB_URL=postgresql://пользователь@хост:5432/база` — обходы в
+    PostgreSQL (extra `rb-spider[postgres]`); пароль — в keychain: `spider auth
+    login --provider database` (или прямо в URL). Сохранённый HTML и тогда лежит
+    локальным файлом, отдельным для каждой базы.
+
     «Свободно внутри» — место удалённых обходов, которое займут следующие обходы
-    или вернёт на диск `spider db vacuum`. Схема не обновляется этой командой:
-    если ждут миграции, их видно здесь (применяет `spider db migrate` или любая
-    другая команда).
+    или вернёт на диск `spider db vacuum` (у PostgreSQL — 0). Схема не обновляется
+    этой командой: если ждут миграции, их видно здесь (применяет `spider db
+    migrate` или любая другая команда).
 
     Примеры:
       spider db info
       spider --json db info
 
     JSON: `{path, size_bytes, html_path, html_size_bytes, free_bytes, sqlite_version,
-    schema_revision, schema_head, pending_migrations, projects, crawls, pages, links, issues}`.
+    schema_revision, schema_head, pending_migrations, projects, crawls, pages, links, issues,
+    engine, server_version}`; engine — sqlite | postgresql, path у PostgreSQL — URL без
+    пароля, server_version — версия сервера PostgreSQL.
     """
     with storage.database(migrate=False) as engine:
         data = dataclasses.asdict(maintenance.db_info(engine))
@@ -77,6 +85,8 @@ def vacuum(
     уменьшается — освободившееся место переиспользуют следующие обходы. VACUUM
     переписывает файл заново: нужно свободное место на диске размером с базу, а
     во время работы обходы не должны идти. Сколько вернётся — `spider db info`.
+    PostgreSQL (`SPIDER_DB_URL`) — VACUUM FULL: таблицы переписываются и на это
+    время заблокированы.
 
     Примеры:
       spider db vacuum

@@ -18,6 +18,7 @@ from rb_spider.core.extract import path_type
 from rb_spider.core.settings import CrawlSettings, Settings
 
 from . import polygon
+from .conftest import db_env, use_db
 
 
 @pytest.fixture(scope="module")
@@ -34,15 +35,16 @@ def crawled(base_url: str, tmp_path_factory):
         patch.setenv("SPIDER_DB_PATH", str(db))
         with storage.database() as engine:
             crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(store_html=True)))
-    yield db
+            env = db_env() | db_env(engine)
+    yield env
 
 
-def _run(db: Path, *args: str) -> tuple[int, str]:
-    result = CliRunner().invoke(app, list(args), env={"SPIDER_DB_PATH": str(db)})
+def _run(db: dict[str, str], *args: str) -> tuple[int, str]:
+    result = CliRunner().invoke(app, list(args), env=db)
     return result.exit_code, result.stdout
 
 
-def _json(db: Path, *args: str) -> dict:
+def _json(db: dict[str, str], *args: str) -> dict:
     code, out = _run(db, "--json", *args)
     assert code == 0, out
     return json.loads(out)
@@ -55,7 +57,7 @@ def _csv(text: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
 
-def test_xlsx_export_and_presets(crawled: Path, tmp_path: Path) -> None:
+def test_xlsx_export_and_presets(crawled: dict[str, str], tmp_path: Path) -> None:
     data = _json(crawled, "export", "issues", "--format", "xlsx", "-o", str(tmp_path / "issues.xlsx"))
     sheet = load_workbook(tmp_path / "issues.xlsx", read_only=True).worksheets[0]
     assert data["rows"] == sum(1 for _ in sheet.iter_rows()) - 1 > 10
@@ -77,7 +79,7 @@ def test_xlsx_export_and_presets(crawled: Path, tmp_path: Path) -> None:
         ("queued", "url", None),  # a finished crawl: an empty queue
     ],
 )
-def test_bulk_datasets(crawled: Path, dataset: str, column: str, expect: str | None) -> None:
+def test_bulk_datasets(crawled: dict[str, str], dataset: str, column: str, expect: str | None) -> None:
     code, out = _run(crawled, "export", dataset)
     assert code == 0
     rows = _csv(out)
@@ -87,7 +89,7 @@ def test_bulk_datasets(crawled: Path, dataset: str, column: str, expect: str | N
         assert any(expect in (row[column] or "") for row in rows)
 
 
-def test_links_by_issue_and_path_type(crawled: Path, base_url: str) -> None:
+def test_links_by_issue_and_path_type(crawled: dict[str, str], base_url: str) -> None:
     code, out = _run(crawled, "export", "links", "--issue", "links_no_anchor_text")
     rows = _csv(out)
     assert code == 0 and {r["source"].removeprefix(base_url) for r in rows} == {"/l-no-anchor"}
@@ -100,7 +102,7 @@ def test_links_by_issue_and_path_type(crawled: Path, base_url: str) -> None:
     assert [path_type(h) for h in ("https://a/", "//a/", "/a", "a", "?q")] == ["a", "p", "r", "l", "l"]
 
 
-def test_redirect_and_canonical_chains(crawled: Path, base_url: str) -> None:
+def test_redirect_and_canonical_chains(crawled: dict[str, str], base_url: str) -> None:
     plain = _json(crawled, "redirects", "--only", "all")
     with_canonicals = _json(crawled, "redirects", "--only", "all", "--canonicals")
     assert with_canonicals["total"] > plain["total"]
@@ -108,14 +110,14 @@ def test_redirect_and_canonical_chains(crawled: Path, base_url: str) -> None:
     assert "canonical" in hops
 
 
-def test_canonicals_report(crawled: Path, base_url: str) -> None:
+def test_canonicals_report(crawled: dict[str, str], base_url: str) -> None:
     rows = _json(crawled, "report", "canonicals", "--only", "non_indexable")["rows"]
     assert {r["url"].removeprefix(base_url) for r in rows} == {"/c-nonindexable"}
     everything = _json(crawled, "report", "canonicals", "--only", "all")
     assert everything["total"] >= len(polygon.EXPECTED_ISSUES["canonical_canonicalised"])
 
 
-def test_structure_times_path(crawled: Path, base_url: str) -> None:
+def test_structure_times_path(crawled: dict[str, str], base_url: str) -> None:
     structure = _json(crawled, "report", "structure", "--depth", "1")
     folders = {f["folder"]: f for f in structure["folders"]}
     assert folders["/shop/"]["urls"] >= 2 and structure["depths"]["0"] == 1
@@ -127,7 +129,7 @@ def test_structure_times_path(crawled: Path, base_url: str) -> None:
     assert _run(crawled, "--json", "report", "crawl-path", f"{base_url}/nowhere")[0] == 2
 
 
-def test_forms_and_headers(crawled: Path, base_url: str) -> None:
+def test_forms_and_headers(crawled: dict[str, str], base_url: str) -> None:
     forms = _json(crawled, "report", "forms")["rows"]
     assert {(f["page"].removeprefix(base_url), f["insecure"]) for f in forms} == {("/s-form", 1)}
     headers = {h["name"]: h for h in _json(crawled, "report", "headers")["rows"]}
@@ -136,7 +138,7 @@ def test_forms_and_headers(crawled: Path, base_url: str) -> None:
 
 
 def test_cookie_and_keyword_reports(base_url: str, tmp_path: Path) -> None:
-    db = tmp_path / "list.sqlite"
+    db = db_env()  # this test's own database
     paths = ["/cookie-set", "/mk-1", "/mk-2", "/mk-3", "/a"]
     (tmp_path / "urls.txt").write_text("\n".join(base_url + p for p in paths))
     assert _run(db, "--json", "crawl", "--list", str(tmp_path / "urls.txt"))[0] == 0
@@ -151,7 +153,7 @@ def test_cookie_and_keyword_reports(base_url: str, tmp_path: Path) -> None:
 
 
 def test_robots_tester(base_url: str, tmp_path: Path) -> None:
-    db = tmp_path / "none.sqlite"
+    db = db_env()
     rows = _json(db, "robots-test", f"{base_url}/private/x", f"{base_url}/a")["rows"]
     assert [(r["allowed"], r["rule"]) for r in rows] == [(False, "Disallow: /private/"), (True, None)]
     rows = _json(db, "robots-test", f"{base_url}/g-blocked", "--user-agent", "Googlebot")["rows"]
@@ -176,7 +178,8 @@ def test_excel_url_list(tmp_path: Path) -> None:
     assert read_url_list(read_url_source(str(tmp_path / "urls.xlsx"))) == ["https://s.example/a", "https://s.example/b"]
 
 
-def test_structure_counts_stay_per_folder(crawled: Path) -> None:
-    with storage.database(crawled) as engine:
-        data = reports.structure(engine, 1, depth=1)
+def test_structure_counts_stay_per_folder(crawled: dict[str, str], monkeypatch) -> None:
+    use_db(monkeypatch, env=crawled)
+    with storage.database() as engine:
+        data = reports.structure(engine, storage.resolve_crawl_id(engine, None), depth=1)
     assert all(f["urls"] == f["indexable"] + f["non_indexable"] for f in data["folders"])

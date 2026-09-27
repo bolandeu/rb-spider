@@ -15,6 +15,7 @@ from rb_spider.core.crawl import crawl_site
 from rb_spider.core.settings import CollectSettings, CrawlSettings, Settings, ThresholdSettings
 
 from . import polygon
+from .conftest import use_db
 
 needs_datasketch = pytest.mark.skipif(importlib.util.find_spec("datasketch") is None, reason="extra rb-spider[near]")
 
@@ -50,7 +51,7 @@ def test_duplicate_details_and_diff(base_url: str, near_crawl, monkeypatch) -> N
     from rb_spider.core import duplicates
 
     engine, crawl_id = near_crawl
-    monkeypatch.setenv("SPIDER_DB_PATH", str(engine.url.database))  # the shared crawl's stored HTML lives beside it
+    use_db(monkeypatch, engine)  # the shared crawl's stored HTML lives beside it
     total, pairs = duplicates.report(engine, crawl_id, ThresholdSettings(), kind="near", url=f"{base_url}/near-1")
     assert total == 1 and 0.9 <= pairs[0]["similarity"] < 1
     diff = duplicates.text_diff(crawl_id, pairs[0]["url"], pairs[0]["other"])

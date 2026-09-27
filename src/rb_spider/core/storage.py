@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections.abc import Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -24,8 +25,9 @@ import zstandard
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import event
+from sqlalchemy import exc as sa_exc
 
-from .errors import InvalidArguments
+from .errors import InvalidArguments, RemoteDatabaseUnavailable
 from .extract import Page
 from .scope import LINK_FIELDS
 from .version import CLI_NAME
@@ -377,8 +379,12 @@ def db_path() -> Path:
 
 
 def html_db_path() -> Path:
-    """Stored HTML (`crawl.store_html`) lives beside the crawl database, not in it: the main DB stays small."""
+    """Stored HTML (`crawl.store_html`) lives beside the crawl database, not in it: the main DB stays small. With
+    SPIDER_DB_URL it's a local file too, one per remote database (named after it)."""
     main = db_path()
+    if url := db_url():
+        name = sa.make_url(url).database or "remote"
+        return main.with_name(f"{main.stem}-html-{name}{main.suffix}")
     return main.with_name(f"{main.stem}-html{main.suffix}")
 
 
@@ -411,8 +417,11 @@ def alembic_config() -> Config:
 def open_db(path: Path | None = None, *, migrate: bool = True) -> sa.Engine:
     """Open (creating if needed) the crawl database and bring its schema up to date.
 
+    `SPIDER_DB_URL` (and no explicit `path`) — a PostgreSQL server instead of the local SQLite file.
     `migrate=False` leaves the schema as it is — for `spider db info|migrate`, which report it.
     """
+    if path is None and (url := db_url()) is not None:
+        return _open_remote(url, migrate=migrate)
     path = path or db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     engine = sa.create_engine(f"sqlite:///{path}")
@@ -423,6 +432,157 @@ def open_db(path: Path | None = None, *, migrate: bool = True) -> sa.Engine:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
     return engine
+
+
+# --- PostgreSQL ------------------------------------------------------------------------------------
+# The rules, reports and exports are SQL written for SQLite. Rather than two versions of every query, a Postgres
+# database gets the few SQLite functions they use (below) and a `rowid` column where queries page by it; what
+# can't be emulated (booleans as 0 / 1, INSERT OR …) is written in the subset both understand.
+
+DB_CREDENTIAL = "database"  # `spider auth login --provider database`: the password of SPIDER_DB_URL
+
+
+def db_url() -> str | None:
+    """`SPIDER_DB_URL` — where crawls live when not in the local SQLite file (PostgreSQL)."""
+    return os.environ.get(f"{CLI_NAME.upper()}_DB_URL") or None
+
+
+def remote_url(url: str) -> sa.URL:
+    """SPIDER_DB_URL for SQLAlchemy: the psycopg driver, and the keychain's password when the URL has none."""
+    try:
+        parsed = sa.make_url(url)
+    except sa_exc.ArgumentError as exc:
+        raise RemoteDatabaseUnavailable(f"SPIDER_DB_URL is not a database URL: {exc}.") from exc
+    if parsed.get_backend_name() != "postgresql":
+        raise RemoteDatabaseUnavailable(
+            f"SPIDER_DB_URL: only PostgreSQL is supported, not '{parsed.get_backend_name()}'."
+        )
+    parsed = parsed.set(drivername="postgresql+psycopg")
+    if parsed.password is None and parsed.username:
+        from ..credentials import manager as credentials
+
+        password = credentials.get_secret(DB_CREDENTIAL)
+        if password:
+            parsed = parsed.set(password=password)
+    return parsed
+
+
+_PG_SHIMS = (
+    # lower() is Unicode-aware in PostgreSQL: casefold (a Python function in SQLite) is just that
+    "CREATE OR REPLACE FUNCTION casefold(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT lower($1) $$",
+    "CREATE OR REPLACE FUNCTION instr(text, text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT strpos($1, $2) $$",
+    "CREATE OR REPLACE FUNCTION round(double precision, integer) RETURNS numeric LANGUAGE sql IMMUTABLE"
+    " AS $$ SELECT round($1::numeric, $2) $$",
+    # group_concat(x[, separator]) and aggregates over booleans, as SQLite has them (a boolean there is 0 / 1)
+    "CREATE OR REPLACE FUNCTION spider_concat(acc text, v text, sep text) RETURNS text LANGUAGE sql IMMUTABLE"
+    " AS $$ SELECT CASE WHEN v IS NULL THEN acc WHEN acc IS NULL THEN v ELSE acc || sep || v END $$",
+    "CREATE OR REPLACE FUNCTION spider_concat(acc text, v text) RETURNS text LANGUAGE sql IMMUTABLE"
+    " AS $$ SELECT spider_concat(acc, v, ',') $$",
+    "CREATE OR REPLACE AGGREGATE group_concat(text, text) (SFUNC = spider_concat, STYPE = text)",
+    "CREATE OR REPLACE AGGREGATE group_concat(text) (SFUNC = spider_concat, STYPE = text)",
+    "CREATE OR REPLACE FUNCTION spider_add(acc bigint, v boolean) RETURNS bigint LANGUAGE sql IMMUTABLE"
+    " AS $$ SELECT CASE WHEN v IS NULL THEN acc ELSE coalesce(acc, 0) + v::int END $$",
+    "CREATE OR REPLACE AGGREGATE sum(boolean) (SFUNC = spider_add, STYPE = bigint)",
+    "CREATE OR REPLACE AGGREGATE max(boolean) (SFUNC = boolor_statefunc, STYPE = boolean)",
+    "CREATE OR REPLACE AGGREGATE min(boolean) (SFUNC = booland_statefunc, STYPE = boolean)",
+)
+# SQLite's implicit rowid, which some passes page by: an identity column with a unique index
+_PG_ROWID = ("pages", "render_events")
+LINKS_VIEW = (
+    "CREATE VIEW links AS SELECT l.crawl_id, s.url AS source, t.url AS target, l.kind, l.internal, l.anchor, l.alt,"
+    " l.rel, l.nofollow, l.alt_attr, l.sized, l.fragment, l.hreflang,"
+    " CASE WHEN l.kind = 'hyperlink' THEN coalesce(l.position, 'content') END AS position, l.path,"
+    " CASE l.path_type WHEN 'a' THEN 'absolute' WHEN 'p' THEN 'protocol-relative' WHEN 'r' THEN 'root-relative'"
+    " WHEN 'l' THEN 'relative' END AS path_type,"
+    " CASE WHEN l.kind = 'hyperlink' THEN CASE l.origin WHEN 'r' THEN 'rendered' WHEN 'b' THEN 'html & rendered'"
+    " ELSE 'html' END WHEN l.kind = 'image' AND l.origin = 'c' THEN 'css background' END AS origin"
+    " FROM link_rows l JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
+)  # the same as the SQLite migrations build (0028)
+
+
+def open_db_url(url: str, *, migrate: bool = True) -> sa.Engine:
+    """A PostgreSQL crawl database by its URL (what SPIDER_DB_URL holds), its schema brought up to date."""
+    return _open_remote(url, migrate=migrate)
+
+
+_GLOB = re.compile(r"\bGLOB '([^'*?]*)\*'")
+
+
+def _pg_statement(_conn, _cursor, statement: str, parameters, _context, _executemany):
+    """SQLite's `x GLOB 'prefix*'` (case-sensitive, and it uses the index) is PostgreSQL's `x LIKE 'prefix%'`."""
+    if "GLOB" in statement:
+        statement = _GLOB.sub(lambda m: "LIKE '" + m.group(1).replace("%", "%%").replace("_", "\\_") + "%%'", statement)
+    return statement, parameters
+
+
+def _open_remote(url: str, *, migrate: bool) -> sa.Engine:
+    try:
+        engine = sa.create_engine(remote_url(url), pool_pre_ping=True)
+    except ModuleNotFoundError as exc:
+        raise RemoteDatabaseUnavailable("PostgreSQL needs the psycopg driver, which is not installed.") from exc
+    event.listen(engine, "before_cursor_execute", _pg_statement, retval=True)
+    if migrate:
+        try:
+            with engine.begin() as conn:
+                prepare_remote(conn)
+        except sa_exc.OperationalError as exc:
+            engine.dispose()
+            raise RemoteDatabaseUnavailable(f"Can't reach the database: {str(exc.orig).strip()}") from exc
+    return engine
+
+
+def prepare_remote(conn: sa.Connection) -> None:
+    """A new database gets the whole schema at once (the SQLite migrations' history isn't replayed) and is stamped
+    as up to date; later migrations run on it as on SQLite."""
+    conn.exec_driver_sql("SELECT pg_advisory_xact_lock(7355608)")  # two spiders starting at once: one creates
+    for statement in _PG_SHIMS:
+        conn.exec_driver_sql(statement)
+    config = alembic_config()
+    config.attributes["connection"] = conn
+    if not sa.inspect(conn).has_table("crawls"):
+        metadata.create_all(conn)
+        for table in _PG_ROWID:
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN rowid bigint GENERATED ALWAYS AS IDENTITY")
+            conn.exec_driver_sql(f"CREATE UNIQUE INDEX {table}_rowid ON {table} (rowid)")
+        conn.exec_driver_sql(LINKS_VIEW)
+        command.stamp(config, "head")
+    else:
+        command.upgrade(config, "head")
+
+
+NO_LIMIT = 2**62  # `LIMIT :limit` without a limit: SQLite's -1 is an error in PostgreSQL, NULL one in SQLite
+
+
+def insert_or_replace(conn: sa.Connection, table: sa.Table) -> sa.Insert:
+    """INSERT that replaces a row with the same primary key (SQLite's INSERT OR REPLACE)."""
+    if is_sqlite(conn):
+        return sa.insert(table).prefix_with("OR REPLACE")
+    from sqlalchemy.dialects.postgresql import insert
+
+    statement = insert(table)
+    keys = [column.name for column in table.primary_key]
+    return statement.on_conflict_do_update(
+        index_elements=keys, set_={c.name: statement.excluded[c.name] for c in table.columns if c.name not in keys}
+    )
+
+
+def is_sqlite(bind: sa.Engine | sa.Connection) -> bool:
+    return bind.dialect.name == "sqlite"
+
+
+@dataclass(frozen=True)
+class _Streamed:
+    conn: sa.Connection
+    rows: int
+
+    def execute(self, statement, parameters=None) -> sa.CursorResult:
+        return self.conn.execute(statement, parameters, execution_options={"yield_per": self.rows})
+
+
+def streamed(conn: sa.Connection, rows: int) -> _Streamed:
+    """`streamed(conn, 1000).execute(query)` — the result read `rows` at a time. Not conn.execution_options(): that
+    changes the connection itself, and in PostgreSQL every later statement on it would go through a server cursor."""
+    return _Streamed(conn, rows)
 
 
 @contextmanager
@@ -468,39 +628,102 @@ _PAGE_COLUMNS = [column.name for column in pages.columns]
 _LINK_COLUMNS = ["crawl_id", *LINK_FIELDS]
 
 
-def _insert_json(table: sa.Table, columns: list[str], verb: str = "INSERT") -> str:
-    """Insert rows passed as one JSON array of arrays (`json_each`): SQLite runs the whole batch in one
-    step, without Python's GIL — `executemany` takes the GIL back after every row, and with the crawl's
-    event loop busy on the same GIL that made writing three times slower."""
-    values = ", ".join(f"json_extract(value, '$[{i}]')" for i in range(len(columns)))
-    return f"{verb} INTO {table.name} ({', '.join(columns)}) SELECT {values} FROM json_each(?)"  # noqa: S608 — fixed names
+def _pg_value(table: sa.Table, name: str, i: int) -> str:
+    """Element `i` of a JSON row as the column's PostgreSQL type (JSON gives text)."""
+    kind = table.c[name].type
+    text = f"(value->>{i})"
+    if isinstance(kind, sa.Boolean):
+        return f"{text}::boolean"
+    if isinstance(kind, sa.Integer):
+        return f"{text}::bigint"
+    if isinstance(kind, sa.Float):
+        return f"{text}::double precision"
+    if isinstance(kind, sa.DateTime):
+        return f"{text}::timestamp AT TIME ZONE 'UTC'"  # _timestamp(): UTC without an offset
+    return text
 
 
-_JSON_CHUNK = 5000  # rows per statement: a bounded JSON argument keeps SQLite's memory flat
-_INSERT_PAGES = _insert_json(pages, _PAGE_COLUMNS, "INSERT OR REPLACE")  # a URL reached twice keeps its latest response
-# A batch of links: its URLs get ids (new ones inserted), then the rows go in with the ids — all inside
-# SQLite, so the writer keeps no URL -> id map in memory. Both statements read the same JSON chunk.
-_LINK_JSON = ", ".join(f"json_extract(value, '$[{i}]') AS {name}" for i, name in enumerate(_LINK_COLUMNS))
-_INSERT_LINK_URLS = (
-    f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
-    "INSERT OR IGNORE INTO urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
-)
-# The ids by a lookup per row through the unique index — not a JOIN: with planner statistics from earlier, smaller
-# crawls in the same database SQLite could pick a scan of `urls` per row (a 4-page crawl then a full one: 20 s).
-_INSERT_LINK_ROWS = (
-    f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
-    f"INSERT INTO link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
-    "SELECT r.crawl_id, (SELECT id FROM urls WHERE url = r.source AND crawl_id = r.crawl_id),"
-    " (SELECT id FROM urls WHERE url = r.target AND crawl_id = r.crawl_id),"
-    f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
-)
-_INSERT_CUSTOM = _insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"])
-_INSERT_EVENTS = _insert_json(render_events, ["crawl_id", "url", "kind", "message", "resource"])
-_INSERT_IMAGES = _insert_json(rendered_images, ["crawl_id", "url", "image", "real_width", "real_height", "display_width",
-                                                "display_height"])  # fmt: skip
-_INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
-_INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
-_MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
+def _insert_json(table: sa.Table, columns: list[str], dialect: str, verb: str = "INSERT", conflict: str = "") -> str:
+    """Insert rows passed as one JSON array of arrays: the database runs the whole batch in one step, without
+    Python's GIL — `executemany` takes the GIL back after every row, and with the crawl's event loop busy on the
+    same GIL that made writing three times slower. SQLite reads it with `json_each`, PostgreSQL with
+    `json_array_elements`; `verb` / `conflict` — SQLite's INSERT OR … / PostgreSQL's ON CONFLICT."""
+    names = ", ".join(columns)
+    if dialect == "sqlite":
+        values = ", ".join(f"json_extract(value, '$[{i}]')" for i in range(len(columns)))
+        return f"{verb} INTO {table.name} ({names}) SELECT {values} FROM json_each(?)"  # noqa: S608 — fixed names
+    values = ", ".join(_pg_value(table, name, i) for i, name in enumerate(columns))
+    return f"INSERT INTO {table.name} ({names}) SELECT {values} FROM json_array_elements(%s::json) AS value {conflict}"  # noqa: S608
+
+
+_JSON_CHUNK = 5000  # rows per statement: a bounded JSON argument keeps the database's memory flat
+
+
+@dataclass(frozen=True)
+class _WriterSql:
+    """The writer's statements for one database dialect."""
+
+    pages: str
+    link_urls: str
+    link_rows: str
+    custom: str
+    events: str
+    images: str
+    sitemap_urls: str
+    queued: str
+    mark_done: str
+
+
+def _writer_sql(dialect: str) -> _WriterSql:
+    sqlite = dialect == "sqlite"
+    link_types = {"crawl_id": link_rows.c.crawl_id, "source": urls.c.url, "target": urls.c.url,
+                  **{name: link_rows.c[name] for name in LINK_DATA}}  # fmt: skip
+    if sqlite:
+        link_json = ", ".join(f"json_extract(value, '$[{i}]') AS {name}" for i, name in enumerate(_LINK_COLUMNS))
+        rows_source, ignore, no_conflict = "json_each(?)", "INSERT OR IGNORE", ""
+    else:
+        link_json = ", ".join(
+            f"{_pg_value(link_types[name].table, link_types[name].name, i)} AS {name}"
+            for i, name in enumerate(_LINK_COLUMNS)
+        )
+        rows_source, ignore, no_conflict = "json_array_elements(%s::json) AS value", "INSERT", " ON CONFLICT DO NOTHING"
+    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in _PAGE_COLUMNS if c not in ("crawl_id", "url"))
+    return _WriterSql(
+        # a URL reached twice keeps its latest response
+        pages=_insert_json(pages, _PAGE_COLUMNS, dialect, "INSERT OR REPLACE",
+                           f"ON CONFLICT (crawl_id, url) DO UPDATE SET {updates}"),
+        # A batch of links: its URLs get ids (new ones inserted), then the rows go in with the ids — all inside the
+        # database, so the writer keeps no URL -> id map in memory. Both statements read the same JSON chunk.
+        link_urls=(
+            f"WITH r AS (SELECT {link_json} FROM {rows_source}) "  # noqa: S608 — fixed names
+            f"{ignore} INTO urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
+            f"{no_conflict}"
+        ),
+        # The ids by a lookup per row through the unique index — not a JOIN: with planner statistics from earlier,
+        # smaller crawls in the same database SQLite could pick a scan of `urls` per row (4 pages then a full one: 20 s).
+        link_rows=(
+            f"WITH r AS (SELECT {link_json} FROM {rows_source}) "  # noqa: S608 — fixed names
+            f"INSERT INTO link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
+            "SELECT r.crawl_id, (SELECT id FROM urls WHERE url = r.source AND crawl_id = r.crawl_id),"
+            " (SELECT id FROM urls WHERE url = r.target AND crawl_id = r.crawl_id),"
+            f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
+        ),
+        custom=_insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"], dialect),
+        events=_insert_json(render_events, ["crawl_id", "url", "kind", "message", "resource"], dialect),
+        images=_insert_json(rendered_images, ["crawl_id", "url", "image", "real_width", "real_height", "display_width",
+                                              "display_height"], dialect),
+        sitemap_urls=_insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"], dialect),
+        queued=_insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], dialect, "INSERT OR IGNORE",
+                            "ON CONFLICT DO NOTHING"),
+        mark_done=(
+            "UPDATE frontier SET done = TRUE WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
+            if sqlite
+            else "UPDATE frontier SET done = TRUE WHERE crawl_id = %s AND url IN (SELECT json_array_elements_text(%s::json))"
+        ),
+    )  # fmt: skip
+
+
+_WRITER_SQL = {name: _writer_sql(name) for name in ("sqlite", "postgresql")}
 
 
 def _timestamp() -> str:
@@ -633,27 +856,29 @@ class PageWriter:
         if batch.html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned
             with self.html_engine.begin() as conn:
                 conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), batch.html)
+        sql = _WRITER_SQL[self.engine.dialect.name]
         with self.engine.begin() as conn:
             for statements, rows in (
-                ((_INSERT_QUEUED,), batch.queued),
-                ((_INSERT_PAGES,), batch.pages),
-                ((_INSERT_LINK_URLS, _INSERT_LINK_ROWS), batch.links),
+                ((sql.queued,), batch.queued),
+                ((sql.pages,), batch.pages),
+                ((sql.link_urls, sql.link_rows), batch.links),
             ):
                 for chunk in range(0, len(rows), _JSON_CHUNK):  # SQLite parses a JSON argument whole
                     data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
-                    for sql in statements:
-                        conn.exec_driver_sql(sql, (data,))
-            for rows, sql in ((batch.custom, _INSERT_CUSTOM), (batch.events, _INSERT_EVENTS),
-                              (batch.images, _INSERT_IMAGES)):  # fmt: skip
+                    for statement in statements:
+                        conn.exec_driver_sql(statement, (data,))
+            for rows, statement in ((batch.custom, sql.custom), (batch.events, sql.events), (batch.images, sql.images)):
                 for chunk in range(0, len(rows), _JSON_CHUNK):
-                    conn.exec_driver_sql(sql, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
+                    conn.exec_driver_sql(
+                        statement, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),)
+                    )
             if batch.sitemap_files:
                 conn.execute(sa.insert(sitemap_files), batch.sitemap_files)
             for chunk in range(0, len(batch.sitemap_urls), _JSON_CHUNK):
                 data = json.dumps(batch.sitemap_urls[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
-                conn.exec_driver_sql(_INSERT_SITEMAP_URLS, (data,))
+                conn.exec_driver_sql(sql.sitemap_urls, (data,))
             if batch.done:
-                conn.exec_driver_sql(_MARK_DONE, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
+                conn.exec_driver_sql(sql.mark_done, (self.crawl_id, json.dumps(batch.done, ensure_ascii=False)))
 
 
 def enqueue(engine: sa.Engine, crawl_id: int, urls: list[str], depth: int = 0) -> None:
@@ -661,7 +886,8 @@ def enqueue(engine: sa.Engine, crawl_id: int, urls: list[str], depth: int = 0) -
     rows = [(crawl_id, url, depth, False) for url in urls]
     with engine.begin() as conn:
         for chunk in range(0, len(rows), _JSON_CHUNK):
-            conn.exec_driver_sql(_INSERT_QUEUED, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
+            conn.exec_driver_sql(_WRITER_SQL[engine.dialect.name].queued,
+                                 (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))  # fmt: skip
 
 
 def reset_for_respider(engine: sa.Engine, crawl_id: int, targets: list[str]) -> list[str]:

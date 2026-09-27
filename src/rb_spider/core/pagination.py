@@ -12,6 +12,8 @@ from typing import Literal, get_args
 
 import sqlalchemy as sa
 
+from . import storage
+
 PAGINATION = "l.kind IN ('next', 'prev')"
 Only = Literal["all", "non_200", "unlinked"]
 ONLY: tuple[str, ...] = get_args(Only)
@@ -24,9 +26,9 @@ _ROWS = """
     WHERE l.crawl_id = :crawl_id AND l.kind IN ('next', 'prev')
 """
 FILTERS = {
-    "all": "1",
+    "all": "TRUE",
     "non_200": "p.url IS NOT NULL AND (p.status_code <> 200 OR p.blocked IS NOT NULL)",
-    "unlinked": "NOT coalesce(p.external, 1) AND NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id"
+    "unlinked": "NOT coalesce(p.external, TRUE) AND NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id"
     " AND h.target_id = l.target_id AND h.kind = 'hyperlink')",
     "not_in_anchor": "NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id AND h.source_id = l.source_id"
     " AND h.target_id = l.target_id AND h.kind = 'hyperlink')",
@@ -44,7 +46,7 @@ def report(engine: sa.Engine, crawl_id: int, only: str = "all", limit: int | Non
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), {"crawl_id": crawl_id}).scalar_one()  # noqa: S608 — fixed text
         rows = conn.execute(
             sa.text(f"{query} ORDER BY source, rel, target LIMIT :limit"),
-            {"crawl_id": crawl_id, "limit": -1 if limit is None else limit},
+            {"crawl_id": crawl_id, "limit": storage.NO_LIMIT if limit is None else limit},
         ).mappings()
         return total, [dict(row) for row in rows]
 
@@ -53,7 +55,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     """Screaming Frog's Contains Pagination / First Page / Paginated 2+ Pages, over the site's pages."""
     rows = conn.execute(
         sa.text(
-            "SELECT pagination, count(*) FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, 0)"
+            "SELECT pagination, count(*) FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
             " AND pagination IS NOT NULL GROUP BY pagination"
         ),
         {"crawl_id": crawl_id},

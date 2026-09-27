@@ -36,6 +36,8 @@ structured = ["extruct>=0.18"]
 xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
 sitemaps = ["rb-sitemap-xml"]
+# crawls in PostgreSQL instead of the local SQLite file (`SPIDER_DB_URL`)
+postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
 spider = "rb_spider.cli:main"
