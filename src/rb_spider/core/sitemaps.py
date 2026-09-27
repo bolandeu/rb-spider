@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from . import storage
 from .errors import InvalidArguments, SitemapsUnavailable
 from .extract import normalize_url
-from .scope import Scope
+from .scope import Scope, link_row
 from .settings import CrawlSettings, SitemapSettings
 
 
@@ -59,8 +59,7 @@ async def read(
             locs = [(normalize_url(entry.loc), entry.lastmod) for entry in entries]
             writer.sitemap(file.model_dump(), locs)
             writer.add_links([
-                (url, normalize_url(href), "hreflang", scope.internal(href), None, None, None, False, None, None,
-                 None, code)
+                link_row(url, normalize_url(href), "hreflang", scope.internal(href), hreflang=code)
                 for (url, _), entry in zip(locs, entries, strict=True) for code, href in entry.alternates
             ])  # fmt: skip
             yield [url for url, _ in locs]

@@ -250,19 +250,39 @@ def serp_preview(data: dict) -> None:
         console.print(f"  обрезано: {', '.join(cut)}")
 
 
+def custom_view(data: dict) -> None:
+    if data.get("rules") is not None:
+        table = Table(box=None, pad_edge=False, title=f"Custom — обход #{data['crawl_id']}", title_justify="left")
+        for column in ("", "имя", "страниц с совпадением / значением", "без"):
+            table.add_column(column)
+        for rule in data["rules"]:
+            table.add_row(
+                rule["kind"], rule["name"], str(rule["pages"]), "—" if rule["without"] is None else str(rule["without"])
+            )
+        console.print(table)
+        return
+    shown, total = len(data["rows"]), data["total"]
+    head = f"[bold]{data['kind']} «{data['name']}»[/bold] — обход #{data['crawl_id']}: {total}"
+    console.print(head + (f", показаны первые {shown}" if shown < total else ""))
+    for row in data["rows"]:
+        value = row.get("value") if row.get("value") is not None else row.get("n")
+        console.print(f"{row['url']}  {'' if value is None else value}", markup=False)
+
+
 def links_table(data: dict) -> None:
     shown, total = len(data["links"]), data["total"]
     arrow = "←" if data["direction"] == "in" else "→"
     head = f"[bold]{data['url']}[/bold] {arrow} обход #{data['crawl_id']}: {total} ссылок"
     console.print(head + (f", показаны первые {shown}" if shown < total else ""))
     table = Table(box=None, pad_edge=False)
-    for column in ("код", "URL", "анкор", "тип"):
+    for column in ("код", "URL", "анкор", "тип", "зона"):
         table.add_column(column)
     for link in data["links"]:
         other = link["source"] if data["direction"] == "in" else link["target"]
         kind = link["kind"] + (" nofollow" if link["nofollow"] else "")
         anchor = link["anchor"] or (f"[img alt: {link['alt']}]" if link["alt"] else "")
-        table.add_row(str(link["status_code"] if link["status_code"] is not None else "—"), other, anchor, kind)
+        status = str(link["status_code"] if link["status_code"] is not None else "—")
+        table.add_row(status, other, anchor, kind, link.get("position") or "")
     console.print(table)
 
 

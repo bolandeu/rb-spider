@@ -2011,6 +2011,9 @@ sitemaps = [
 structured = [
     { name = "extruct" },
 ]
+xpath = [
+    { name = "lxml" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -2032,6 +2035,7 @@ requires-dist = [
     { name = "extruct", marker = "extra == 'structured'", specifier = ">=0.18" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "keyring", specifier = ">=25.0" },
+    { name = "lxml", marker = "extra == 'xpath'", specifier = ">=5" },
     { name = "packaging", specifier = ">=24.0" },
     { name = "platformdirs", specifier = ">=4.2" },
     { name = "pydantic", specifier = ">=2.6" },
@@ -2043,7 +2047,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "zstandard", specifier = ">=0.23" },
 ]
-provides-extras = ["render", "curl", "near", "structured", "sitemaps"]
+provides-extras = ["render", "curl", "near", "structured", "xpath", "sitemaps"]
 
 [package.metadata.requires-dev]
 dev = [

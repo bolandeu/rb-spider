@@ -30,6 +30,8 @@ curl = ["crawlee[curl-impersonate]>=1.10,<1.11"]
 near = ["datasketch>=2.0"]
 # Microdata and RDFa (`collect.structured_data`): extruct; JSON-LD needs nothing extra
 structured = ["extruct>=0.18"]
+# Custom Extraction by XPath (`custom.extract` with kind = "xpath")
+xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
 sitemaps = ["rb-sitemap-xml"]
 

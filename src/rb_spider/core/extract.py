@@ -30,6 +30,8 @@ class Link:
     rel: str | None = None  # raw rel attribute, lower-case
     nofollow: bool = False
     fragment: str | None = None  # the #bookmark the link jumps to, when it names one (see bookmark_fragment)
+    position: str | None = None  # nav | header | footer | sidebar | content… (custom.link_positions)
+    path: str | None = None  # the landmark ancestors, /nav.menu/… (collect.link_path)
 
 
 @dataclass
@@ -62,6 +64,7 @@ class Page:
     forms: list[str] = field(default_factory=list)  # each <form>'s action, absolute (no action: the page itself)
     mobile_alternates: list[str] = field(default_factory=list)  # <link rel="alternate" media="…"> targets
     uncrawlable: list[tuple[str, str]] = field(default_factory=list)  # (javascript: / onclick…, text) — not followable
+    custom: list[tuple] = field(default_factory=list)  # custom_values rows: (kind, name, value, n)
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -296,6 +299,7 @@ def _content(tree: LexborHTMLParser, body: bytes, exclude: Sequence[str], minhas
         # visible text (single spaces between words), % of the HTML
         "text_ratio": round(100 * (sum(map(len, tokens)) + len(tokens)) / len(body), 1) if body else None,
         "minhash": content.signature(text) if minhash else None,
+        "_text": text,  # for custom search over the text; taken out before the row is stored
     }
 
 
@@ -336,8 +340,11 @@ def anchor_ids(tree: LexborHTMLParser) -> str:
     return base64.b64encode(b"".join(fingerprints)).decode()
 
 
-def _links(url: str, tree: LexborHTMLParser, *, keep_fragments: bool = False, invalid: bool = False) -> list[Link]:
+def _links(
+    url: str, tree: LexborHTMLParser, *, keep_fragments: bool = False, invalid: bool = False, placer=None
+) -> list[Link]:
     links = []
+    place = placer.placer() if placer is not None else None
     for anchor in tree.css("a[href]"):
         href = anchor.attributes.get("href") or ""
         target = _link_target(url, href, keep_fragment=keep_fragments, invalid=invalid)
@@ -355,6 +362,8 @@ def _links(url: str, tree: LexborHTMLParser, *, keep_fragments: bool = False, in
                 fragment=bookmark_fragment(href),
             )
         )
+        if place is not None:
+            links[-1].position, links[-1].path = place(anchor)
     return links
 
 
@@ -570,6 +579,8 @@ def parse_page(
     keep_fragments: bool = False,
     invalid_links: bool = False,
     assume_html: bool = True,
+    custom=None,
+    placer=None,
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -604,7 +615,9 @@ def parse_page(
                 if refresh := _refresh_target(url, meta.attributes.get("content")):
                     page.refresh_url, page.refresh_kind = refresh, "meta"
                 break
-    page.links = _links(url, tree, keep_fragments=keep_fragments, invalid=invalid_links)
+    page.links = _links(url, tree, keep_fragments=keep_fragments, invalid=invalid_links, placer=placer)
+    if custom is not None and custom.active:
+        page.custom = custom.before_content(tree, body)
     page.resources = _resources(url, tree, srcset)
     page.uncrawlable = uncrawlable_links(tree)
     page.onpage["uncrawlable_outlinks"] = len(page.uncrawlable)
@@ -617,4 +630,8 @@ def parse_page(
     page.onpage |= {"forms": len(page.forms), "unsafe_blank_links": _unsafe_blank_links(url, tree),
                     "protocol_relative": _protocol_relative_resources(tree)}  # fmt: skip
     page.onpage |= _content(tree, body, content_exclude, minhash)
+    if custom is not None and custom.active:
+        page.custom += custom.after_content(page.onpage.pop("_text", ""))
+    else:
+        page.onpage.pop("_text", None)
     return page

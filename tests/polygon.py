@@ -563,6 +563,18 @@ SETTINGS_TRAPS: dict[str, tuple[int, dict[str, str], str]] = {
     "/self-refresh": (200, {}, _html("self-refresh", dead_end=True,
                                      head=_head("self-refresh", extra='<meta http-equiv="refresh" content="30; url={base}/self-refresh">'))),
 }  # fmt: skip
+# Custom Search / Extraction and link positions (#36): a page with landmarks, a price and a counter snippet.
+CUSTOM_PAGE = (
+    '<html><head><title>{t}</title><meta name="description" content="{d}"><meta name="author" content="Редакция">'
+    '<script src="https://www.googletagmanager.com/gtm.js?id=GTM-X"></script></head><body>'
+    '<header class="site-header"><a href="/a">Главная раздела</a></header>'
+    '<nav class="main-menu"><ul><li><a href="/b">Каталог</a></li><li><a href="/c">Доставка</a></li></ul></nav>'
+    '<main><h1>Товар дня</h1><h2>Цены</h2><p class="price">1 990 ₽</p><p class="price">2 490 ₽</p>'
+    '<p>Акция! Артикул SKU-12345. Акция до конца недели.</p><a href="/shop/">В магазин</a></main>'
+    '<aside class="sidebar"><a href="/deep1">Похожее</a></aside>'
+    '<footer><a href="/">Контакты</a></footer></body></html>'
+).format(t=TITLE.format("custom"), d=DESCRIPTION.format("custom"))
+SETTINGS_TRAPS["/cx"] = (200, {}, CUSTOM_PAGE)
 FLAKY_FAILS = 2
 FLAKY_SEEN: dict[str, int] = {}
 BASIC_AUTH = "Basic " + __import__("base64").b64encode(b"stage:pa55").decode()

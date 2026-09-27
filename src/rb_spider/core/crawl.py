@@ -54,11 +54,12 @@ from .errors import (
     InvalidArguments,
     NearDuplicatesUnavailable,
     StructuredDataUnavailable,
+    XPathUnavailable,
 )
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
 from .render import Renderer
-from .scope import PageReader, Reading, Scope, init_worker, read_in_worker
+from .scope import PageReader, Reading, Scope, init_worker, link_row, read_in_worker
 from .settings import CrawlSettings, Settings
 
 PROGRESS_EVERY_S = 5.0
@@ -313,7 +314,9 @@ async def _run(
     )
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
-    parser = Parser(PageReader(scope, settings, collect, all_settings.rewrite), settings.parse_workers)
+    parser = Parser(
+        PageReader(scope, settings, collect, all_settings.rewrite, all_settings.custom), settings.parse_workers
+    )
     response_ms: dict[str, int] = {}  # answered requests -> response time, until their handler stores it
     redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
     retried: dict[str, int] = {}  # URLs asked again after a 5xx (crawl.retries_5xx), until they are stored
@@ -409,7 +412,7 @@ async def _run(
             if secure := hsts_upgrade(url):  # not fetched: recorded as the browser's own 307 to HTTPS
                 writer.queued(url, depth, check)
                 writer.add(_hsts_redirect(url, secure, scope), depth=depth)
-                writer.add_links([(url, secure, "redirect", scope.internal(secure), *[None] * 3, False, *[None] * 4)])
+                writer.add_links([link_row(url, secure, "redirect", scope.internal(secure))])
                 upgraded.append(secure)
                 continue
             if settings.robots == "respect" and not await robots.allowed(url):
@@ -541,6 +544,8 @@ def _ready(settings: Settings) -> None:
         raise StructuredDataUnavailable
     if settings.sitemaps.crawl:
         sitemaps.ensure_available()
+    if any(rule.kind == "xpath" for rule in settings.custom.extract) and importlib.util.find_spec("lxml") is None:
+        raise XPathUnavailable
 
 
 _URL_COLUMNS = ("url", "address", "loc", "адрес")

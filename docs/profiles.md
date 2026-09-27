@@ -104,6 +104,7 @@ concurrency = 10
 | `collect.pagination.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.mobile_alternate.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.mobile_alternate.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.link_path` | `bool` | `false` | Хранить у каждой ссылки путь её предков (/nav.menu/…) — для разбора зон; ~40 байт на ссылку. |
 | `collect.uncrawlable_links` | `bool` | `false` | Хранить и «ссылки», по которым не перейти (javascript:, href не у <a>, onclick) — видны в `spider links`. |
 | `collect.html_validation` | `bool` | `true` | Проверять структуру HTML по исходному коду: <head> / <body>, порядок, элементы в <head>. |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
@@ -121,6 +122,9 @@ concurrency = 10
 | `sitemaps.discover` | `bool` | `true` | Искать sitemap сам: строки Sitemap: в robots.txt, затем /sitemap.xml и т.п. |
 | `sitemaps.urls` | `list[str]` | `[]` | Адреса sitemap (или индексов) вдобавок к найденным. |
 | `sitemaps.follow` | `bool` | `true` | Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать). |
+| `custom.search` | `list[rb_spider.core.settings.CustomSearch]` | `[]` | Поиски по страницам: [[custom.search]] с name, query, regex, scope (html / text / element). |
+| `custom.extract` | `list[rb_spider.core.settings.CustomExtract]` | `[]` | Извлечения: [[custom.extract]] с name, kind (css / xpath / regex), query, output, limit. |
+| `custom.link_positions` | `list[tuple[str, str]]` | `[["nav", "nav"], ["menu", "nav"], ["header", "header"], ["footer", "footer"], ["aside", "sidebar"], ["sidebar", "sidebar"]]` | Зоны ссылок: пары [слово пути, зона] по порядку — слово класса, id или тега предка ссылки; ни одно не подошло — content. |
 | `rewrite.remove_params` | `list[str]` | `[]` | Удалять из найденных URL эти GET-параметры (точное имя, с учётом регистра). |
 | `rewrite.regex` | `list[tuple[str, str]]` | `[]` | Замены по регулярным выражениям, по порядку: пары [выражение, замена]; группы в замене — \1, \2. |
 | `rewrite.lowercase` | `bool` | `false` | Переводить найденные URL в нижний регистр целиком. |

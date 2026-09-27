@@ -32,13 +32,13 @@
 | Раздел | `MVP` | `v2` | `v3` | `backlog` | `skip` | Всего |
 |---|---:|---:|---:|---:|---:|---:|
 | A. Проверки (issues) | 78 | 93 | 32 | 113 | 4 | 320 |
-| B. Сбор данных и вкладки | 15 | 22 | 7 | 8 | 1 | 53 |
+| B. Сбор данных и вкладки | 15 | 23 | 7 | 8 | 1 | 54 |
 | C. Настройки обхода | 44 | 44 | 2 | 11 | 5 | 106 |
 | D. Режимы | 6 | 4 | 2 | 4 | 1 | 17 |
 | E. Экспорт и отчёты | 11 | 24 | 8 | 11 | 2 | 56 |
 | F. Интеграции | 1 | 0 | 5 | 1 | 4 | 11 |
 | G. Наше, чего нет в SF | 22 | 4 | 0 | 0 | 0 | 26 |
-| **Итого** | **177** | **191** | **56** | **148** | **17** | **589** |
+| **Итого** | **177** | **192** | **56** | **148** | **17** | **590** |
 
 В разделе A 320 проверок SF, из них 92 — Accessibility (все `backlog`).
 
@@ -473,7 +473,7 @@
 - [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
 - [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
 - [ ] `v3` **Links: Link Score** — внутренний «PageRank» 0–100
-- [ ] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений
+- [x] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений → `spider custom`
 - [ ] `backlog` **Custom JavaScript** — результаты пользовательских JS-сниппетов
 - [ ] `backlog` **AMP: Non-Indexable** — список неиндексируемых AMP
 - [ ] `skip` **Analytics: Sessions Above 0** — URL с сессиями в GA
@@ -496,7 +496,8 @@
 
 - [x] `MVP` **URL Details** — сводка по URL: код, тип, размер, глубина, число ссылок
 - [x] `MVP` **Inlinks / Outlinks** — ссылки с колонками: анкор, alt, follow, target, rel, код ответа цели
-- [ ] `v2` **Link Path, Link Position, Link Origin** — XPath ссылки, её зона (nav, header, footer, content…), откуда взята (raw / rendered HTML)
+- [x] `v2` **Link Path, Link Position** — путь предков ссылки (`collect.link_path`), её зона (nav, header, footer, sidebar, content) → `spider links`
+- [ ] `v2` **Link Origin** — откуда взята ссылка (raw / rendered HTML) — вместе со сравнением raw и rendered (#39)
 - [x] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
 - [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
@@ -649,9 +650,9 @@
 
 ### Пользовательские правила (Config > Custom)
 
-- [ ] `v2` **Custom Search** — «содержит / не содержит» текст или regex в HTML, тексте, элементе → `custom.search`
-- [ ] `v2` **Custom Extraction** — XPath, CSS, regex; вывод элемент / inner HTML / текст / значение функции → `custom.extract`
-- [ ] `v2` **Link Positions** — правила «XPath ссылки → зона (nav, footer, content…)» → `custom.link_positions`
+- [x] `v2` **Custom Search** — «содержит / не содержит» текст или regex в HTML, тексте, элементе → `custom.search`
+- [x] `v2` **Custom Extraction** — XPath, CSS, regex; вывод элемент / inner HTML / текст / значение функции → `custom.extract` (XPath — extra `rb-spider[xpath]`)
+- [x] `v2` **Link Positions** — правила «слово пути ссылки → зона (nav, footer, content…)» → `custom.link_positions`
 - [ ] `backlog` **Custom JavaScript** — пользовательские JS-сниппеты на каждой странице (извлечение и действия)
 - [ ] `backlog` **Segments** — сегменты URL по правилам
 

@@ -190,7 +190,10 @@ urls = sa.Table(
     sa.Column("url", sa.String, nullable=False),
     sa.UniqueConstraint("url", "crawl_id", name="urls_by_url"),
 )
-LINK_DATA = ("kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang")
+LINK_DATA = (
+    "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang", "position",
+    "path",
+)  # fmt: skip
 link_rows = sa.Table(
     "link_rows",
     metadata,
@@ -208,6 +211,10 @@ link_rows = sa.Table(
     sa.Column("sized", sa.Boolean),  # images: width and height are set in the HTML
     sa.Column("fragment", sa.String),  # hyperlinks to a #bookmark: the id it should land on (Broken Bookmark)
     sa.Column("hreflang", sa.String),  # hreflang annotations: the language / region code, as written
+    sa.Column(
+        "position", sa.String
+    ),  # hyperlinks: nav | header | footer | sidebar (custom.link_positions); NULL — content
+    sa.Column("path", sa.String),  # hyperlinks: the landmark ancestors, /nav.menu/… (collect.link_path)
     sa.Index("link_rows_by_source", "crawl_id", "source_id"),
     sa.Index("link_rows_by_target", "crawl_id", "target_id"),
     # links to a #bookmark are few: Broken Bookmark reads them without scanning every link of the crawl
@@ -237,6 +244,8 @@ links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never w
     sa.Column("sized", sa.Boolean),
     sa.Column("fragment", sa.String),
     sa.Column("hreflang", sa.String),
+    sa.Column("position", sa.String),
+    sa.Column("path", sa.String),
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(
@@ -269,6 +278,19 @@ sitemap_urls = sa.Table(
     sa.Column("source", sa.String, nullable=False),  # the sitemap file
     sa.Column("lastmod", sa.String),
     sa.Index("sitemap_urls_by_url", "crawl_id", "url"),
+)
+# Custom Search and Custom Extraction results ([custom]): a search — the number of matches on a page (a row only
+# when there are any); an extraction — each value, `n` its order on the page.
+custom_values = sa.Table(
+    "custom_values",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("kind", sa.String, nullable=False),  # search | extract
+    sa.Column("name", sa.String, nullable=False),
+    sa.Column("value", sa.String),
+    sa.Column("n", sa.Integer, nullable=False),
+    sa.Index("custom_values_by_name", "crawl_id", "kind", "name"),
 )
 # Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
 near_duplicates = sa.Table(
@@ -418,6 +440,7 @@ _INSERT_LINK_ROWS = (
     " (SELECT id FROM urls WHERE url = r.target AND crawl_id = r.crawl_id),"
     f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
 )
+_INSERT_CUSTOM = _insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"])
 _INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
 _MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
@@ -430,6 +453,7 @@ def _timestamp() -> str:
 
 @dataclass
 class _Batch:
+    custom: list[tuple] = field(default_factory=list)
     sitemap_files: list[dict] = field(default_factory=list)
     sitemap_urls: list[tuple] = field(default_factory=list)
     pages: list[tuple] = field(default_factory=list)
@@ -504,6 +528,7 @@ class PageWriter:
             "refresh_kind": page.refresh_kind,
         }
         self._batch.pages.append(tuple(row.get(column) for column in _PAGE_COLUMNS))
+        self._batch.custom.extend((self.crawl_id, page.url, *values) for values in page.custom)
         self._batch.done.append(page.url)
         self.count += 1
         if len(self._batch.pages) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
@@ -557,6 +582,9 @@ class PageWriter:
                     data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
                     for sql in statements:
                         conn.exec_driver_sql(sql, (data,))
+            for chunk in range(0, len(batch.custom), _JSON_CHUNK):
+                data = json.dumps(batch.custom[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
+                conn.exec_driver_sql(_INSERT_CUSTOM, (data,))
             if batch.sitemap_files:
                 conn.execute(sa.insert(sitemap_files), batch.sitemap_files)
             for chunk in range(0, len(batch.sitemap_urls), _JSON_CHUNK):
@@ -723,6 +751,8 @@ def links_of(
             links.c.rel,
             links.c.nofollow,
             links.c.internal,
+            links.c.position,
+            links.c.path,
             pages.c.status_code,
         )
         .select_from(links.outerjoin(pages, sa.and_(pages.c.crawl_id == links.c.crawl_id, pages.c.url == other)))

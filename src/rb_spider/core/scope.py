@@ -14,16 +14,26 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
+from .custom import CustomRules, LinkPlacer
 from .extract import Page, missing_security_headers, normalize_url, parse_page, sniffed_mismatch
 
 if TYPE_CHECKING:
-    from .settings import CollectSettings, CrawlSettings, RewriteSettings
+    from .settings import CollectSettings, CrawlSettings, CustomSettings, RewriteSettings
 
 # Columns of a `links` row as `PageReader` builds it (the crawl id is added by the writer).
 LINK_FIELDS = (
     "source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment",
-    "hreflang",
+    "hreflang", "position", "path",
 )  # fmt: skip
+_LINK_DEFAULTS = dict.fromkeys(LINK_FIELDS[4:]) | {"nofollow": False}
+
+
+def link_row(source: str, target: str, kind: str, internal: bool, **fields) -> tuple:
+    """A `links` row in LINK_FIELDS order; fields not given are empty (nofollow — false)."""
+    values = _LINK_DEFAULTS | fields
+    return (source, target, kind, internal, *(values[name] for name in LINK_FIELDS[4:]))
+
+
 _PERCENT = re.compile(r"%[0-9a-fA-F]{2}")
 
 
@@ -138,9 +148,17 @@ class PageReader:
     """Parses a response and applies `collect.*`: what to follow and what to store, per kind of link."""
 
     def __init__(
-        self, scope: Scope, crawl: CrawlSettings, collect: CollectSettings, rewrite: RewriteSettings | None = None
+        self,
+        scope: Scope,
+        crawl: CrawlSettings,
+        collect: CollectSettings,
+        rewrite: RewriteSettings | None = None,
+        custom: CustomSettings | None = None,
     ) -> None:
         self.scope = scope
+        self.custom = CustomRules(custom.search, custom.extract) if custom else None
+        positions = custom.link_positions if custom else ()
+        self.placer = LinkPlacer(positions, collect.link_path) if positions or collect.link_path else None
         self.rewrite = Rewriter(rewrite)
         self.content_exclude: Sequence[str] = list(crawl.content_exclude)
         self.srcset = collect.images_srcset
@@ -168,7 +186,7 @@ class PageReader:
                           content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash,
                           structured_data=self.structured_data, validate=self.validate,
                           keep_fragments=self.keep_fragments, invalid_links=self.invalid_links,
-                          assume_html=self.assume_html)  # fmt: skip
+                          assume_html=self.assume_html, custom=self.custom, placer=self.placer)  # fmt: skip
         page.bytes = len(body)
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
@@ -212,8 +230,9 @@ class PageReader:
             elif internal:
                 counts["internal_nofollow_outlinks"] += 1
             if kind.store:
-                rows.append((page.url, link.url, "hyperlink", internal, link.anchor, link.alt, link.rel,
-                             link.nofollow, None, None, link.fragment, None))  # fmt: skip
+                rows.append(link_row(page.url, link.url, "hyperlink", internal, anchor=link.anchor, alt=link.alt,
+                                     rel=link.rel, nofollow=link.nofollow, fragment=link.fragment,
+                                     position=link.position, path=link.path))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
             if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)
@@ -230,9 +249,7 @@ class PageReader:
             if not target or target == page.url:
                 continue
             if option.store or kind == "redirect":
-                rows.append(
-                    (page.url, target, kind, internal_of(target), None, None, None, False, None, None, None, None)
-                )
+                rows.append(link_row(page.url, target, kind, internal_of(target)))
             always = (
                 ("redirect", "refresh", *(("canonical",) if self.list_canonicals else ()))
                 if self.listed
@@ -243,31 +260,27 @@ class PageReader:
         hreflang = self.kinds["hreflang"]
         for code, target in page.hreflang:  # self-references too: Missing Self Reference needs them
             if hreflang.store:
-                rows.append((page.url, target, "hreflang", internal_of(target), None, None, None, False, None, None,
-                             None, code))  # fmt: skip
+                rows.append(link_row(page.url, target, "hreflang", internal_of(target), hreflang=code))
             if hreflang.follow and not self.listed and target != page.url:
                 follow.append(target)
         pagination = self.kinds["pagination"]
         for rel, target in page.pagination:
             if pagination.store:
-                rows.append((page.url, target, rel, internal_of(target), None, None, None, False, None, None,
-                             None, None))  # fmt: skip
+                rows.append(link_row(page.url, target, rel, internal_of(target)))
             if pagination.follow and not self.listed and target != page.url:
                 follow.append(target)
         mobile = self.kinds["mobile_alternate"]
         for target in page.mobile_alternates:
             if mobile.store:
-                rows.append((page.url, target, "mobile_alternate", internal_of(target), None, None, None, False, None,
-                             None, None, None))  # fmt: skip
+                rows.append(link_row(page.url, target, "mobile_alternate", internal_of(target)))
             if mobile.follow and not self.listed:
                 follow.append(target)
         if self.store_uncrawlable:  # kept for `spider links`: what the "link" is, not a URL to fetch
-            rows += [(page.url, target, "uncrawlable", True, text, None, None, False, None, None, None, None)
-                     for target, text in page.uncrawlable]  # fmt: skip
+            rows += [link_row(page.url, target, "uncrawlable", True, anchor=text) for target, text in page.uncrawlable]
         for action in page.forms:  # kept with the links of its kind, never fetched
             internal = internal_of(action)
             if self.kinds["internal_links" if internal else "external_links"].store:
-                rows.append((page.url, action, "form", internal, None, None, None, False, None, None, None, None))
+                rows.append(link_row(page.url, action, "form", internal))
         page.hreflang, page.pagination, page.forms, page.mobile_alternates, page.uncrawlable = [], [], [], [], []
         return follow, rows
 
@@ -278,8 +291,8 @@ class PageReader:
         for resource in page.resources:
             option = self.kinds[resource.kind]
             if option.store:
-                rows.append((page.url, resource.url, resource.kind, self.scope.internal(resource.url), None,
-                             resource.alt, None, False, resource.alt_attr, resource.sized, None, None))  # fmt: skip
+                rows.append(link_row(page.url, resource.url, resource.kind, self.scope.internal(resource.url),
+                                     alt=resource.alt, alt_attr=resource.alt_attr, sized=resource.sized))  # fmt: skip
             if option.follow and not self.listed:
                 check.append(resource.url)
         return check, rows

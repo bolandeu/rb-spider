@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import platformdirs
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from .errors import InvalidArguments
 from .version import CLI_NAME
@@ -334,6 +334,10 @@ class CollectSettings(BaseModel):
         default_factory=FollowStore,
         description="Мобильная версия <link rel=alternate media=…>: follow — обходить её страницы.",
     )
+    link_path: bool = Field(
+        False,
+        description="Хранить у каждой ссылки путь её предков (/nav.menu/…) — для разбора зон; ~40 байт на ссылку.",
+    )
     uncrawlable_links: bool = Field(
         False,
         description="Хранить и «ссылки», по которым не перейти (javascript:, href не у <a>, onclick) — видны в `spider links`.",
@@ -420,6 +424,91 @@ class SitemapSettings(BaseModel):
     )
     follow: bool = Field(
         True, description="Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать)."
+    )
+
+
+class CustomSearch(BaseModel):
+    """One Custom Search rule: how many times a text or a regular expression occurs on each page."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Имя поиска — так он называется в `spider custom`.")
+    query: str = Field(description="Что искать: текст или регулярное выражение (regex = true).")
+    regex: bool = Field(False, description="query — регулярное выражение Python.")
+    case_sensitive: bool = Field(False, description="Учитывать регистр.")
+    scope: Literal["html", "text", "element"] = Field(
+        "html",
+        description="Где искать: html — исходный код; text — текст страницы; element — текст элементов selector.",
+    )
+    selector: str | None = Field(None, description="CSS-селектор для scope = element.")
+
+    @model_validator(mode="after")
+    def _valid(self) -> CustomSearch:
+        if not self.query:
+            raise ValueError("query is empty")
+        if self.regex:
+            _check_regex(self.query)
+        if self.scope == "element" and not self.selector:
+            raise ValueError("scope = element needs a selector")
+        return self
+
+
+class CustomExtract(BaseModel):
+    """One Custom Extraction rule: values taken from each page into `spider custom`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Имя извлечения — так оно называется в `spider custom`.")
+    kind: Literal["css", "xpath", "regex"] = Field(
+        "css",
+        description="css — CSS-селектор; xpath — XPath (extra `rb-spider[xpath]`); regex — группа 1 или всё совпадение.",
+    )
+    query: str = Field(description="Селектор, XPath или регулярное выражение.")
+    output: str = Field(
+        "text",
+        description="Что брать у элемента: text, html (элемент целиком), inner_html или имя атрибута (href, content…).",
+    )
+    limit: int = Field(1, ge=1, le=100, description="Сколько значений брать со страницы.")
+
+    @model_validator(mode="after")
+    def _valid(self) -> CustomExtract:
+        if self.kind == "regex":
+            _check_regex(self.query)
+        return self
+
+
+def _check_regex(pattern: str) -> None:
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise ValueError(f"invalid regular expression {pattern!r}: {exc}") from exc
+
+
+DEFAULT_LINK_POSITIONS = [["nav", "nav"], ["menu", "nav"], ["header", "header"], ["footer", "footer"],
+                          ["aside", "sidebar"], ["sidebar", "sidebar"]]  # fmt: skip
+
+
+class CustomSettings(BaseModel):
+    """Custom Search, Custom Extraction and link positions (Screaming Frog's Configuration > Custom)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    search: list[CustomSearch] = Field(
+        [],
+        description="Поиски по страницам: [[custom.search]] с name, query, regex, scope (html / text / element).",
+        examples=[[{"name": "GTM", "query": "googletagmanager.com"}]],
+    )
+    extract: list[CustomExtract] = Field(
+        [],
+        description="Извлечения: [[custom.extract]] с name, kind (css / xpath / regex), query, output, limit.",
+        examples=[[{"name": "price", "query": ".price", "output": "text"}]],
+    )
+    link_positions: list[tuple[str, str]] = Field(
+        [(word, zone) for word, zone in DEFAULT_LINK_POSITIONS],
+        description=(
+            "Зоны ссылок: пары [слово пути, зона] по порядку — слово класса, id или тега предка ссылки; ни одно не "
+            "подошло — content."
+        ),
     )
 
 
@@ -558,6 +647,10 @@ class Settings(BaseModel):
         default_factory=CollectSettings, description="Что обходить и что хранить: ссылки, canonical, refresh."
     )
     sitemaps: SitemapSettings = Field(default_factory=SitemapSettings, description="XML sitemap: чтение и проверки.")
+    custom: CustomSettings = Field(
+        default_factory=CustomSettings,
+        description="Свои поиски, извлечения и зоны ссылок (Custom Search / Extraction).",
+    )
     rewrite: RewriteSettings = Field(
         default_factory=RewriteSettings, description="Переписывание найденных URL: параметры, замены, регистр."
     )
@@ -793,7 +886,7 @@ def _toml_literal(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)  # a JSON string is a valid TOML basic string
-    if isinstance(value, list):
+    if isinstance(value, list | tuple):
         return "[" + ", ".join(_toml_literal(v) for v in value) + "]"
     if isinstance(value, dict):
         pairs = ", ".join(f"{json.dumps(k, ensure_ascii=False)} = {_toml_literal(v)}" for k, v in value.items())

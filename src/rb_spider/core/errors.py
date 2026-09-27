@@ -183,3 +183,18 @@ class SitemapsUnavailable(CliError):
             ),
             exit_code=1,
         )
+
+
+class XPathUnavailable(CliError):
+    """A `custom.extract` rule of kind xpath without the `xpath` extra."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "XPATH_UNAVAILABLE",
+            "Custom Extraction by XPath needs lxml, which is not installed.",
+            action=(
+                f'Install it: uv tool install --reinstall "{DIST_NAME}[xpath] @ git+https://github.com/bolandeu/spider.git" '
+                '(in a checkout: uv sync --extra xpath), or use kind = "css".'
+            ),
+            exit_code=1,
+        )

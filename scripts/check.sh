@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 uv lock --check
-uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps
+uv sync --quiet --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
@@ -19,7 +19,7 @@ for flag in "$@"; do
   case "$flag" in
     --py312)
       env312="$(mktemp -d)"
-      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps pytest -q -p no:cacheprovider
+      UV_PROJECT_ENVIRONMENT="$env312" uv run --quiet --python 3.12 --extra render --extra curl --extra near --extra structured --extra sitemaps --extra xpath pytest -q -p no:cacheprovider
       rm -rf "$env312"
       ;;
     --linux)

@@ -178,7 +178,7 @@ def test_url_id_migration_keeps_every_link(base_url: str, tmp_path) -> None:
     engine = storage.open_db(tmp_path / "links.sqlite")
     try:
         crawl_id = _crawl(engine, base_url, "site")
-        columns = [c for c in storage.links.c if c.name not in ("fragment", "hreflang")]
+        columns = [c for c in storage.links.c if c.name not in ("fragment", "hreflang", "position", "path")]
         query = sa.select(*columns).where(storage.links.c.crawl_id == crawl_id)
         with engine.connect() as conn:
             before = sorted(tuple(row) for row in conn.execute(query))

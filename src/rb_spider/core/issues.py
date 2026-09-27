@@ -9,7 +9,9 @@ priorities follow Screaming Frog's issue library (docs/features.md, docs/referen
 from __future__ import annotations
 
 import base64
+import logging
 import re
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -30,6 +32,7 @@ from .errors import InvalidArguments
 from .extract import anchor_hash
 from .settings import Settings, ThresholdSettings
 
+log = logging.getLogger(__name__)
 Finding = tuple[str, str | None]  # (url, detail)
 RuleFinder = Callable[[sa.Connection, int, ThresholdSettings], Iterable[Finding]]
 
@@ -1162,21 +1165,36 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         # finding the URL's id first (minutes instead of seconds). Sampled, so quick however big the database.
         conn.exec_driver_sql("PRAGMA analysis_limit = 1000")
         conn.exec_driver_sql("ANALYZE")
-        compute_indexability(conn, crawl_id, thresholds)
-        compute_link_counts(conn, crawl_id)
-        compute_url_issues(conn, crawl_id, thresholds)
-        serp_module.compute(conn, crawl_id, thresholds)
-        duplicates_module.compute_near(conn, crawl_id, thresholds)
-        conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))
+        steps: list[tuple[str, Callable[[], object]]] = [
+            ("indexability", lambda: compute_indexability(conn, crawl_id, thresholds)),
+            ("link counts", lambda: compute_link_counts(conn, crawl_id)),
+            ("url flags", lambda: compute_url_issues(conn, crawl_id, thresholds)),
+            ("serp widths", lambda: serp_module.compute(conn, crawl_id, thresholds)),
+            ("near duplicates", lambda: duplicates_module.compute_near(conn, crawl_id, thresholds)),
+            ("clear", lambda: conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id))),
+        ]
+        for name, step in steps:
+            _timed(name, step)
         found = 0
         for r in RULES:
             if r.code in skipped:
                 continue
-            if isinstance(r.find, SqlFinder):
-                found += r.find.store(conn, crawl_id, r.code, thresholds)
-                continue
-            found += _store_findings(conn, crawl_id, r.code, r.find(conn, crawl_id, thresholds))
+            finder, code = r.find, r.code
+            if isinstance(finder, SqlFinder):
+                found += _timed(code, lambda f=finder, c=code: f.store(conn, crawl_id, c, thresholds))
+            else:
+                found += _timed(
+                    code, lambda f=finder, c=code: _store_findings(conn, crawl_id, c, f(conn, crawl_id, thresholds))
+                )
     return found
+
+
+def _timed(name: str, step: Callable[[], Any]) -> Any:
+    """Run one step of `analyze`, logging how long it took (`spider --verbose`): a slow rule shows itself."""
+    started = time.monotonic()
+    result = step()
+    log.debug("analyze: %s %.2f s", name, time.monotonic() - started)
+    return result
 
 
 def _store_findings(conn: sa.Connection, crawl_id: int, code: str, findings: Iterable[Finding]) -> int:
