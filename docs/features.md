@@ -13,7 +13,7 @@
 |---|---|
 | `MVP` | Первая рабочая версия: ядро обхода + базовые SEO-проверки |
 | `v2` | Вторая волна: расширенный аудит (hreflang, JS, микроразметка, sitemap, сравнение обходов…) |
-| `v3` | Внешние API и тяжёлая аналитика (Search Console, PageSpeed, Link Score, визуализации) |
+| `v3` | Внешние API и тяжёлая аналитика (Search Console, PageSpeed, Link Score) |
 | `backlog` | Возможно когда-нибудь; сейчас не планируем |
 | `skip` | Не делаем (не нужно в CLI или закрывается другими средствами) |
 
@@ -478,7 +478,7 @@
 - [ ] `backlog` **AMP: Non-Indexable** — список неиндексируемых AMP
 - [ ] `skip` **Analytics: Sessions Above 0** — URL с сессиями в GA
 - [ ] `v3` **Search Console: Clicks Above 0** + колонки URL Inspection (Coverage, Last Crawl, Google-Selected Canonical…)
-- [ ] `v3` **Link Metrics** — метрики Majestic / Ahrefs / Moz по URL, поддомену, домену
+- [ ] `backlog` **Link Metrics** — метрики Majestic / Ahrefs / Moz по URL, поддомену, домену
 - [ ] `backlog` **AI** — ответы LLM по промптам на каждую страницу
 - [x] `v2` **Change Detection** — что изменилось между обходами: индексируемость, title, description, h1, word count, crawl depth, inlinks/outlinks, типы разметки, контент → `spider compare … --field`
 
@@ -760,9 +760,9 @@
 
 ### Визуализации
 
-- [ ] `v3` **Crawl Diagram / Tree Graph** — граф обхода (force-directed, дерево), цвет по индексируемости и метрикам
-- [ ] `v3` **Directory Tree Diagram / Graph** — граф по каталогам
-- [ ] `v3` **Экспорт визуализаций в SVG**
+- [ ] `backlog` **Crawl Diagram / Tree Graph** — граф обхода (force-directed, дерево), цвет по индексируемости и метрикам
+- [ ] `backlog` **Directory Tree Diagram / Graph** — граф по каталогам
+- [ ] `backlog` **Экспорт визуализаций в SVG**
 - [ ] `backlog` **3D-графы**
 - [ ] `backlog` **Word clouds** (анкоры, текст страниц)
 - [ ] `backlog` **Content Cluster Diagram** (кластеры по эмбеддингам)
@@ -786,7 +786,7 @@
 - [ ] `v3` **Яндекс.Вебмастер** — аналог GSC для Яндекса; на основе пакета `yandex-webmaster` (в SF нет)
 - [ ] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop
 - [ ] `v3` **Lighthouse локально** — без API, работает за авторизацией
-- [ ] `v3` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
+- [ ] `backlog` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
 - [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги
 - [ ] `skip` **Google Analytics 4**
 - [ ] `skip` **Looker Studio / Data Studio**
