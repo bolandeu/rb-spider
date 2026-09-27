@@ -51,6 +51,8 @@ class Rule:
 INTERNAL = "NOT coalesce(external, 0)"
 EXTERNAL = "coalesce(external, 0)"
 HTML_OK = f"{INTERNAL} AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
+# on-page and content checks: HTML_OK, and indexable too while thresholds.issues_indexable_only
+ONPAGE = f"{HTML_OK} AND (indexable OR NOT :issues_indexable_only)"
 
 # Why a URL can't be indexed — Screaming Frog's Indexability Status, first matching reason wins.
 _INDEXABILITY = sa.text(
@@ -58,7 +60,8 @@ _INDEXABILITY = sa.text(
     UPDATE pages SET indexability_status = CASE
         WHEN blocked = 'robots_txt' THEN 'Blocked by Robots.txt'
         WHEN status_code = 0 THEN 'No Response'
-        WHEN status_code BETWEEN 300 AND 399 OR refresh_url IS NOT NULL THEN 'Redirected'
+        WHEN status_code BETWEEN 300 AND 399 THEN 'Redirected'
+        WHEN refresh_url IS NOT NULL AND (refresh_url <> url OR :self_refresh_non_indexable) THEN 'Redirected'
         WHEN status_code BETWEEN 400 AND 499 THEN 'Client Error'
         WHEN status_code >= 500 THEN 'Server Error'
         WHEN robots_directives LIKE '%,noindex,%' OR robots_directives LIKE '%,none,%' THEN 'noindex'
@@ -70,9 +73,13 @@ _INDEXABILITY = sa.text(
 _INDEXABLE = sa.text("UPDATE pages SET indexable = indexability_status IS NULL WHERE crawl_id = :crawl_id")
 
 
-def compute_indexability(conn: sa.Connection, crawl_id: int) -> None:
-    """Fill pages.indexable / indexability_status — rules and reports rely on them."""
-    conn.execute(_INDEXABILITY, {"crawl_id": crawl_id})
+def compute_indexability(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings | None = None) -> None:
+    """Fill pages.indexable / indexability_status — rules and reports rely on them.
+
+    A refresh to the page itself counts as a redirect while thresholds.self_refresh_non_indexable (default).
+    """
+    self_refresh = (thresholds or ThresholdSettings()).self_refresh_non_indexable
+    conn.execute(_INDEXABILITY, {"crawl_id": crawl_id, "self_refresh_non_indexable": self_refresh})
     conn.execute(_INDEXABLE, {"crawl_id": crawl_id})
 
 
@@ -155,7 +162,7 @@ def _duplicate(column: str, *, skip_paginated: bool = True) -> RuleFinder:
 
 def _length(column: str, op: str, threshold: str) -> RuleFinder:
     return _sql(
-        f"{HTML_OK} AND trim(coalesce({column}, '')) <> '' AND length({column}) {op} :{threshold}",
+        f"{ONPAGE} AND trim(coalesce({column}, '')) <> '' AND length({column}) {op} :{threshold}",
         f"length({column}) || ' симв.: ' || {column}",
     )
 
@@ -168,11 +175,11 @@ def _onpage_rules() -> list[Rule]:
     return [
         # --- Page Titles
         r("page_title_missing", "Page Titles", "Missing", "issue", "high",
-          "Нет <title>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='title')}")),
+          "Нет <title>, он пустой или из пробелов.", _sql(f"{ONPAGE} AND {missing.format(c='title')}")),
         r("page_title_multiple", "Page Titles", "Multiple", "issue", "high",
-          "На странице несколько <title>.", _sql(f"{HTML_OK} AND title_count > 1", "CAST(title_count AS TEXT)")),
+          "На странице несколько <title>.", _sql(f"{ONPAGE} AND title_count > 1", "CAST(title_count AS TEXT)")),
         r("page_title_outside_head", "Page Titles", "Outside <head>", "issue", "high",
-          "<title> стоит вне <head>: поисковик может его не учесть.", _sql(f"{HTML_OK} AND title_outside_head > 0")),
+          "<title> стоит вне <head>: поисковик может его не учесть.", _sql(f"{ONPAGE} AND title_outside_head > 0")),
         r("page_title_duplicate", "Page Titles", "Duplicate", "opportunity", "medium",
           "Одинаковый title у нескольких страниц: поисковику трудно различить их.", _duplicate("title")),
         r("page_title_over_max", "Page Titles", "Over Max Characters", "opportunity", "medium",
@@ -183,23 +190,23 @@ def _onpage_rules() -> list[Rule]:
           _length("title", "<", "title_min_chars")),
         r("page_title_over_px", "Page Titles", "Over Max Pixels", "opportunity", "medium",
           "Title шире thresholds.title_max_px пикселей (Arial 20px): обрежется в выдаче Google.",
-          _sql(f"{HTML_OK} AND title_px > :title_max_px", "title_px || ' px: ' || title")),
+          _sql(f"{ONPAGE} AND title_px > :title_max_px", "title_px || ' px: ' || title")),
         r("page_title_below_px", "Page Titles", "Below Min Pixels", "opportunity", "medium",
           "Title уже thresholds.title_min_px пикселей: место в выдаче используется не полностью.",
-          _sql(f"{HTML_OK} AND title_px < :title_min_px", "title_px || ' px: ' || title")),
+          _sql(f"{ONPAGE} AND title_px < :title_min_px", "title_px || ' px: ' || title")),
         r("page_title_same_as_h1", "Page Titles", "Same as H1", "opportunity", "low",
           "Title дословно совпадает с H1: упущена возможность раскрыть страницу иначе.",
-          _sql(f"{HTML_OK} AND trim(coalesce(title, '')) <> '' AND title = h1", "title")),
+          _sql(f"{ONPAGE} AND trim(coalesce(title, '')) <> '' AND title = h1", "title")),
         # --- Meta Description
         r("meta_description_multiple", "Meta Description", "Multiple", "issue", "medium",
           "Несколько meta description на странице.",
-          _sql(f"{HTML_OK} AND meta_description_count > 1", "CAST(meta_description_count AS TEXT)")),
+          _sql(f"{ONPAGE} AND meta_description_count > 1", "CAST(meta_description_count AS TEXT)")),
         r("meta_description_outside_head", "Meta Description", "Outside <head>", "issue", "medium",
           "Meta description вне <head>: поисковик может её проигнорировать.",
-          _sql(f"{HTML_OK} AND meta_description_outside_head > 0")),
+          _sql(f"{ONPAGE} AND meta_description_outside_head > 0")),
         r("meta_description_missing", "Meta Description", "Missing", "opportunity", "low",
           "Meta description нет, она пустая или из пробелов: сниппет поисковик соберёт сам.",
-          _sql(f"{HTML_OK} AND {missing.format(c='meta_description')}")),
+          _sql(f"{ONPAGE} AND {missing.format(c='meta_description')}")),
         r("meta_description_duplicate", "Meta Description", "Duplicate", "opportunity", "low",
           "Одинаковая meta description у нескольких страниц.", _duplicate("meta_description")),
         r("meta_description_over_max", "Meta Description", "Over Max Characters", "opportunity", "low",
@@ -210,33 +217,33 @@ def _onpage_rules() -> list[Rule]:
           _length("meta_description", "<", "description_min_chars")),
         r("meta_description_over_px", "Meta Description", "Over Max Pixels", "opportunity", "low",
           "Description шире thresholds.description_max_px пикселей (Arial 14px): обрежется в сниппете.",
-          _sql(f"{HTML_OK} AND description_px > :description_max_px", "description_px || ' px'")),
+          _sql(f"{ONPAGE} AND description_px > :description_max_px", "description_px || ' px'")),
         r("meta_description_below_px", "Meta Description", "Below Min Pixels", "opportunity", "low",
           "Description уже thresholds.description_min_px пикселей: сниппет можно сделать информативнее.",
-          _sql(f"{HTML_OK} AND description_px < :description_min_px", "description_px || ' px'")),
+          _sql(f"{ONPAGE} AND description_px < :description_min_px", "description_px || ' px'")),
         # --- H1
         r("h1_missing", "H1", "Missing", "issue", "medium",
-          "Нет <h1>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='h1')}")),
+          "Нет <h1>, он пустой или из пробелов.", _sql(f"{ONPAGE} AND {missing.format(c='h1')}")),
         r("h1_multiple", "H1", "Multiple", "warning", "medium",
-          "Несколько <h1> на странице.", _sql(f"{HTML_OK} AND h1_count > 1", "CAST(h1_count AS TEXT)")),
+          "Несколько <h1> на странице.", _sql(f"{ONPAGE} AND h1_count > 1", "CAST(h1_count AS TEXT)")),
         r("h1_alt_text", "H1", "Alt Text in h1", "warning", "low",
           "Текст H1 взят из alt картинки внутри <h1>: проверьте, что это осмысленный заголовок.",
-          _sql(f"{HTML_OK} AND h1_from_alt", "h1")),
+          _sql(f"{ONPAGE} AND h1_from_alt", "h1")),
         r("h1_non_sequential", "H1", "Non-sequential", "warning", "low",
-          "<h1> не первый заголовок на странице.", _sql(f"{HTML_OK} AND h1_count > 0 AND NOT h1_first_heading")),
+          "<h1> не первый заголовок на странице.", _sql(f"{ONPAGE} AND h1_count > 0 AND NOT h1_first_heading")),
         r("h1_duplicate", "H1", "Duplicate", "opportunity", "low",
           "Одинаковый H1 у нескольких страниц.", _duplicate("h1")),
         r("h1_over_max", "H1", "Over Max Characters", "opportunity", "low",
           "H1 длиннее thresholds.h1_max_chars.", _length("h1", ">", "h1_max_chars")),
         # --- H2
         r("h2_missing", "H2", "Missing", "warning", "low",
-          "Нет <h2>, он пустой или из пробелов.", _sql(f"{HTML_OK} AND {missing.format(c='h2')}")),
+          "Нет <h2>, он пустой или из пробелов.", _sql(f"{ONPAGE} AND {missing.format(c='h2')}")),
         r("h2_multiple", "H2", "Multiple", "warning", "low",
           "Несколько <h2> (информационно: обычно это нормально).",
-          _sql(f"{HTML_OK} AND h2_count > 1", "CAST(h2_count AS TEXT)")),
+          _sql(f"{ONPAGE} AND h2_count > 1", "CAST(h2_count AS TEXT)")),
         r("h2_non_sequential", "H2", "Non-sequential", "warning", "low",
           "Первому <h2> предшествует не <h1>: уровни заголовков пропущены или перепутаны.",
-          _sql(f"{HTML_OK} AND h2_count > 0 AND NOT h2_sequential")),
+          _sql(f"{ONPAGE} AND h2_count > 0 AND NOT h2_sequential")),
         r("h2_duplicate", "H2", "Duplicate", "opportunity", "low",
           "Одинаковый первый H2 у нескольких страниц.", _duplicate("h2")),
         r("h2_over_max", "H2", "Over Max Characters", "opportunity", "low",
@@ -445,8 +452,8 @@ def _soft_404(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings)
     if not patterns:
         return
     rows = conn.execution_options(yield_per=1000).execute(
-        sa.text(f"SELECT url, title, h1 FROM pages WHERE crawl_id = :crawl_id AND {HTML_OK} ORDER BY url"),  # noqa: S608
-        {"crawl_id": crawl_id},
+        sa.text(f"SELECT url, title, h1 FROM pages WHERE crawl_id = :crawl_id AND {ONPAGE} ORDER BY url"),  # noqa: S608
+        {"crawl_id": crawl_id, "issues_indexable_only": thresholds.issues_indexable_only},
     )
     for url, title, h1 in rows:
         for text in (title, h1):
@@ -457,7 +464,7 @@ def _soft_404(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings)
 
 def _readability(low: str, high: str | None) -> RuleFinder:
     band = f"flesch < :{low}" + (f" AND flesch >= :{high}" if high else "")
-    return _sql(f"{HTML_OK} AND word_count >= :readability_min_words AND {band}",
+    return _sql(f"{ONPAGE} AND word_count >= :readability_min_words AND {band}",
                 "'индекс Флеша ' || flesch || ', слов в предложении ' || words_per_sentence")  # fmt: skip
 
 
@@ -473,14 +480,14 @@ def _content_rules() -> list[Rule]:
           "Страница отвечает 200, но по title / H1 — «страница не найдена» (thresholds.soft_404_patterns): "
           "поисковик сочтёт её ошибкой, а обход — рабочей.", _soft_404),
         r("content_lorem_ipsum", "Lorem Ipsum Placeholder", "warning", "high",
-          "На странице остался текст-заглушка «Lorem ipsum».", _sql(f"{HTML_OK} AND lorem_ipsum")),
+          "На странице остался текст-заглушка «Lorem ipsum».", _sql(f"{ONPAGE} AND lorem_ipsum")),
         r("content_near_duplicates", "Near Duplicates", "warning", "medium",
           "Текст почти совпадает с другой страницей (сходство MinHash ≥ thresholds.near_duplicate_similarity): "
           "пары — `spider duplicates`.",
           _run_sql(sa.text(duplicates_module.PAIRS + duplicates_module.NEAR_FINDINGS)), ("collect.near_duplicates",)),
         r("content_low_content", "Low Content Pages", "opportunity", "medium",
           "Мало текста: меньше thresholds.low_content_words слов в видимом тексте.",
-          _sql(f"{HTML_OK} AND word_count < :low_content_words", "word_count || ' слов'")),
+          _sql(f"{ONPAGE} AND word_count < :low_content_words", "word_count || ' слов'")),
         r("content_readability_difficult", "Readability Difficult", "opportunity", "low",
           "Текст трудно читать: индекс Флеша ниже thresholds.readability_difficult (длинные предложения и слова).",
           _readability("readability_difficult", "readability_very_difficult")),
@@ -1155,7 +1162,7 @@ def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | No
         # finding the URL's id first (minutes instead of seconds). Sampled, so quick however big the database.
         conn.exec_driver_sql("PRAGMA analysis_limit = 1000")
         conn.exec_driver_sql("ANALYZE")
-        compute_indexability(conn, crawl_id)
+        compute_indexability(conn, crawl_id, thresholds)
         compute_link_counts(conn, crawl_id)
         compute_url_issues(conn, crawl_id, thresholds)
         serp_module.compute(conn, crawl_id, thresholds)

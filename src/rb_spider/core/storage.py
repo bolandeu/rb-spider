@@ -66,6 +66,7 @@ pages = sa.Table(
     sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("error", sa.String),  # why there is no response (status_code 0)
     sa.Column("blocked", sa.String),  # "robots_txt": not fetched on purpose (status_code 0)
+    sa.Column("blocked_rule", sa.String),  # the robots.txt line that closed it: "Disallow: /private/"
     sa.Column("refresh_url", sa.String),  # target of a meta / HTTP Refresh
     sa.Column("refresh_kind", sa.String),  # "meta" | "http"
     # on-page elements (HTML pages only); the text is the first element, counts say how many there were
@@ -408,12 +409,14 @@ _INSERT_LINK_URLS = (
     f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
     "INSERT OR IGNORE INTO urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
 )
+# The ids by a lookup per row through the unique index — not a JOIN: with planner statistics from earlier, smaller
+# crawls in the same database SQLite could pick a scan of `urls` per row (a 4-page crawl then a full one: 20 s).
 _INSERT_LINK_ROWS = (
     f"WITH r AS (SELECT {_LINK_JSON} FROM json_each(?)) "  # noqa: S608 — fixed names
     f"INSERT INTO link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
-    f"SELECT r.crawl_id, s.id, t.id, {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r "
-    "JOIN urls s ON s.url = r.source AND s.crawl_id = r.crawl_id "
-    "JOIN urls t ON t.url = r.target AND t.crawl_id = r.crawl_id"
+    "SELECT r.crawl_id, (SELECT id FROM urls WHERE url = r.source AND crawl_id = r.crawl_id),"
+    " (SELECT id FROM urls WHERE url = r.target AND crawl_id = r.crawl_id),"
+    f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
 )
 _INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")

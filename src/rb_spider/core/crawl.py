@@ -17,11 +17,13 @@ throttling queue isn't needed.
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import functools
 import importlib.util
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -41,6 +43,7 @@ from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
 from crawlee.events import LocalEventManager
 from crawlee.http_clients import HttpClient, ImpitHttpClient
 from crawlee.proxy_configuration import ProxyConfiguration
+from crawlee.sessions import Session
 from crawlee.storage_clients import MemoryStorageClient
 
 from ..credentials import manager as credentials
@@ -100,10 +103,14 @@ def project_for(url: str) -> str:
 
 
 class RobotsGate:
-    """robots.txt verdicts for the crawl's user agent, one robots.txt per host, fetched once."""
+    """robots.txt verdicts for the crawl's user agent, one robots.txt per host, fetched once.
 
-    def __init__(self, http_client: HttpClient, user_agent: str) -> None:
+    `custom` — the text to use for the site's own host instead of its real robots.txt (crawl.robots_custom).
+    """
+
+    def __init__(self, http_client: HttpClient, user_agent: str, custom: str | None = None, site: str = "") -> None:
         self.http_client, self.user_agent = http_client, user_agent
+        self.custom, self.site = custom, site
         self._files: dict[str, RobotsTxtFile | None] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -112,7 +119,10 @@ class RobotsGate:
         async with self._locks.setdefault(host, asyncio.Lock()):
             if host not in self._files:
                 try:
-                    self._files[host] = await RobotsTxtFile.find(url, self.http_client)
+                    if self.custom is not None and host == self.site:
+                        self._files[host] = await RobotsTxtFile.from_content(url, self.custom)
+                    else:
+                        self._files[host] = await RobotsTxtFile.find(url, self.http_client)
                 except Exception:  # unreachable robots.txt: crawl as if there were none, like search bots do
                     self._files[host] = None
             return self._files[host]
@@ -124,6 +134,27 @@ class RobotsGate:
     async def crawl_delay(self, url: str) -> int | None:
         robots = await self._file(url)
         return robots.get_crawl_delay(self.user_agent) if robots else None
+
+    def rule(self, url: str) -> str | None:
+        """The robots.txt line that decided a URL ("Disallow: /private/"), for a host already read; None if unknown.
+
+        protego doesn't say which rule matched, so this walks its rule set the way its can_fetch does — private
+        fields: on a protego change it gives up (None) rather than failing the crawl.
+        """
+        robots = self._files.get(urlsplit(url).netloc)
+        if robots is None:
+            return None
+        try:
+            from protego._ruleset import _quote_path
+
+            rule_set = robots._robots._get_matching_rule_set(self.user_agent)
+            quoted = _quote_path(url)
+            for rule in rule_set._rules if rule_set else []:
+                if rule.value.match(quoted):
+                    return f"{rule.field.title()}: {rule.value._pattern}"
+        except Exception:  # noqa: S110 — see the docstring
+            pass
+        return None
 
 
 class Parser:
@@ -176,14 +207,40 @@ def proxy_urls(settings: CrawlSettings) -> list[str]:
 
 
 def http_client(settings: CrawlSettings) -> HttpClient:
-    """`crawl.http_client`, never following redirects itself: every step is a page of its own."""
+    """`crawl.http_client`, never following redirects itself: every step is a page of its own.
+
+    Cookies: Crawlee keeps them per session (`cookies = session`) or not at all (`none`). A custom CA (`ca_bundle`)
+    only the curl client can load; impit has no such option.
+    """
+    cookies = settings.cookies == "session"
     if settings.http_client == "curl":
         if importlib.util.find_spec("curl_cffi") is None:
             raise HttpClientUnavailable
         from crawlee.http_clients import CurlImpersonateHttpClient
 
-        return CurlImpersonateHttpClient(allow_redirects=False, **({} if settings.verify_tls else {"verify": False}))
-    return ImpitHttpClient(follow_redirects=False, verify=settings.verify_tls)
+        verify: bool | str = settings.ca_bundle or settings.verify_tls
+        return CurlImpersonateHttpClient(persist_cookies_per_session=cookies, allow_redirects=False,
+                                         **({} if verify is True else {"verify": verify}))  # fmt: skip
+    if settings.ca_bundle:
+        raise InvalidArguments(
+            "crawl.ca_bundle needs crawl.http_client = curl: impit can't load a custom CA "
+            "(or turn certificate checks off with crawl.verify_tls = false)."
+        )
+    return ImpitHttpClient(persist_cookies_per_session=cookies, follow_redirects=False, verify=settings.verify_tls)
+
+
+SITE_CREDENTIAL = "site"
+
+
+def site_auth_header(settings: CrawlSettings) -> dict[str, str]:
+    """`crawl.auth = basic`: the Authorization header for the site's own URLs, password from the keychain."""
+    if settings.auth != "basic":
+        return {}
+    password = credentials.get_secret(SITE_CREDENTIAL)
+    if password is None:
+        raise AuthRequired(SITE_CREDENTIAL)
+    token = base64.b64encode(f"{settings.auth_user or ''}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 
 def requests_per_minute(settings: CrawlSettings, crawl_delay: int | None) -> float:
@@ -212,14 +269,17 @@ async def _run(
     scope = Scope(start_url, settings, hosts)
     proxies = proxy_urls(settings)
     client = http_client(settings)
-    robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*")
+    robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*", settings.robots_custom,
+                        urlsplit(start_url).netloc)  # fmt: skip
+    auth = site_auth_header(settings)
     crawl_delay = await robots.crawl_delay(start_url) if settings.robots == "respect" else None
 
     config = Configuration(log_level="WARNING")
     storage_client = MemoryStorageClient()
 
     def request(url: str, check: bool) -> Request:
-        return Request.from_url(url, headers=headers or None, user_data={"check": check})
+        extra = auth if auth and scope.internal(url) else {}  # the site's password never goes to other sites
+        return Request.from_url(url, headers={**headers, **extra} or None, user_data={"check": check})
 
     queue = MemoryQueue(request)
     concurrency = settings.concurrency
@@ -256,10 +316,16 @@ async def _run(
     parser = Parser(PageReader(scope, settings, collect, all_settings.rewrite), settings.parse_workers)
     response_ms: dict[str, int] = {}  # answered requests -> response time, until their handler stores it
     redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
+    retried: dict[str, int] = {}  # URLs asked again after a 5xx (crawl.retries_5xx), until they are stored
     # Response time around the client's own request: Crawlee's navigation hooks cost ~15% of a big crawl.
     client_crawl = client.crawl
+    # crawl.cookies = session: one cookie jar for the whole crawl, like a browser. Crawlee keeps cookies per session
+    # of its pool, and requests get different sessions — so the client gets this one instead (the proxy was already
+    # picked from Crawlee's session, rotation stays as it was); "none" — no session, no cookies.
+    cookie_jar = Session() if settings.cookies == "session" else None
 
     async def timed_crawl(request, *args, **kwargs):
+        kwargs["session"] = cookie_jar
         sent = time.monotonic()
         result = await client_crawl(request, *args, **kwargs)
         response_ms[request.url] = round((time.monotonic() - sent) * 1000)
@@ -281,6 +347,36 @@ async def _run(
         if on_progress and time.monotonic() - last_progress >= PROGRESS_EVERY_S:
             last_progress = time.monotonic()
             on_progress(writer.count)
+
+    # limits by depth, subdomain and path (crawl.max_urls_per_depth, max_urls_per_subdomain, path_limits): counts of
+    # admitted URLs — as many entries as depths, hosts and patterns, whatever the size of the site
+    path_limits = [(re.compile(pattern), limit) for pattern, limit in settings.path_limits]
+    per_depth: dict[int, int] = {}
+    per_host: dict[str, int] = {}
+    per_path: dict[int, int] = {}
+
+    def over_limits(url: str, depth: int, crawled: bool) -> bool:
+        """Count a URL to crawl against the limits; True — one of them is full, leave it out."""
+        if not crawled:
+            return False
+        host = urlsplit(url).netloc
+        matched = [i for i, (pattern, _) in enumerate(path_limits) if pattern.search(url)]
+        if settings.max_urls_per_depth is not None and per_depth.get(depth, 0) >= settings.max_urls_per_depth:
+            return True
+        if settings.max_urls_per_subdomain is not None and per_host.get(host, 0) >= settings.max_urls_per_subdomain:
+            return True
+        if any(per_path.get(i, 0) >= path_limits[i][1] for i in matched):
+            return True
+        per_depth[depth] = per_depth.get(depth, 0) + 1
+        per_host[host] = per_host.get(host, 0) + 1
+        for i in matched:
+            per_path[i] = per_path.get(i, 0) + 1
+        return False
+
+    if resume:  # the limits count what the crawl already admitted
+        for seen_url, seen_depth in resume.seen.items():
+            if scope.crawlable(seen_url):
+                over_limits(seen_url, seen_depth, True)
 
     async def admit(urls: list[str], depth: int, *, start: bool = False, resources: bool = False) -> None:
         """Enqueue the URLs that pass scope, limits and robots.txt; disallowed ones go to the report.
@@ -306,17 +402,23 @@ async def _run(
             new = new[: max(0, settings.max_urls - len(depth_of))]
         upgraded: list[str] = []
         for url in new:
-            depth_of[url] = depth
             check = roles[url] == "check"
-            writer.queued(url, depth, check)
+            if not start and over_limits(url, depth, not check):
+                continue
+            depth_of[url] = depth
             if secure := hsts_upgrade(url):  # not fetched: recorded as the browser's own 307 to HTTPS
+                writer.queued(url, depth, check)
                 writer.add(_hsts_redirect(url, secure, scope), depth=depth)
                 writer.add_links([(url, secure, "redirect", scope.internal(secure), *[None] * 3, False, *[None] * 4)])
                 upgraded.append(secure)
                 continue
             if settings.robots == "respect" and not await robots.allowed(url):
-                writer.add(Page.blocked_by_robots(url), depth=depth)  # never fetched, but part of the report
+                internal = scope.internal(url)
+                if settings.robots_show_internal_blocked if internal else settings.robots_show_external_blocked:
+                    writer.queued(url, depth, check)
+                    writer.add(_blocked(url, robots, scope), depth=depth)  # never fetched, but part of the report
                 continue
+            writer.queued(url, depth, check)
             queue.push(url, check)
         if upgraded:
             await admit(upgraded, depth, resources=resources)
@@ -326,6 +428,14 @@ async def _run(
         response = ctx.http_response
         body = await response.read()
         check = bool(ctx.request.user_data.get("check"))
+        if response.status_code >= 500 and retried.get(ctx.request.url, 0) < settings.retries_5xx:
+            retried[ctx.request.url] = retried.get(ctx.request.url, 0) + 1  # asked again later, nothing stored yet
+            response_ms.pop(ctx.request.url, None)
+            queue.push(ctx.request.url, check)
+            return
+        retried.pop(ctx.request.url, None)
+        if settings.max_page_size_kb is not None and len(body) > settings.max_page_size_kb * 1024:
+            check = True  # too big to read: status, headers and size only
         headers = dict(response.headers)
         if ctx.request.url.startswith("https://") and any(k.lower() == "strict-transport-security" for k in headers):
             hsts_hosts.add(urlsplit(ctx.request.url).hostname or "")
@@ -369,7 +479,7 @@ async def _run(
         if resume and resume.seen:  # continue (or a list crawl's first run): the queue is whatever isn't done
             for url, depth, check in resume.pending:
                 if settings.robots == "respect" and not await robots.allowed(url):  # a listed URL wasn't checked yet
-                    writer.add(Page.blocked_by_robots(url), depth=depth)
+                    writer.add(_blocked(url, robots, scope), depth=depth)
                     continue
                 queue.push(url, check)
         else:
@@ -385,6 +495,13 @@ async def _run(
     finally:
         parser.close()
         await queue.drop()
+
+
+def _blocked(url: str, robots: RobotsGate, scope: Scope) -> Page:
+    """A URL robots.txt closes: never fetched, stored with the rule that closed it."""
+    page = Page.blocked_by_robots(url)
+    page.onpage = {"external": not scope.internal(url), "blocked_rule": robots.rule(url)}
+    return page
 
 
 def _hsts_redirect(url: str, secure: str, scope: Scope) -> Page:
@@ -412,7 +529,10 @@ def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Se
 def _ready(settings: Settings) -> None:
     """What a crawl needs, checked before it is registered: the proxy password, the browser for rendering."""
     proxy_urls(settings.crawl)
+    site_auth_header(settings.crawl)  # the site's password, asked for before a crawl is registered
     http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
+    if settings.crawl.ca_bundle and not Path(settings.crawl.ca_bundle).is_file():
+        raise InvalidArguments(f"crawl.ca_bundle: no file '{settings.crawl.ca_bundle}'.")
     if settings.crawl.render == "always":
         render.ensure_available()
     if settings.collect.near_duplicates and importlib.util.find_spec("datasketch") is None:

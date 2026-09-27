@@ -72,11 +72,18 @@ class Scope:
         self.max_url_length = settings.max_url_length
         self.check_outside_folder = settings.check_outside_start_folder
         self.check_external = True  # narrowed by collect.external_links.follow at the link level
+        self.cdns = tuple(host.lower().strip(".") for host in settings.cdns)
+        self.max_folder_depth = settings.max_folder_depth
+        self.max_query_params = settings.max_query_params
         # URLs reaching here are normalized (path at least "/"), so the site's own start with one of these
         self._own_prefixes = (f"http://{self.host}/", f"https://{self.host}/")
 
     def internal(self, url: str) -> bool:
-        """Part of the site (the start host, or any subdomain with `all_subdomains`)."""
+        """Part of the site (the start host, any subdomain with `all_subdomains`, a CDN from `cdns`)."""
+        if self.cdns:
+            hostname = urlsplit(url).hostname or ""
+            if hostname in self.cdns or hostname.endswith(tuple(f".{cdn}" for cdn in self.cdns)):
+                return True
         if self.hosts is not None:
             return urlsplit(url).netloc in self.hosts
         if self.all_subdomains:
@@ -98,8 +105,13 @@ class Scope:
             return None
         if not self.internal(url):
             return "check" if self.check_external else None
-        if self.folder and not urlsplit(url).path.startswith(self.folder):
+        parts = urlsplit(url)
+        if self.folder and not parts.path.startswith(self.folder):
             return "check" if self.check_outside_folder else None
+        if self.max_folder_depth is not None and parts.path.rstrip("/").count("/") > self.max_folder_depth:
+            return None  # /a/b/c has three levels: the page itself counts as one
+        if self.max_query_params is not None and parts.query and len(parts.query.split("&")) > self.max_query_params:
+            return None
         return "crawl"
 
     def crawlable(self, url: str) -> bool:
@@ -135,6 +147,11 @@ class PageReader:
         self.minhash = collect.near_duplicates
         self.structured_data = tuple(collect.structured_data)
         self.validate = collect.html_validation
+        self.store_uncrawlable = collect.uncrawlable_links
+        self.keep_fragments = crawl.keep_fragments
+        self.invalid_links = crawl.crawl_invalid_links
+        self.assume_html = crawl.assume_html
+        self.list_canonicals = crawl.list_follow_canonicals
         self.follow_internal_nofollow = crawl.follow_internal_nofollow
         self.follow_external_nofollow = crawl.follow_external_nofollow
         self.max_links_per_page = crawl.max_links_per_page
@@ -149,7 +166,9 @@ class PageReader:
         """A checked URL (`check`) is not read: status, headers and redirect target only."""
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash,
-                          structured_data=self.structured_data, validate=self.validate)  # fmt: skip
+                          structured_data=self.structured_data, validate=self.validate,
+                          keep_fragments=self.keep_fragments, invalid_links=self.invalid_links,
+                          assume_html=self.assume_html)  # fmt: skip
         page.bytes = len(body)
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
@@ -214,7 +233,11 @@ class PageReader:
                 rows.append(
                     (page.url, target, kind, internal_of(target), None, None, None, False, None, None, None, None)
                 )
-            always = ("redirect", "refresh") if self.listed else ("redirect",)
+            always = (
+                ("redirect", "refresh", *(("canonical",) if self.list_canonicals else ()))
+                if self.listed
+                else ("redirect",)
+            )
             if kind in always or (option.follow and not self.listed):
                 follow.append(target)
         hreflang = self.kinds["hreflang"]
@@ -238,11 +261,14 @@ class PageReader:
                              None, None, None))  # fmt: skip
             if mobile.follow and not self.listed:
                 follow.append(target)
+        if self.store_uncrawlable:  # kept for `spider links`: what the "link" is, not a URL to fetch
+            rows += [(page.url, target, "uncrawlable", True, text, None, None, False, None, None, None, None)
+                     for target, text in page.uncrawlable]  # fmt: skip
         for action in page.forms:  # kept with the links of its kind, never fetched
             internal = internal_of(action)
             if self.kinds["internal_links" if internal else "external_links"].store:
                 rows.append((page.url, action, "form", internal, None, None, None, False, None, None, None, None))
-        page.hreflang, page.pagination, page.forms, page.mobile_alternates = [], [], [], []
+        page.hreflang, page.pagination, page.forms, page.mobile_alternates, page.uncrawlable = [], [], [], [], []
         return follow, rows
 
     def _resources_to_check(self, page: Page) -> tuple[list[str], list[tuple]]:

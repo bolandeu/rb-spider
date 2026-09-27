@@ -549,6 +549,24 @@ VALIDATION_TRAPS: dict[str, str] = {
     "/m/page": _html("m-page"),  # the "mobile site", found through the alternate link only
 }  # fmt: skip
 
+# Crawl settings (#35). Linked from home: /l-invalid (a link with no host, dropped unless crawl.crawl_invalid_links)
+# and /r-noindex-thin (an on-page issue on a non-indexable page: thresholds.issues_indexable_only). The rest are
+# crawled on their own by the settings tests.
+SETTINGS_TRAPS: dict[str, tuple[int, dict[str, str], str]] = {
+    "/l-invalid": (200, {}, _html("l-invalid", "/", body=f"<h1>{H1.format('l-invalid')}</h1><h2>{H2.format('l-invalid')}</h2>"
+                                  '<a href="https:///no-host">без хоста</a>')),
+    "/r-noindex-thin": (200, {}, _html("r-noindex-thin", thin=True, head=_head("r-noindex-thin", extra=_robots("noindex")))),
+    "/cookie-set": (200, {"Set-Cookie": "polygon=1; Path=/"}, _html("cookie-set", "/cookie-check")),
+    "/cookie-check": (200, {}, _html("cookie-check", dead_end=True)),
+    "/flaky": (200, {}, _html("flaky", dead_end=True)),  # 503 for the first FLAKY_FAILS requests (see _handle)
+    "/members/": (200, {}, _html("members", dead_end=True)),  # 401 without Authorization: Basic (see _handle)
+    "/self-refresh": (200, {}, _html("self-refresh", dead_end=True,
+                                     head=_head("self-refresh", extra='<meta http-equiv="refresh" content="30; url={base}/self-refresh">'))),
+}  # fmt: skip
+FLAKY_FAILS = 2
+FLAKY_SEEN: dict[str, int] = {}
+BASIC_AUTH = "Basic " + __import__("base64").b64encode(b"stage:pa55").decode()
+
 NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
@@ -586,6 +604,8 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/hl/header",
             *PAGINATION_LINKED,
             *(p for p in VALIDATION_TRAPS if p != "/m/page"),
+            "/l-invalid",
+            "/r-noindex-thin",
             *SECURITY_TRAPS,
             "/sd/",
         ),
@@ -633,6 +653,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, headers, html) for path, (headers, html) in SECURITY_TRAPS.items()},
     **{path: (200, {}, html) for path, html in STRUCTURED_TRAPS.items()},
     **{path: (200, {}, html) for path, html in VALIDATION_TRAPS.items()},
+    **SETTINGS_TRAPS,
     **{path: (200, {"Content-Type": "application/xml"}, xml) for path, xml in SITEMAP_FILES.items()},
     **{path: (200, {}, html) for path, html in SITEMAP_TRAPS.items()},
     # not linked: a crawl or fetch starts right at it (response details, #25)
@@ -675,6 +696,8 @@ REACHABLE = {
     *SECURITY_TRAPS,
     *STRUCTURED_TRAPS,
     *VALIDATION_TRAPS,
+    "/l-invalid",
+    "/r-noindex-thin",
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -766,7 +789,7 @@ EXPECTED_ISSUES = {
     # Directives
     "directives_outside_head": {"/r-outside"},
     "directives_noimageindex": {"/r-noimageindex"},
-    "directives_noindex": {"/r-noindex", "/r-noindex-header", "/l-noindex-hub", "/pg-ni/2"},
+    "directives_noindex": {"/r-noindex", "/r-noindex-header", "/l-noindex-hub", "/pg-ni/2", "/r-noindex-thin"},
     "directives_nofollow": {"/r-nofollow"},
     "directives_none": {"/r-none"},
     "directives_unavailable_after": {"/r-unavailable"},
@@ -781,7 +804,7 @@ EXPECTED_ISSUES = {
     "content_readability_difficult": {"/read-hard"},
     "content_readability_very_difficult": {"/read-very-hard"},
     "content_lorem_ipsum": {"/lorem"},
-    "content_low_content": {"/thin"},
+    "content_low_content": {"/thin", "/r-noindex-thin"},  # the noindex one: gone with issues_indexable_only
     # Links
     "links_outlinks_to_localhost": {"/l-external", "/s-blank"},  # /s-blank: its "other site" is the localhost alias
     "links_uncrawlable_outlinks": {"/l-uncrawlable"},
@@ -874,6 +897,7 @@ EXPECTED_ISSUES = {
     "mobile_alternate_link": {"/m-alternate"},
 }
 
+HTTPS_CA: bytes = b""  # the running HTTPS polygon's root certificate (PEM)
 SEEN_USER_AGENTS: set[str] = set()  # what reached the server — proves crawl.user_agent is sent
 SEEN_HEADERS: list[dict[str, str]] = []  # every request's headers, lower-case names — proves crawl.headers are sent
 SLOW_S = 3.0  # "/slow" (linked from nowhere) answers after this long: a timeout trap
@@ -891,6 +915,12 @@ async def _handle(request: web.Request) -> web.StreamResponse:
         assert request.transport is not None
         request.transport.abort()
         return web.Response()
+    if request.path == "/flaky":
+        FLAKY_SEEN[request.host] = FLAKY_SEEN.get(request.host, 0) + 1
+        if FLAKY_SEEN[request.host] <= FLAKY_FAILS:
+            return web.Response(status=503, text="later")
+    if request.path.startswith("/members/") and request.headers.get("Authorization") != BASIC_AUTH:
+        return web.Response(status=401, headers={"WWW-Authenticate": 'Basic realm="polygon"'}, text="login")
     routes = HTTPS_ROUTES if request.secure else ROUTES
     status, headers, body = routes.get(request.path, (404, {}, "<html><body>Не найдено</body></html>"))
     port = request.host.rsplit(":", 1)[1]
@@ -922,8 +952,11 @@ def serve(*, https: bool = False) -> Iterator[str]:
     loop.run_until_complete(runner.setup())
     context = None
     if https:
+        global HTTPS_CA  # the one polygon's CA, for crawl.ca_bundle tests
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        trustme.CA().issue_cert("127.0.0.1", "localhost").configure_cert(context)
+        ca = trustme.CA()
+        ca.issue_cert("127.0.0.1", "localhost").configure_cert(context)
+        HTTPS_CA = ca.cert_pem.bytes()
     site = web.TCPSite(runner, "127.0.0.1", 0, ssl_context=context)
     loop.run_until_complete(site.start())
     port = runner.addresses[0][1]

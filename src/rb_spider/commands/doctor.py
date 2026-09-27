@@ -52,6 +52,8 @@ def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[di
     except CliError as exc:
         return {"name": "settings", "ok": False, "detail": exc.message}, []
     needed = [crawl_service.PROXY_CREDENTIAL] if any("{password}" in u for u in crawl.proxy_urls) else []
+    if crawl.auth == "basic":
+        needed.append(crawl_service.SITE_CREDENTIAL)
     return {"name": "settings", "ok": True}, needed
 
 
@@ -68,7 +70,8 @@ def doctor(
     всегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.
     `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет); `settings` —
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
-    если `crawl.proxy_urls` его требует (`{password}`).
+    если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
+    при `crawl.auth = basic`.
 
     Примеры:
       spider doctor

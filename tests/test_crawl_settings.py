@@ -18,7 +18,14 @@ from rb_spider.core.crawl import crawl_site, proxy_urls, requests_per_minute
 from rb_spider.core.errors import AuthRequired
 from rb_spider.core.extract import parse_page
 from rb_spider.core.scope import Rewriter, Scope
-from rb_spider.core.settings import USER_AGENT_PRESETS, CrawlSettings, RewriteSettings, Settings
+from rb_spider.core.settings import (
+    USER_AGENT_PRESETS,
+    CollectSettings,
+    CrawlSettings,
+    RewriteSettings,
+    Settings,
+    ThresholdSettings,
+)
 
 from . import polygon
 
@@ -212,3 +219,170 @@ def test_rewriter_percent_encoding_and_order() -> None:
 def test_rewrite_regex_is_validated() -> None:
     with pytest.raises(ValueError, match="invalid regular expression"):
         RewriteSettings(regex=[("(", "x")])
+
+
+# --- limits and advanced settings (#35) -----------------------------------------------------------
+
+
+def _pages_of(base_url: str, start: str = "/", **crawl) -> dict[str, dict]:
+    return _crawl(base_url, start, **crawl)
+
+
+def test_folder_depth_and_query_limits(base_url: str) -> None:
+    pages = _pages_of(base_url, max_folder_depth=1, max_query_params=0)
+    assert "/a" in pages and "/shop/" in pages  # one folder level: /shop/ is /shop
+    assert "/shop/item" not in pages and "/u/shoes/shoes" not in pages
+    assert "/b?sort=price" not in pages and "/search?q=test" not in pages
+
+
+def test_per_depth_subdomain_and_path_limits(base_url: str) -> None:
+    pages = _pages_of(base_url, max_urls_per_depth=5)
+    assert sum(1 for p in pages.values() if p["depth"] == 1 and p["parsed"]) <= 5
+    pages = _pages_of(base_url, path_limits=[("/l-", 2)])
+    assert sum(1 for path, p in pages.items() if path.startswith("/l-") and p["parsed"]) == 2
+    pages = _pages_of(base_url, max_urls_per_subdomain=10)
+    assert sum(1 for p in pages.values() if not p["external"] and p["parsed"]) <= 10
+
+
+def test_max_page_size(base_url: str) -> None:
+    pages = _pages_of(base_url, max_page_size_kb=100)
+    assert pages["/v-big"]["status_code"] == 200 and not pages["/v-big"]["parsed"]
+    assert pages["/a"]["parsed"]
+
+
+def test_5xx_retries(base_url: str) -> None:
+    polygon.FLAKY_SEEN.clear()
+    assert _pages_of(base_url, "/flaky", retries_5xx=0)["/flaky"]["status_code"] == 503
+    polygon.FLAKY_SEEN.clear()
+    assert _pages_of(base_url, "/flaky", retries_5xx=2)["/flaky"]["status_code"] == 200
+
+
+def test_cookies(base_url: str) -> None:
+    polygon.SEEN_HEADERS.clear()
+    _pages_of(base_url, "/cookie-set")
+    assert any("polygon=1" in h.get("cookie", "") for h in polygon.SEEN_HEADERS)
+    polygon.SEEN_HEADERS.clear()
+    _pages_of(base_url, "/cookie-set", cookies="none")
+    assert not any("cookie" in h for h in polygon.SEEN_HEADERS)
+
+
+def test_basic_auth_only_to_the_site(base_url: str, monkeypatch) -> None:
+    monkeypatch.setattr(
+        crawl_service.credentials, "get_secret", lambda provider: "pa55" if provider == "site" else None
+    )
+    assert _pages_of(base_url, "/members/")["/members/"]["status_code"] == 401
+    polygon.SEEN_HEADERS.clear()
+    assert _pages_of(base_url, "/members/", auth="basic", auth_user="stage")["/members/"]["status_code"] == 200
+    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: None)
+    with pytest.raises(AuthRequired):
+        _pages_of(base_url, "/members/", auth="basic", auth_user="stage")
+
+
+def test_other_sites_never_get_the_password(base_url: str, monkeypatch) -> None:
+    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: "pa55")
+    polygon.SEEN_HEADERS.clear()
+    _pages_of(base_url, "/l-external", auth="basic", auth_user="stage")
+    local = {h.get("host", "") for h in polygon.SEEN_HEADERS if h.get("authorization")}
+    assert local and all(host.startswith("127.0.0.1") for host in local)  # localhost:port is "another site"
+
+
+def test_custom_robots_and_the_matched_rule(base_url: str) -> None:
+    pages = _pages_of(base_url)
+    assert (pages["/private/secret"]["blocked"], pages["/private/secret"]["blocked_rule"]) == (
+        "robots_txt",
+        "Disallow: /private/",
+    )
+    pages = _pages_of(base_url, robots_custom="User-agent: *\nDisallow: /a\n")
+    assert pages["/a"]["blocked_rule"] == "Disallow: /a" and pages["/private/secret"]["blocked"] is None
+    pages = _pages_of(base_url, robots_show_internal_blocked=False)
+    assert "/private/secret" not in pages and "/private/hidden.png" not in pages
+
+
+def test_cdns_are_the_site(base_url: str) -> None:
+    pages = _pages_of(base_url, cdns=["localhost"])
+    local = f"http://localhost:{base_url.rsplit(':', 1)[1]}"
+    with storage.database() as engine, engine.connect() as conn:
+        rows = conn.execute(sa.select(storage.pages.c.url, storage.pages.c.external).where(
+            storage.pages.c.url.like(f"{local}/%"))).all()  # fmt: skip
+    assert rows and not any(external for _, external in rows)
+    assert pages  # the crawl itself ran
+
+
+def test_fragments_and_invalid_links(base_url: str) -> None:
+    assert "/a#reviews" in _pages_of(base_url, keep_fragments=True)
+    assert "/a#reviews" not in _pages_of(base_url)
+    with storage.database() as engine:
+        crawl_site(engine, f"{base_url}/l-invalid", "polygon", Settings(crawl=CrawlSettings(crawl_invalid_links=True)))
+        with engine.connect() as conn:
+            found = conn.execute(
+                sa.select(storage.pages.c.status_code).where(storage.pages.c.url == "https:///no-host")
+            ).all()
+    assert found == [(0,)]  # tried, and of course no answer
+
+
+def test_list_mode_can_follow_canonicals(base_url: str) -> None:
+    with storage.database() as engine:
+        plain = crawl_service.register_list_crawl(engine, [f"{base_url}/c-canonicalised"], "p", Settings())
+        crawl_service.run_crawl(engine, plain)
+        follow = crawl_service.register_list_crawl(
+            engine, [f"{base_url}/c-canonicalised"], "p", Settings(crawl=CrawlSettings(list_follow_canonicals=True))
+        )
+        crawl_service.run_crawl(engine, follow)
+        with engine.connect() as conn:
+
+            def urls(crawl_id: int) -> set[str]:
+                rows = conn.execute(sa.select(storage.pages.c.url).where(storage.pages.c.crawl_id == crawl_id))
+                return {u.removeprefix(base_url) for (u,) in rows}
+
+            assert urls(plain) == {"/c-canonicalised"} and urls(follow) == {"/c-canonicalised", "/a"}
+
+
+def test_ca_bundle_needs_curl(base_url: str, tmp_path) -> None:
+    with pytest.raises(Exception, match=r"needs crawl\.http_client = curl"):
+        _pages_of(base_url, "/a", ca_bundle=str(tmp_path / "ca.pem"))
+    with pytest.raises(Exception, match="no file"):
+        _pages_of(base_url, "/a", ca_bundle=str(tmp_path / "missing.pem"), http_client="curl")
+
+
+@pytest.mark.skipif(importlib.util.find_spec("curl_cffi") is None, reason="extra rb-spider[curl]")
+def test_ca_bundle_trusts_a_private_root(tmp_path) -> None:
+    with polygon.serve(https=True) as https_url:
+        ca = tmp_path / "root.pem"
+        ca.write_bytes(polygon.HTTPS_CA)
+        pages = _crawl(https_url, "/plain", http_client="curl", ca_bundle=str(ca), max_urls=1)
+    assert pages["/plain"]["status_code"] == 200
+
+
+def test_uncrawlable_links_are_kept_on_request(base_url: str) -> None:
+    settings = Settings(collect=CollectSettings(uncrawlable_links=True))
+    with storage.database() as engine:
+        crawl_id = crawl_site(engine, f"{base_url}/l-uncrawlable", "polygon", settings).crawl_id
+        with engine.connect() as conn:
+            rows = conn.execute(sa.select(storage.links.c.target, storage.links.c.anchor).where(
+                storage.links.c.crawl_id == crawl_id, storage.links.c.kind == "uncrawlable")).all()  # fmt: skip
+    assert set(rows) == {("javascript:void(0)", "меню"), ("/a", "псевдоссылка")}
+
+
+def test_assume_html() -> None:
+    body = b"<html><head><title>T</title></head><body><a href='/x'>x</a></body></html>"
+    assert parse_page("https://s.example/", 200, {}, body).title == "T"
+    assert parse_page("https://s.example/", 200, {}, body, assume_html=False).title is None
+
+
+def test_self_refresh_and_indexable_only_issues(base_url: str) -> None:
+    from rb_spider.core import issues
+
+    with storage.database() as engine:
+        crawl_id = crawl_service.register_list_crawl(engine, [f"{base_url}/self-refresh"], "p", Settings())
+        crawl_service.run_crawl(engine, crawl_id)
+        status = sa.select(storage.pages.c.indexability_status).where(storage.pages.c.crawl_id == crawl_id)
+        with engine.connect() as conn:
+            assert conn.execute(status).scalar() == "Redirected"
+        issues.analyze(engine, crawl_id, ThresholdSettings(self_refresh_non_indexable=False))
+        with engine.connect() as conn:
+            assert conn.execute(status).scalar() is None
+
+        full = crawl_site(engine, f"{base_url}/", "polygon").crawl_id
+        issues.analyze(engine, full, ThresholdSettings(issues_indexable_only=True))
+        _, rows = issues.urls_with(engine, full, "content_low_content")
+    assert {r["url"].removeprefix(base_url) for r in rows} == {"/thin"}

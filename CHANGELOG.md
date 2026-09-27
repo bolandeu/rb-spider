@@ -60,6 +60,7 @@
 - XML sitemap через соседний пакет rb-sitemap-xml (extra `rb-spider[sitemaps]`): `sitemaps.crawl` читает sitemap в начале обхода (robots.txt и стандартные пути — `sitemaps.discover`, свои — `sitemaps.urls`), его URL обходятся (`sitemaps.follow`), hreflang из `xhtml:link` идёт в проверки Hreflang. 6 проверок — больше `thresholds.sitemap_max_urls` URL или `sitemap_max_mb` МБ в файле, индексируемая страница не в sitemap, «сироты», неиндексируемые в sitemap, URL в нескольких sitemap. `spider sitemaps show [--only files|urls|orphans|not_in_sitemap]`, `spider sitemaps build` — XML / Image Sitemap по обходу (разбиение по 49 999 URL, индекс, lastmod, changefreq, priority), `spider overview` — сводка. `spider crawl --list` и `spider fetch --list` принимают XML sitemap и CSV с колонкой url / address / loc. Установка с пакетом: `uv tool install --with-editable <путь к sitemap-xml> "rb-spider @ git+…"`.
 - Ширина в выдаче Google: title и description в пикселях (Arial 20px / 14px — `thresholds.serp_*_font_px`; таблица ширин `data/arial_widths.json`, `scripts/build_font_widths.py`), 4 проверки по порогам `title_min_px` / `title_max_px` (200 / 561) и `description_min_px` / `description_max_px` (400 / 985). Сниппет с обрезкой по словам — в `spider url`; `spider serp summary` — SERP Summary, `spider serp preview` — предпросмотр для своего текста без обхода.
 - Валидность HTML (9 проверок) по исходному коду, который HTML5-парсер иначе молча исправляет: нет / несколько `<head>` и `<body>`, элементы до `<html>`, `<head>` не первый, недопустимый элемент в `<head>` (Google заканчивает head на нём), HTML больше `thresholds.document_max_mb` и JS / CSS больше `resource_max_mb` (2 МБ). Мобильная версия: нет viewport с `width=`, плагины Flash / Silverlight / Java, `<link rel="alternate" media>` на мобильный сайт (`collect.mobile_alternate`). Выключатель проверки исходника — `collect.html_validation`.
+- Настройки обхода (#35): лимиты `crawl.max_page_size_kb`, `max_urls_per_depth`, `max_folder_depth`, `max_query_params`, `max_urls_per_subdomain`, `path_limits`; `retries_5xx`; `cookies` (`session` — одно хранилище на весь обход, `none`); `assume_html`; `keep_fragments`; `crawl_invalid_links` (по умолчанию ссылки без хоста теперь отбрасываются); `list_follow_canonicals`; `cdns`; `robots_custom`, `robots_show_internal_blocked` / `robots_show_external_blocked` и совпавшая строка robots.txt у заблокированных (`pages.blocked_rule`); Basic-авторизация сайта (`crawl.auth`, пароль — `spider auth login --provider site`, к чужим сайтам не уходит); `ca_bundle` — свой корневой сертификат (клиент curl); `collect.uncrawlable_links`; пороги `thresholds.issues_indexable_only`, `self_refresh_non_indexable`.
 
 ### Changed
 
@@ -69,6 +70,10 @@
 - Ключ `crawl.respect_robots` заменён на `crawl.robots` (`respect` / `ignore` / `report`).
 
 ### Fixed
+
+- Запись ссылок могла идти минутами, если в базе уже были небольшие обходы: SQLite по их статистике выбирал перебор таблицы `urls` на каждую ссылку (обход 200 страниц после двух крошечных — 21 с вместо 0,2). id URL теперь подставляются поиском по уникальному индексу.
+
+- Заблокированные robots.txt чужие URL записывались как URL сайта (не заполнялся признак `external`).
 
 - `spider overview`: `totals.indexable` считал и чужие URL, ответившие 200; теперь — только URL сайта, как раздел `indexability`.
 

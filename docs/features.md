@@ -33,12 +33,12 @@
 |---|---:|---:|---:|---:|---:|---:|
 | A. Проверки (issues) | 78 | 93 | 32 | 113 | 4 | 320 |
 | B. Сбор данных и вкладки | 15 | 22 | 7 | 8 | 1 | 53 |
-| C. Настройки обхода | 44 | 44 | 2 | 10 | 5 | 105 |
+| C. Настройки обхода | 44 | 44 | 2 | 11 | 5 | 106 |
 | D. Режимы | 6 | 4 | 2 | 4 | 1 | 17 |
 | E. Экспорт и отчёты | 11 | 24 | 8 | 11 | 2 | 56 |
 | F. Интеграции | 1 | 0 | 5 | 1 | 4 | 11 |
 | G. Наше, чего нет в SF | 22 | 4 | 0 | 0 | 0 | 26 |
-| **Итого** | **177** | **191** | **56** | **147** | **17** | **588** |
+| **Итого** | **177** | **191** | **56** | **148** | **17** | **589** |
 
 В разделе A 320 проверок SF, из них 92 — Accessibility (все `backlog`).
 
@@ -544,14 +544,14 @@
 - [x] `v2` **Pagination (rel next/prev)** → `collect.pagination.follow` / `.store`
 - [x] `v2` **Hreflang** → `collect.hreflang.follow` / `.store`
 - [x] `v2` **Mobile Alternate** → `collect.mobile_alternate.follow` / `.store`
-- [ ] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links.store`
+- [x] `v2` **Uncrawlable Links** (сохранять «ссылки» не в `<a href>`) → `collect.uncrawlable_links` (ссылки вида `uncrawlable`)
 - [ ] `backlog` **AMP** → `collect.amp.follow` / `.store`
 - [ ] `skip` **SWF (Flash)**
 - [x] `MVP` **Check Links Outside of Start Folder** — проверять, но не обходить ссылки за пределами стартовой папки → `scope.check_outside_start_folder`
 - [x] `MVP` **Crawl Outside of Start Folder** → `scope.crawl_outside_start_folder`
 - [x] `MVP` **Crawl All Subdomains** — считать поддомены внутренними → `scope.all_subdomains`
 - [x] `MVP` **Follow Internal / External "nofollow"** → `follow_nofollow.internal` / `follow_nofollow.external`
-- [ ] `v2` **Crawl Invalid Links** — пробовать синтаксически битые href → `scope.crawl_invalid_links`
+- [x] `v2` **Crawl Invalid Links** — пробовать синтаксически битые href → `crawl.crawl_invalid_links`
 - [x] `v2` **Crawl Linked XML Sitemaps** — найти sitemap через robots.txt или по списку → `sitemaps.crawl`, `sitemaps.discover`, `sitemaps.urls`, `sitemaps.follow`
 
 ### Лимиты (Spider > Limits)
@@ -561,12 +561,12 @@
 - [x] `MVP` **Max Redirects to Follow** (#16) → `crawl.max_redirects`
 - [x] `MVP` **Max URL Length to Crawl** → `limits.max_url_length`
 - [x] `MVP` **Max Links per URL to Crawl** → `limits.max_links_per_page`
-- [ ] `v2` **Max Page Size (KB) to Crawl** → `limits.max_page_size_kb`
-- [ ] `v2` **Limit URLs Per Crawl Depth** → `limits.max_urls_per_depth`
-- [ ] `v2` **Limit Max Folder Depth** → `limits.max_folder_depth`
-- [ ] `v2` **Limit Number of Query Strings** → `limits.max_query_params`
-- [ ] `v2` **Limit Crawl Total Per Subdomain** → `limits.max_urls_per_subdomain`
-- [ ] `v2` **Limit by URL Path** (шаблон → максимум страниц) → `limits.per_path`
+- [x] `v2` **Max Page Size (KB) to Crawl** → `crawl.max_page_size_kb`
+- [x] `v2` **Limit URLs Per Crawl Depth** → `crawl.max_urls_per_depth`
+- [x] `v2` **Limit Max Folder Depth** → `crawl.max_folder_depth`
+- [x] `v2` **Limit Number of Query Strings** → `crawl.max_query_params`
+- [x] `v2` **Limit Crawl Total Per Subdomain** → `crawl.max_urls_per_subdomain`
+- [x] `v2` **Limit by URL Path** (шаблон → максимум страниц) → `crawl.path_limits`
 
 ### Рендеринг (Spider > Rendering)
 
@@ -583,18 +583,18 @@
 ### Дополнительно (Spider > Advanced)
 
 - [x] `MVP` **Response Timeout** → `http.timeout`
-- [ ] `v2` **5XX Response Retries** → `http.retries_5xx`
-- [ ] `v2` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `issues.indexable_only`
+- [x] `v2` **5XX Response Retries** → `crawl.retries_5xx`
+- [x] `v2` **Ignore Non-Indexable URLs for Issues** — проверки контента только для индексируемых → `thresholds.issues_indexable_only`
 - [x] `MVP` **Always Follow Redirects** (#16) (в режиме списка — до конечной цели) → всегда в `crawl.mode = "list"`
-- [ ] `v2` **Respect Self Referencing Meta Refresh** → `issues.self_meta_refresh_non_indexable`
+- [x] `v2` **Respect Self Referencing Meta Refresh** → `thresholds.self_refresh_non_indexable`
 - [x] `MVP` **Extract Images From IMG SRCSET Attribute** → `collect.images.srcset`
-- [ ] `v2` **Cookie Storage: session / persistent / none** → `http.cookies`
+- [x] `v2` **Cookie Storage: session / none** → `crawl.cookies` (persistent между обходами — не делаем: у CLI нет общего профиля браузера)
 - [x] `v2` **Ignore Paginated URLs for Duplicate Filters** → `thresholds.ignore_paginated_duplicates` (параметр проверок, меняется через `spider analyze`)
-- [ ] `v2` **Always Follow Canonicals** (в режиме списка) → `list.follow_canonicals`
+- [x] `v2` **Always Follow Canonicals** (в режиме списка) → `crawl.list_follow_canonicals`
 - [x] `v2` **Respect HSTS Policy** → `crawl.respect_hsts` (307 «HSTS Policy» без запроса)
-- [ ] `v2` **Crawl Fragment Identifiers** — считать `#fragment` отдельными URL → `scope.keep_fragments`
+- [x] `v2` **Crawl Fragment Identifiers** — считать `#fragment` отдельными URL → `crawl.keep_fragments`
 - [x] `v2` **Perform HTML Validation** → `collect.html_validation` (по умолчанию включено: сканирование исходника ~0,04 мс на страницу)
-- [ ] `v2` **Assume Pages are HTML** (нет Content-Type → HTML) → `http.assume_html`
+- [x] `v2` **Assume Pages are HTML** (нет Content-Type → HTML) → `crawl.assume_html`
 - [ ] `skip` **Respect Noindex / Canonical / Next-Prev** — в SF только скрывают URL в интерфейсе; у нас это фильтры в `spider urls`
 - [ ] `backlog` **Green Hosting Carbon Calculation**
 
@@ -622,9 +622,9 @@
 
 - [x] `MVP` **Respect / Ignore robots.txt** → `respect_robots` / `--ignore-robots`
 - [x] `MVP` **Ignore robots.txt but report status** — обходить, но отмечать, что было бы заблокировано → `robots.mode = "report"`
-- [ ] `v2` **Show Internal URLs Blocked by Robots.txt** (+ совпавшая строка robots.txt) → `robots.show_internal_blocked`
-- [ ] `v2` **Show External URLs Blocked by Robots.txt** → `robots.show_external_blocked`
-- [ ] `v2` **Custom Robots** — подменить robots.txt для обхода (тест правок) → `robots.custom`
+- [x] `v2` **Show Internal URLs Blocked by Robots.txt** (+ совпавшая строка robots.txt) → `crawl.robots_show_internal_blocked`, `pages.blocked_rule`
+- [x] `v2` **Show External URLs Blocked by Robots.txt** → `crawl.robots_show_external_blocked`
+- [x] `v2` **Custom Robots** — подменить robots.txt для обхода (тест правок) → `crawl.robots_custom`
 
 ### URL и домены
 
@@ -632,7 +632,7 @@
 - [x] `v2` **URL Rewriting: Remove Parameters** → `rewrite.remove_params`
 - [x] `v2` **URL Rewriting: Regex Replace** → `rewrite.regex`
 - [x] `v2` **URL Rewriting: Lowercase Discovered URLs, Percent Encoding Mode** → `rewrite.lowercase`, `rewrite.percent_encoding`
-- [ ] `v2` **CDNs** — домены, которые считать внутренними → `scope.cdns`
+- [x] `v2` **CDNs** — домены, которые считать внутренними → `crawl.cdns`
 
 ### Запросы
 
@@ -642,8 +642,9 @@
 - [x] `MVP` **Robots User-Agent** — чью группу правил robots.txt соблюдать → `robots.user_agent`
 - [x] `MVP` **HTTP Header** — произвольные заголовки запроса → `headers`
 - [x] `MVP` **Proxy** → `proxy` / `--proxy` (в SF — один прокси; у нас ротация через Crawlee)
-- [ ] `v2` **Authentication: Basic / Digest** → `auth.basic` (пароль — в keychain)
-- [ ] `v2` **Trusted Certificates** (свои корневые сертификаты для MITM-прокси) → `http.ca_bundle`
+- [x] `v2` **Authentication: Basic** → `crawl.auth = basic`, `crawl.auth_user` (пароль — `spider auth login --provider site`)
+- [ ] `backlog` **Authentication: Digest** — impit не умеет challenge-response Digest; своя реализация — по запросу
+- [x] `v2` **Trusted Certificates** (свои корневые сертификаты для MITM-прокси) → `crawl.ca_bundle` (с `http_client = curl`: impit свой CA не загружает)
 - [ ] `backlog` **Authentication: Forms Based** (вход через браузер, cookies для обхода)
 
 ### Пользовательские правила (Config > Custom)

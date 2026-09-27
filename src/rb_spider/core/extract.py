@@ -61,6 +61,7 @@ class Page:
     pagination: list[tuple[str, str]] = field(default_factory=list)  # ("next" | "prev", absolute URL): HTML + Link
     forms: list[str] = field(default_factory=list)  # each <form>'s action, absolute (no action: the page itself)
     mobile_alternates: list[str] = field(default_factory=list)  # <link rel="alternate" media="…"> targets
+    uncrawlable: list[tuple[str, str]] = field(default_factory=list)  # (javascript: / onclick…, text) — not followable
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -79,8 +80,30 @@ def normalize_url(url: str) -> str:
 
 
 def _absolute(base: str, href: str) -> str | None:
-    url = urljoin(base, href.strip())
-    return normalize_url(url) if urlsplit(url).scheme in _FOLLOWABLE_SCHEMES else None
+    """An http(s) URL, fragment dropped; None — another scheme, or no host (`http:/x`, a broken IPv6 literal…)."""
+    try:
+        url = urljoin(base, href.strip())
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    return normalize_url(url) if parts.scheme in _FOLLOWABLE_SCHEMES and parts.netloc else None
+
+
+def _link_target(base: str, href: str, *, keep_fragment: bool, invalid: bool) -> str | None:
+    """A link's URL: `_absolute`, or with `keep_fragment` its #fragment kept, or with `invalid` a malformed http(s)
+    URL kept as it is (crawl.keep_fragments, crawl.crawl_invalid_links)."""
+    target = _absolute(base, href)
+    if target is None:
+        if not invalid:
+            return None
+        try:
+            url = urljoin(base, href.strip())
+        except ValueError:
+            return None
+        return url if url.lower().startswith(("http:", "https:")) else None
+    if keep_fragment and (fragment := urlsplit(urljoin(base, href.strip())).fragment):
+        return f"{target}#{fragment}"
+    return target
 
 
 def _refresh_target(base: str, value: str | None) -> str | None:
@@ -313,11 +336,11 @@ def anchor_ids(tree: LexborHTMLParser) -> str:
     return base64.b64encode(b"".join(fingerprints)).decode()
 
 
-def _links(url: str, tree: LexborHTMLParser) -> list[Link]:
+def _links(url: str, tree: LexborHTMLParser, *, keep_fragments: bool = False, invalid: bool = False) -> list[Link]:
     links = []
     for anchor in tree.css("a[href]"):
         href = anchor.attributes.get("href") or ""
-        target = _absolute(url, href)
+        target = _link_target(url, href, keep_fragment=keep_fragments, invalid=invalid)
         if target is None:
             continue
         rel = (anchor.attributes.get("rel") or "").lower() or None
@@ -513,18 +536,24 @@ def _mobile(url: str, tree: LexborHTMLParser) -> tuple[dict, list[str]]:
 _JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
 
 
-def _uncrawlable_links(tree: LexborHTMLParser) -> int:
-    """Link-like elements a crawler can't follow: `javascript:` hrefs, href on non-links, onclick navigation."""
-    count = 0
+def uncrawlable_links(tree: LexborHTMLParser) -> list[tuple[str, str]]:
+    """Link-like elements a crawler can't follow — `javascript:` hrefs, href on non-links, onclick navigation —
+    as (what it points to, its text)."""
+    found = []
     for node in tree.css("[href]"):
-        href = (node.attributes.get("href") or "").strip().lower()
-        if node.tag == "a":
-            count += href.startswith("javascript:")
-        elif node.tag not in ("link", "base", "area"):
-            count += 1
+        href = (node.attributes.get("href") or "").strip()
+        if (node.tag == "a" and href.lower().startswith("javascript:")) or node.tag not in (
+            "a",
+            "link",
+            "base",
+            "area",
+        ):
+            found.append((href[:500], _text(node)[:200]))
     for node in tree.css("[onclick]"):
-        count += bool(_JS_NAVIGATION.search(node.attributes.get("onclick") or ""))
-    return count
+        onclick = node.attributes.get("onclick") or ""
+        if _JS_NAVIGATION.search(onclick):
+            found.append((f"onclick: {onclick.strip()}"[:500], _text(node)[:200]))
+    return found
 
 
 def parse_page(
@@ -538,6 +567,9 @@ def parse_page(
     minhash: bool = False,
     structured_data: tuple[str, ...] = (),
     validate: bool = True,
+    keep_fragments: bool = False,
+    invalid_links: bool = False,
+    assume_html: bool = True,
 ) -> Page:
     """Extract what a crawl needs from a response: redirect targets, title, outgoing links."""
     headers = {k.lower(): v for k, v in headers.items()}
@@ -545,7 +577,8 @@ def parse_page(
     page = Page(url=url, status_code=status_code, content_type=content_type, bytes=len(body))
     if refresh := _refresh_target(url, headers.get("refresh")):
         page.refresh_url, page.refresh_kind = refresh, "http"
-    is_html = bool(body) and "html" in (content_type or "text/html") and not 300 <= status_code < 400
+    declared = content_type or ("text/html" if assume_html else "")
+    is_html = bool(body) and "html" in declared and not 300 <= status_code < 400
     tree = LexborHTMLParser(body) if is_html else None
     page.onpage = _directives_and_canonical(url, headers, tree)
     page.hreflang, page.onpage["hreflang_outside_head"] = _hreflang(url, headers, tree)
@@ -571,9 +604,10 @@ def parse_page(
                 if refresh := _refresh_target(url, meta.attributes.get("content")):
                     page.refresh_url, page.refresh_kind = refresh, "meta"
                 break
-    page.links = _links(url, tree)
+    page.links = _links(url, tree, keep_fragments=keep_fragments, invalid=invalid_links)
     page.resources = _resources(url, tree, srcset)
-    page.onpage["uncrawlable_outlinks"] = _uncrawlable_links(tree)
+    page.uncrawlable = uncrawlable_links(tree)
+    page.onpage["uncrawlable_outlinks"] = len(page.uncrawlable)
     page.onpage["anchor_ids"] = anchor_ids(tree)
     page.forms = _forms(url, tree)
     mobile, page.mobile_alternates = _mobile(url, tree)

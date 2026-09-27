@@ -49,13 +49,29 @@ concurrency = 10
 | `crawl.all_subdomains` | `bool` | `false` | Считать поддомены (blog.site.ru и т.п.) частью сайта и обходить их. |
 | `crawl.stay_in_start_folder` | `bool` | `false` | Обходить только внутри папки стартового URL (старт /blog/ — только /blog/…). |
 | `crawl.check_outside_start_folder` | `bool` | `true` | С stay_in_start_folder: ссылки за пределами папки проверять (код ответа), но не обходить. |
+| `crawl.cdns` | `list[str]` | `[]` | Домены CDN, которые считать частью сайта (и их поддомены): их URL обходятся как свои. |
+| `crawl.keep_fragments` | `bool` | `false` | Считать URL с разными #фрагментами разными страницами (SPA на #). |
+| `crawl.crawl_invalid_links` | `bool` | `false` | Обходить и синтаксически битые ссылки (без хоста, вида http:/site); иначе они отбрасываются. |
+| `crawl.list_follow_canonicals` | `bool` | `false` | В режиме списка обходить и цели canonical. |
 | `crawl.follow_internal_nofollow` | `bool` | `false` | Обходить внутренние ссылки с rel=nofollow. |
 | `crawl.follow_external_nofollow` | `bool` | `false` | Проверять внешние ссылки с rel=nofollow. |
 | `crawl.content_exclude` | `list[str]` | `["nav", "footer"]` | CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»). |
+| `crawl.max_page_size_kb` | `int \| None` | — | Страницы тяжелее стольких КБ не разбирать (код и размер записываются); не задано — все. |
+| `crawl.max_urls_per_depth` | `int \| None` | — | Не больше стольких URL на каждом уровне глубины; не задано — без ограничения. |
+| `crawl.max_folder_depth` | `int \| None` | — | Не обходить URL глубже стольких папок в пути (/a/b/c — 3); не задано — любые. |
+| `crawl.max_query_params` | `int \| None` | — | Не обходить URL с большим числом GET-параметров; 0 — только без параметров. |
+| `crawl.max_urls_per_subdomain` | `int \| None` | — | С all_subdomains: не больше стольких URL с одного поддомена. |
+| `crawl.path_limits` | `list[tuple[str, int]]` | `[]` | Лимиты по разделам: пары [регулярное выражение, максимум URL]; URL сверх лимита не обходятся. |
 | `crawl.concurrency` | `int` | `20` | Сколько запросов к сайту выполняется одновременно. |
 | `crawl.max_rps` | `float \| None` | — | Не больше стольких запросов в секунду; не задано — без ограничения. |
 | `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
 | `crawl.http_client` | `Literal['impit', 'curl']` | `"impit"` | HTTP-клиент: impit — по умолчанию, самый быстрый; curl — запасной (curl-impersonate, `rb-spider[curl]`), если сайт плохо отвечает impit. |
+| `crawl.retries_5xx` | `int` | `0` | Сколько раз повторять запрос, ответивший 5xx, прежде чем записать ошибку. |
+| `crawl.cookies` | `Literal['session', 'none']` | `"session"` | Cookies: session — хранить в пределах обхода (как браузер); none — не хранить и не слать. |
+| `crawl.assume_html` | `bool` | `true` | Ответ без Content-Type разбирать как HTML. |
+| `crawl.ca_bundle` | `str \| None` | — | Свой корневой сертификат (PEM) — для MITM-прокси и корпоративных сетей; только с http_client = curl (impit свой CA не загружает — там только verify_tls = false). |
+| `crawl.auth` | `Literal['none', 'basic']` | `"none"` | HTTP-авторизация сайта: basic — заголовок Authorization к URL сайта (не к чужим); пароль — `spider auth login --provider site`. |
+| `crawl.auth_user` | `str \| None` | — | Логин для auth = basic. |
 | `crawl.verify_tls` | `bool` | `true` | Проверять сертификат HTTPS; false — принимать и самоподписанные / просроченные (тестовые стенды). |
 | `crawl.respect_hsts` | `bool` | `true` | Как браузер: после ответа с Strict-Transport-Security http-ссылки на тот же хост не скачивать, а записывать как 307 на https-адрес (HSTS Policy); false — скачивать и видеть настоящий редирект. |
 | `crawl.render` | `Literal['never', 'always']` | `"never"` | JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS. |
@@ -66,6 +82,9 @@ concurrency = 10
 | `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
 | `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |
 | `crawl.robots` | `Literal['respect', 'ignore', 'report']` | `"respect"` | robots.txt: respect — запрещённое не скачивать (но показать в отчёте), с учётом Crawl-delay; ignore — не читать; report — скачивать всё, но отмечать запрещённое. |
+| `crawl.robots_custom` | `str \| None` | — | Свой robots.txt для сайта вместо настоящего — проверить правки до выкладки (текст файла). |
+| `crawl.robots_show_internal_blocked` | `bool` | `true` | Записывать в отчёт URL сайта, запрещённые robots.txt. |
+| `crawl.robots_show_external_blocked` | `bool` | `true` | Записывать в отчёт чужие URL, запрещённые их robots.txt. |
 | `crawl.robots_user_agent` | `str \| None` | — | От чьего имени читать robots.txt; не задано — от User-Agent запросов. |
 | `crawl.proxy_urls` | `list[str]` | `[]` | Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. |
 | `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
@@ -85,6 +104,7 @@ concurrency = 10
 | `collect.pagination.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.mobile_alternate.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.mobile_alternate.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
+| `collect.uncrawlable_links` | `bool` | `false` | Хранить и «ссылки», по которым не перейти (javascript:, href не у <a>, onclick) — видны в `spider links`. |
 | `collect.html_validation` | `bool` | `true` | Проверять структуру HTML по исходному коду: <head> / <body>, порядок, элементы в <head>. |
 | `collect.images_srcset` | `bool` | `false` | Брать картинки и из атрибута srcset, а не только src. |
 | `collect.structured_data` | `list[Literal['json-ld', 'microdata', 'rdfa']]` | `[]` | Какую микроразметку извлекать и проверять (Schema.org, расширенные результаты Google): json-ld, microdata, rdfa; пусто — не извлекать. Microdata и RDFa — extra `rb-spider[structured]`. |
@@ -136,6 +156,8 @@ concurrency = 10
 | `thresholds.resource_max_mb` | `float` | `2` | JS / CSS больше стольких МБ — «Validation: Resource Over 2MB». |
 | `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
 | `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |
+| `thresholds.issues_indexable_only` | `bool` | `false` | Проверки контента (title, description, H1, H2, Content…) только для индексируемых страниц — Ignore Non-Indexable URLs for Issues. |
+| `thresholds.self_refresh_non_indexable` | `bool` | `true` | Страница с meta / HTTP Refresh на саму себя — неиндексируемая (Redirected). |
 | `thresholds.ignore_paginated_duplicates` | `bool` | `true` | Не считать дублями title / description / H1 / H2 страниц пагинации 2+ (с rel=prev): у страниц одного списка они обычно одинаковы. |
 | `thresholds.internal_search` | `list[str]` | `["[?&](q|s|query|search|text|keyword|keywords)=", "/(search|poisk|find)(/|$|\\?)"]` | Регулярные выражения (без учёта регистра) по пути и параметрам URL: совпало — страница внутреннего поиска, «URL: Internal Search». |
 <!-- keys:end -->

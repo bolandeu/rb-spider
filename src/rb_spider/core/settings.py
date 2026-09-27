@@ -96,11 +96,45 @@ class CrawlSettings(BaseModel):
     check_outside_start_folder: bool = Field(
         True, description="С stay_in_start_folder: ссылки за пределами папки проверять (код ответа), но не обходить."
     )
+    cdns: list[str] = Field(
+        [],
+        description="Домены CDN, которые считать частью сайта (и их поддомены): их URL обходятся как свои.",
+        examples=[["cdn.example.net"]],
+    )
+    keep_fragments: bool = Field(False, description="Считать URL с разными #фрагментами разными страницами (SPA на #).")
+    crawl_invalid_links: bool = Field(
+        False,
+        description="Обходить и синтаксически битые ссылки (без хоста, вида http:/site); иначе они отбрасываются.",
+    )
+    list_follow_canonicals: bool = Field(False, description="В режиме списка обходить и цели canonical.")
     follow_internal_nofollow: bool = Field(False, description="Обходить внутренние ссылки с rel=nofollow.")
     follow_external_nofollow: bool = Field(False, description="Проверять внешние ссылки с rel=nofollow.")
     content_exclude: list[str] = Field(
         ["nav", "footer"],
         description="CSS-селекторы блоков, которые не считаются текстом страницы (число слов, «Lorem ipsum»).",
+    )
+    # --- limits (Screaming Frog's Spider > Limits)
+    max_page_size_kb: int | None = Field(
+        None,
+        ge=1,
+        description="Страницы тяжелее стольких КБ не разбирать (код и размер записываются); не задано — все.",
+    )
+    max_urls_per_depth: int | None = Field(
+        None, ge=1, description="Не больше стольких URL на каждом уровне глубины; не задано — без ограничения."
+    )
+    max_folder_depth: int | None = Field(
+        None, ge=0, description="Не обходить URL глубже стольких папок в пути (/a/b/c — 3); не задано — любые."
+    )
+    max_query_params: int | None = Field(
+        None, ge=0, description="Не обходить URL с большим числом GET-параметров; 0 — только без параметров."
+    )
+    max_urls_per_subdomain: int | None = Field(
+        None, ge=1, description="С all_subdomains: не больше стольких URL с одного поддомена."
+    )
+    path_limits: list[tuple[str, int]] = Field(
+        [],
+        description="Лимиты по разделам: пары [регулярное выражение, максимум URL]; URL сверх лимита не обходятся.",
+        examples=[[["/blog/", 1000], ["/tag/", 50]]],
     )
     # --- how fast
     concurrency: int = Field(20, ge=1, le=500, description="Сколько запросов к сайту выполняется одновременно.")
@@ -115,6 +149,30 @@ class CrawlSettings(BaseModel):
             "`rb-spider[curl]`), если сайт плохо отвечает impit."
         ),
     )
+    retries_5xx: int = Field(
+        0, ge=0, le=10, description="Сколько раз повторять запрос, ответивший 5xx, прежде чем записать ошибку."
+    )
+    cookies: Literal["session", "none"] = Field(
+        "session",
+        description="Cookies: session — хранить в пределах обхода (как браузер); none — не хранить и не слать.",
+    )
+    assume_html: bool = Field(True, description="Ответ без Content-Type разбирать как HTML.")
+    ca_bundle: str | None = Field(
+        None,
+        description=(
+            "Свой корневой сертификат (PEM) — для MITM-прокси и корпоративных сетей; только с http_client = curl "
+            "(impit свой CA не загружает — там только verify_tls = false)."
+        ),
+        examples=["/etc/ssl/company-root.pem"],
+    )
+    auth: Literal["none", "basic"] = Field(
+        "none",
+        description=(
+            "HTTP-авторизация сайта: basic — заголовок Authorization к URL сайта (не к чужим); пароль — "
+            "`spider auth login --provider site`."
+        ),
+    )
+    auth_user: str | None = Field(None, description="Логин для auth = basic.", examples=["stage"])
     verify_tls: bool = Field(
         True,
         description=(
@@ -182,6 +240,17 @@ class CrawlSettings(BaseModel):
             "ignore — не читать; report — скачивать всё, но отмечать запрещённое."
         ),
     )
+    robots_custom: str | None = Field(
+        None,
+        description="Свой robots.txt для сайта вместо настоящего — проверить правки до выкладки (текст файла).",
+        examples=["User-agent: *\nDisallow: /cart"],
+    )
+    robots_show_internal_blocked: bool = Field(
+        True, description="Записывать в отчёт URL сайта, запрещённые robots.txt."
+    )
+    robots_show_external_blocked: bool = Field(
+        True, description="Записывать в отчёт чужие URL, запрещённые их robots.txt."
+    )
     robots_user_agent: str | None = Field(
         None,
         description="От чьего имени читать robots.txt; не задано — от User-Agent запросов.",
@@ -199,6 +268,16 @@ class CrawlSettings(BaseModel):
     store_html: bool = Field(
         False, description="Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5."
     )
+
+    @field_validator("path_limits")
+    @classmethod
+    def _valid_path_limits(cls, limits: list[tuple[str, int]]) -> list[tuple[str, int]]:
+        for pattern, _ in limits:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"invalid regular expression {pattern!r}: {exc}") from exc
+        return limits
 
     @field_validator("include", "exclude")
     @classmethod
@@ -254,6 +333,10 @@ class CollectSettings(BaseModel):
     mobile_alternate: FollowStore = Field(
         default_factory=FollowStore,
         description="Мобильная версия <link rel=alternate media=…>: follow — обходить её страницы.",
+    )
+    uncrawlable_links: bool = Field(
+        False,
+        description="Хранить и «ссылки», по которым не перейти (javascript:, href не у <a>, onclick) — видны в `spider links`.",
     )
     html_validation: bool = Field(
         True, description="Проверять структуру HTML по исходному коду: <head> / <body>, порядок, элементы в <head>."
@@ -428,6 +511,16 @@ class ThresholdSettings(BaseModel):
     )
     sitemap_max_mb: float = Field(
         50, gt=0, description="Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb»."
+    )
+    issues_indexable_only: bool = Field(
+        False,
+        description=(
+            "Проверки контента (title, description, H1, H2, Content…) только для индексируемых страниц — "
+            "Ignore Non-Indexable URLs for Issues."
+        ),
+    )
+    self_refresh_non_indexable: bool = Field(
+        True, description="Страница с meta / HTTP Refresh на саму себя — неиндексируемая (Redirected)."
     )
     ignore_paginated_duplicates: bool = Field(
         True,
