@@ -559,6 +559,24 @@ COMPARE_FIELDS = [
 ]  # fmt: skip
 
 
+class UrlMapping(BaseModel):
+    """One URL Mapping rule of `spider compare`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: str = Field(description="Регулярное выражение (Python) по URL прежнего обхода.")
+    replace: str = Field(description="На что заменить совпадение (\\1 — группа из pattern).")
+
+    @field_validator("pattern")
+    @classmethod
+    def _compiles(cls, pattern: str) -> str:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ValueError(f"not a regular expression: {exc}") from exc
+        return pattern
+
+
 class CompareSettings(BaseModel):
     """What `spider compare` checks for changes (Screaming Frog's Config > Compare, Change Detection)."""
 
@@ -567,6 +585,15 @@ class CompareSettings(BaseModel):
     fields: list[str] = Field(
         list(COMPARE_FIELDS),
         description="Поля Change Detection: " + ", ".join(COMPARE_FIELDS) + " (content — HTML изменился, по md5).",
+    )
+    url_mapping: list[UrlMapping] = Field(
+        [],
+        description=(
+            "URL Mapping: правила «регулярное выражение → замена» для URL прежнего обхода, чтобы сравнить разные "
+            "адреса одних страниц — staging против production, переезд на другой домен или HTTPS, новая структура "
+            "URL. Применяются по порядку."
+        ),
+        examples=[[{"pattern": "^https://staging\\.example\\.com", "replace": "https://example.com"}]],
     )
 
     @field_validator("fields")
@@ -579,7 +606,7 @@ class CompareSettings(BaseModel):
 
 
 EXPORT_DATASETS = ["pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates",
-                   "custom", "sitemap-urls"]  # fmt: skip
+                   "custom", "sitemap-urls", "javascript", "rendered-source", "screenshots"]  # fmt: skip
 
 
 class ExportSettings(BaseModel):

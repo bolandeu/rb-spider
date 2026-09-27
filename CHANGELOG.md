@@ -70,6 +70,7 @@
 - Link Score (v3): `spider link-score [обход]` — внутренний PageRank страниц по follow-ссылкам сайта на шкале 0–100 (логарифмической, как в Screaming Frog), только по запросу и только для обхода с сохранёнными внутренними ссылками (иначе выход 2, `INTERNAL_LINKS_NOT_COLLECTED`); результат — колонка `pages.link_score` (`spider url`, `spider export`, `spider query`).
 - Скриншоты отрендеренных страниц (v3): `crawl.render_screenshots = true` — первый экран каждой страницы в JPEG в папке рядом с базой, путь — `pages.screenshot` и `spider url`; удаляются вместе с обходом. Удаление обхода теперь явно чистит и `render_events` / `rendered_images`.
 - View Source (#51): при `--store-html` у отрендеренных страниц рядом с ответом сервера сохраняется DOM после JavaScript; `spider source <url> [--rendered | --diff]` — исходный HTML, отрендеренный или diff между ними; наборы `spider export rendered-source` и `spider export screenshots` (`-o папка` — сами JPEG-файлы с index.csv).
+- URL Mapping (#53): `spider compare --map 'РЕГУЛЯРКА=>ЗАМЕНА'` и `compare.url_mapping` переписывают URL прежнего обхода в адреса нового — staging против production, переезд на другой домен или HTTPS, новая структура URL; страницы сравниваются между собой, а не считаются пропавшими и новыми. Наборы `javascript`, `rendered-source`, `screenshots` теперь доступны и в пресетах `export.presets`.
 
 ### Changed
 

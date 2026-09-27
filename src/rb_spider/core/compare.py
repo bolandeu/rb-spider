@@ -8,11 +8,14 @@ loaded into memory whatever the size of the sites. An issue's URLs fall into Scr
 - removed — the URL is in both crawls, and had the issue but no longer has it;
 - missing — the URL had the issue and is gone from the crawl.
 
-Change Detection compares the fields in `compare.fields` of URLs present in both crawls.
+Change Detection compares the fields in `compare.fields` of URLs present in both crawls. With URL Mapping
+(`compare.url_mapping`) the old crawl's URLs are first rewritten into the new crawl's (staging vs production, a
+domain move, a new URL structure).
 """
 
 from __future__ import annotations
 
+import re
 from typing import Literal, get_args
 
 import sqlalchemy as sa
@@ -43,30 +46,88 @@ FIELDS = {
 Status = Literal["added", "new", "removed", "missing"]
 STATUSES: tuple[str, ...] = get_args(Status)
 _OWN = "NOT coalesce(external, FALSE)"
+_BATCH = 5000
 
 
-def _urls(crawl: str) -> str:
-    return f"SELECT url FROM pages WHERE crawl_id = :{crawl} AND {_OWN}"  # noqa: S608 — fixed text
+class Mapping:
+    """URL Mapping: the old crawl's URLs as the new crawl spells them (`compare.url_mapping`, regex → replacement).
+
+    The rules go over the old crawl's URLs once, a batch at a time; only the URLs they change land in a temporary
+    table `cmp_old (orig → url)`, so queries translate an old URL with one index lookup. Without rules every piece
+    of SQL below is the plain URL-to-URL comparison.
+    """
+
+    def __init__(self, conn: sa.Connection, old: int, rules: list[tuple[str, str]]) -> None:
+        self.active = bool(rules)
+        if not self.active:
+            return
+        compiled = [(re.compile(pattern), replace) for pattern, replace in rules]
+        temp = "temp" if storage.is_sqlite(conn) else "pg_temp"
+        conn.exec_driver_sql(f"DROP TABLE IF EXISTS {temp}.cmp_old")
+        conn.exec_driver_sql("CREATE TEMP TABLE cmp_old (orig TEXT PRIMARY KEY, url TEXT NOT NULL)")
+        conn.exec_driver_sql(
+            f"CREATE INDEX {'temp.' if storage.is_sqlite(conn) else ''}cmp_old_by_url ON cmp_old (url)"
+        )
+        select = sa.text("SELECT url FROM pages WHERE crawl_id = :old AND url > :after ORDER BY url LIMIT :limit")
+        insert = sa.text("INSERT INTO cmp_old (orig, url) VALUES (:orig, :url)")
+        after = ""
+        while batch := conn.execute(select, {"old": old, "after": after, "limit": _BATCH}).scalars().all():
+            after = batch[-1]
+            changed = []
+            for url in batch:
+                mapped = url
+                for pattern, replace in compiled:
+                    mapped = pattern.sub(replace, mapped)
+                if mapped != url:
+                    changed.append({"orig": url, "url": mapped})
+            if changed:
+                conn.execute(insert, changed)
+
+    def old(self, column: str) -> str:
+        """An old crawl's URL column as the new crawl spells it."""
+        if not self.active:
+            return column
+        return f"coalesce((SELECT cm.url FROM cmp_old cm WHERE cm.orig = {column}), {column})"  # noqa: S608 — a column name
+
+    def back(self, column: str) -> str:
+        """A new crawl's URL column as the old crawl spelled it (the first old URL mapped onto it, else itself)."""
+        if not self.active:
+            return column
+        return f"coalesce((SELECT cm.orig FROM cmp_old cm WHERE cm.url = {column} LIMIT 1), {column})"  # noqa: S608
+
+    def urls(self, crawl: str) -> str:
+        """The crawl's own URLs — the old one's as the new crawl spells them."""
+        column = self.old("p.url") if crawl == "old" else "p.url"
+        own = "NOT coalesce(p.external, FALSE)"
+        return f"SELECT {column} AS url FROM pages p WHERE p.crawl_id = :{crawl} AND {own}"  # noqa: S608 — fixed text
 
 
-def summary(engine: sa.Engine, old: int, new: int, fields: list[str]) -> dict:
+def _rules(mapping: list | None) -> list[tuple[str, str]]:
+    return [(m.pattern, m.replace) if hasattr(m, "pattern") else tuple(m) for m in mapping or []]
+
+
+def summary(engine: sa.Engine, old: int, new: int, fields: list[str], mapping: list | None = None) -> dict:
     """URL counts, every rule's four groups (rules with something in either crawl) and changed fields."""
     params = {"old": old, "new": new}
-    with engine.connect() as conn:
+    with engine.begin() as conn:
+        m = Mapping(conn, old, _rules(mapping))
+        old_urls, new_urls = m.urls("old"), m.urls("new")
         urls = conn.execute(
             sa.text(
-                f"SELECT (SELECT count(*) FROM ({_urls('old')})), (SELECT count(*) FROM ({_urls('new')})),"  # noqa: S608
-                f" (SELECT count(*) FROM ({_urls('new')}) n WHERE n.url NOT IN ({_urls('old')})),"
-                f" (SELECT count(*) FROM ({_urls('old')}) o WHERE o.url NOT IN ({_urls('new')}))"
+                f"SELECT (SELECT count(*) FROM ({old_urls}) a), (SELECT count(*) FROM ({new_urls}) b),"  # noqa: S608
+                f" (SELECT count(*) FROM ({new_urls}) n WHERE n.url NOT IN ({old_urls})),"
+                f" (SELECT count(*) FROM ({old_urls}) o WHERE o.url NOT IN ({new_urls}))"
             ),
             params,
         ).one()
         # one pass: every (rule, URL) with whether it was flagged before / now, and whether the URL was crawled
         rows = conn.execute(
             sa.text(
-                f"WITH oldpages AS ({_urls('old')}), newpages AS ({_urls('new')}),"  # noqa: S608
-                " x AS (SELECT code, url, max(crawl_id = :old) AS was, max(crawl_id = :new) AS is_now FROM issues"
-                "   WHERE crawl_id IN (:old, :new) GROUP BY code, url),"
+                f"WITH oldpages AS ({old_urls}), newpages AS ({new_urls}),"  # noqa: S608
+                " f AS (SELECT i.code, CASE WHEN i.crawl_id = :old THEN "
+                f"{m.old('i.url')} ELSE i.url END AS url, i.crawl_id = :old AS was, i.crawl_id = :new AS is_now"
+                "   FROM issues i WHERE i.crawl_id IN (:old, :new)),"
+                " x AS (SELECT code, url, max(was) AS was, max(is_now) AS is_now FROM f GROUP BY code, url),"
                 " y AS (SELECT code, was, is_now, url IN (SELECT url FROM oldpages) AS in_old,"
                 "   url IN (SELECT url FROM newpages) AS in_new FROM x)"
                 " SELECT code, sum(was), sum(is_now), sum(is_now AND NOT was AND in_old), sum(is_now AND NOT in_old),"
@@ -74,7 +135,7 @@ def summary(engine: sa.Engine, old: int, new: int, fields: list[str]) -> dict:
             ),
             params,
         ).all()
-        changes = {name: conn.execute(sa.text(f"SELECT count(*) FROM ({_changed(name)})"), params).scalar_one()  # noqa: S608
+        changes = {name: conn.execute(sa.text(f"SELECT count(*) FROM ({_changed(name, m)}) c"), params).scalar_one()  # noqa: S608
                    for name in fields}  # fmt: skip
     order = {rule.code: i for i, rule in enumerate(issues.RULES)}
     found = []
@@ -89,28 +150,37 @@ def summary(engine: sa.Engine, old: int, new: int, fields: list[str]) -> dict:
     }
 
 
-def _changed(field: str) -> str:
+def _changed(field: str, m: Mapping) -> str:
     if field not in FIELDS:
         raise InvalidArguments(f"Unknown compare field '{field}': one of {', '.join(FIELDS)}.")
     expression = FIELDS[field]
     return (
         f"SELECT n.url, {expression.replace('p.', 'o.')} AS old, {expression.replace('p.', 'n.')} AS new"  # noqa: S608
-        f" FROM pages n JOIN pages o ON o.crawl_id = :old AND o.url = n.url AND NOT coalesce(o.external, FALSE)"
+        f" FROM pages n JOIN pages o ON o.crawl_id = :old AND o.url = {m.back('n.url')}"
+        f" AND NOT coalesce(o.external, FALSE)"
         f" WHERE n.crawl_id = :new AND NOT coalesce(n.external, FALSE) AND n.parsed AND o.parsed"
         f" AND {expression.replace('p.', 'o.')} IS DISTINCT FROM {expression.replace('p.', 'n.')}"
     )
 
 
-def _issue_urls(code: str, status: str) -> str:
+def _issue_urls(code: str, status: str, m: Mapping) -> str:
     issues.rule(code)
     if status not in STATUSES:
         raise InvalidArguments(f"--status: one of {', '.join(STATUSES)}.")
-    now, before = ("new", "old") if status in ("added", "new") else ("old", "new")
     presence = "IN" if status in ("added", "removed") else "NOT IN"
+    if status in ("added", "new"):  # flagged now (new crawl), not before (old crawl): URLs in the new crawl's terms
+        return (
+            "SELECT DISTINCT i.url FROM issues i WHERE i.crawl_id = :new AND i.code = :code"  # noqa: S608
+            f" AND i.url {presence} ({m.urls('old')})"
+            " AND NOT EXISTS (SELECT 1 FROM issues j WHERE j.crawl_id = :old AND j.code = :code"
+            f" AND j.url = {m.back('i.url')})"
+        )
+    # flagged before, not now: the old crawl's own URLs
     return (
-        f"SELECT DISTINCT i.url FROM issues i WHERE i.crawl_id = :{now} AND i.code = :code"  # noqa: S608
-        f" AND i.url {presence} ({_urls(before)})"
-        f" AND NOT EXISTS (SELECT 1 FROM issues j WHERE j.crawl_id = :{before} AND j.code = :code AND j.url = i.url)"
+        "SELECT DISTINCT i.url FROM issues i WHERE i.crawl_id = :old AND i.code = :code"  # noqa: S608
+        f" AND {m.old('i.url')} {presence} ({m.urls('new')})"
+        " AND NOT EXISTS (SELECT 1 FROM issues j WHERE j.crawl_id = :new AND j.code = :code"
+        f" AND j.url = {m.old('i.url')})"
     )
 
 
@@ -124,22 +194,27 @@ def details(
     field: str | None = None,
     urls: str | None = None,
     limit: int | None = None,
+    mapping: list | None = None,
 ) -> tuple[int, list[dict]]:
     """One list: an issue's URLs in one group, the URLs whose `field` changed, or the new / missing URLs."""
     if sum(x is not None for x in (issue, field, urls)) != 1:
         raise InvalidArguments("Choose one list: --issue CODE --status …, --field NAME or --urls new|missing.")
-    if issue is not None:
-        query = _issue_urls(issue, status or "new")
-    elif field is not None:
-        query = _changed(field)
-    elif urls == "new":
-        query = f"SELECT url FROM ({_urls('new')}) WHERE url NOT IN ({_urls('old')})"  # noqa: S608
-    elif urls == "missing":
-        query = f"SELECT url FROM ({_urls('old')}) WHERE url NOT IN ({_urls('new')})"  # noqa: S608
-    else:
-        raise InvalidArguments("--urls: new or missing.")
     params = {"old": old, "new": new, "code": issue, "limit": storage.NO_LIMIT if limit is None else limit}
-    with engine.connect() as conn:
-        total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), params).scalar_one()  # noqa: S608
-        rows = conn.execute(sa.text(f"SELECT * FROM ({query}) ORDER BY url LIMIT :limit"), params).mappings()  # noqa: S608
+    with engine.begin() as conn:
+        m = Mapping(conn, old, _rules(mapping))
+        if issue is not None:
+            query = _issue_urls(issue, status or "new", m)
+        elif field is not None:
+            query = _changed(field, m)
+        elif urls == "new":
+            query = f"SELECT url FROM ({m.urls('new')}) n WHERE url NOT IN ({m.urls('old')})"  # noqa: S608
+        elif urls == "missing":  # the old crawl's own URLs
+            query = (
+                "SELECT o.url FROM pages o WHERE o.crawl_id = :old AND NOT coalesce(o.external, FALSE)"  # noqa: S608
+                f" AND {m.old('o.url')} NOT IN ({m.urls('new')})"
+            )
+        else:
+            raise InvalidArguments("--urls: new or missing.")
+        total = conn.execute(sa.text(f"SELECT count(*) FROM ({query}) q"), params).scalar_one()  # noqa: S608
+        rows = conn.execute(sa.text(f"SELECT * FROM ({query}) q ORDER BY url LIMIT :limit"), params).mappings()  # noqa: S608
         return total, [dict(row) for row in rows]

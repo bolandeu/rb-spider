@@ -123,3 +123,32 @@ def test_cli_respider(base_url: str) -> None:
     result = runner.invoke(app, ["--json", "crawls", "respider", str(crawl["crawl_id"]), f"{base_url}/"])
     assert result.exit_code == 0 and json.loads(result.stdout)["pages"] == 5
     assert runner.invoke(app, ["--json", "crawls", "respider", str(crawl["crawl_id"])]).exit_code == 2
+
+
+# --- URL Mapping (#53) -------------------------------------------------------------
+
+
+def test_url_mapping_matches_the_same_pages_on_another_host(base_url: str, monkeypatch) -> None:
+    """The same site crawled as 127.0.0.1 and as localhost: without mapping every URL is new / missing."""
+    port = base_url.rsplit(":", 1)[1]
+    with storage.database() as engine:
+        old = crawl_site(engine, f"{base_url}/", "polygon").crawl_id
+        new = crawl_site(engine, f"http://localhost:{port}/", "polygon").crawl_id
+        plain = compare.summary(engine, old, new, ["title"])
+        assert plain["urls"]["missing_urls"] == plain["urls"]["old"] > 100
+        rules = [(r"^http://127\.0\.0\.1:(\d+)", r"http://localhost:\1")]
+        mapped = compare.summary(engine, old, new, ["title", "status_code"], rules)
+        assert mapped["urls"]["missing_urls"] == 0
+        # the polygon's "other site" traps live on localhost: crawled from localhost, one of them is the site's own
+        _, fresh = compare.details(engine, old, new, urls="new", mapping=rules)
+        assert _paths(fresh, f"http://localhost:{port}") == {"/img/gone.png"}
+        assert mapped["changes"] == {"title": 0, "status_code": 0}
+        assert all(row["added"] == 0 for row in mapped["issues"])  # matched pages: nothing new about them
+        assert compare.details(engine, old, new, urls="missing", mapping=rules)[0] == 0
+
+        use_db(monkeypatch, engine)
+        result = CliRunner().invoke(app, ["--json", "compare", str(old), str(new), "--map",
+                                          r"^http://127\.0\.0\.1:(\d+)=>http://localhost:\1"])  # fmt: skip
+        assert result.exit_code == 0 and json.loads(result.stdout)["urls"]["missing_urls"] == 0
+        bad = CliRunner().invoke(app, ["--json", "compare", str(old), str(new), "--map", "no-arrow"])
+        assert bad.exit_code == 2

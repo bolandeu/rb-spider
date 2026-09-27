@@ -663,7 +663,7 @@
 - [x] `v2` **Crawl Analysis: полный список пунктов** — после обхода в `spider analyze` считаются Canonicals, Pagination, Hreflang (return links и др.), Sitemaps, почти-дубли, индексируемость и ссылки; Link Score — v3
 - [x] `MVP` **Configuration profiles** — сохранение/загрузка настроек → профили `.spider/profiles/*.toml`, `extends` (см. раздел G)
 - [x] `v2` **Compare config** — какие элементы учитывать при сравнении обходов → `compare.fields`
-- [ ] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) (#53)
+- [x] `v3` **URL Mapping** при сравнении (regex «старый URL → новый», staging vs production) → `compare.url_mapping`, `spider compare --map` (#53)
 
 ### Системные настройки SF
 
@@ -684,7 +684,7 @@
 - [x] `v2` **Compare** — сравнение двух обходов: добавлено / новое / удалено / пропало по каждой проверке + Change Detection → `spider compare <id1> <id2>`
 - [ ] `v3` **APIs** — только загрузить данные API (GSC, PSI…) по списку URL, без обхода
 - [ ] `backlog` **SERP** — посчитать длины и ширину в пикселях для загруженных title/description без обхода
-- [ ] `v3` **Staging vs production** — сравнение двух окружений с сопоставлением URL
+- [x] `v3` **Staging vs production** — сравнение двух окружений с сопоставлением URL → `spider compare --map` (#53)
 
 ### Управление обходами
 
