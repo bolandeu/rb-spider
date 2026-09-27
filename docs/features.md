@@ -472,7 +472,7 @@
 - [x] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap → `spider sitemaps show --only urls`, `spider overview`
 - [x] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
 - [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
-- [ ] `v3` **Links: Link Score** — внутренний «PageRank» 0–100
+- [x] `v3` **Links: Link Score** — внутренний «PageRank» 0–100 → `pages.link_score`, `thresholds.link_score = true`
 - [x] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений → `spider custom`
 - [ ] `backlog` **Custom JavaScript** — результаты пользовательских JS-сниппетов
 - [ ] `backlog` **AMP: Non-Indexable** — список неиндексируемых AMP
@@ -769,7 +769,7 @@
 
 ### Прочий анализ
 
-- [ ] `v3` **Link Score** — внутренний PageRank 0–100 после обхода
+- [x] `v3` **Link Score** — внутренний PageRank 0–100 после обхода (`thresholds.link_score`, по умолчанию выключен)
 - [x] `v2` **Readability** — Flesch Reading Ease
 - [x] `v2` **Robots.txt tester** — проверить, разрешён ли URL, с подменённым robots.txt → `spider robots-test`
 - [x] `v2` **SERP snippet emulator** — предпросмотр сниппета (без редактирования в UI) → `spider serp preview`

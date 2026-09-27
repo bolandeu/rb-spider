@@ -132,6 +132,8 @@ pages = sa.Table(
     # the old AJAX crawling scheme: <meta name="fragment"> and <a href="…#!…"> links
     sa.Column("ajax_meta_fragment", sa.Boolean),
     sa.Column("hashbang_links", sa.Integer),
+    # computed after the crawl with thresholds.link_score: internal PageRank on a 0–100 log scale (Link Score)
+    sa.Column("link_score", sa.Integer),
     # images: the real size, from the file's header (Image Details)
     sa.Column("image_width", sa.Integer),
     sa.Column("image_height", sa.Integer),

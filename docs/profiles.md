@@ -167,6 +167,7 @@ concurrency = 10
 | `thresholds.document_max_mb` | `float` | `2` | HTML-страница больше стольких МБ — «Validation: HTML Document Over 2MB» (Googlebot читает 2 МБ). |
 | `thresholds.resource_max_mb` | `float` | `2` | JS / CSS больше стольких МБ — «Validation: Resource Over 2MB». |
 | `thresholds.image_oversize_ratio` | `float` | `2` | Картинка шире или выше, чем показана на странице, больше чем во столько раз — «Images: Incorrectly Sized Images» (2 — запас на экраны высокой плотности). |
+| `thresholds.link_score` | `bool` | `false` | Считать Link Score (внутренний PageRank 0–100 по follow-ссылкам сайта) при `spider analyze` и после обхода — колонка pages.link_score; на больших сайтах добавляет к проверкам заметное время. |
 | `thresholds.js_content_min_words` | `int` | `10` | После JS на странице хотя бы столько новых слов — «JavaScript: Contains JavaScript Content». |
 | `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
 | `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |
