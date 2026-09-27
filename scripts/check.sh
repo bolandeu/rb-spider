@@ -45,7 +45,7 @@ for flag in "$@"; do
         --tmpfs /var/lib/postgresql/data postgres:17-alpine >/dev/null
       trap 'docker stop "$name" >/dev/null 2>&1 || true' EXIT
       port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
-      until docker exec "$name" pg_isready -U pg >/dev/null 2>&1; do sleep 0.5; done
+      until docker exec "$name" pg_isready -h 127.0.0.1 -U pg >/dev/null 2>&1; do sleep 0.5; done  # TCP: the init server has none
       echo "--- PostgreSQL"
       SPIDER_TEST_PG="postgresql://pg:pg@127.0.0.1:$port/pg" uv run pytest -q --no-cov -p no:cacheprovider
       ;;
