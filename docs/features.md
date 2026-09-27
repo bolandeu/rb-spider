@@ -151,10 +151,10 @@
 
 - [x] `MVP` **Missing Alt Text** — атрибут alt есть, но пустой _(SF: Issue, Low)_
 - [x] `MVP` **Missing Alt Attribute** — атрибута alt нет вовсе _(SF: Issue, Low)_
-- [ ] `v2` **Background Images** — картинки из CSS `background` и подгружаемые динамически (нужен рендеринг) _(SF: Warning, Low)_
+- [x] `v2` **Background Images** — картинки из CSS `background`: из атрибута style — всегда, из стилей — с рендерингом _(SF: Warning, Low)_
 - [x] `MVP` **Over 100 kb** — картинка тяжелее 100 КБ _(SF: Opportunity, Medium)_
 - [x] `MVP` **Alt Text Over 100 Characters** — alt длиннее 100 символов _(SF: Opportunity, Low)_
-- [ ] `v2` **Incorrectly Sized Images** — реальный размер картинки не совпадает с отображаемым (нужен рендеринг) _(SF: Opportunity, Low)_
+- [x] `v2` **Incorrectly Sized Images** — картинка больше показанной в `thresholds.image_oversize_ratio` раз (рендеринг + `crawl.render_images`) _(SF: Opportunity, Low)_
 - [x] `MVP` **Missing Size Attributes** — у `<img>` не заданы `width`/`height` в HTML _(SF: Opportunity, Low)_
 
 ### Canonicals
@@ -499,7 +499,7 @@
 - [x] `v2` **Link Path, Link Position** — путь предков ссылки (`collect.link_path`), её зона (nav, header, footer, sidebar, content) → `spider links`
 - [x] `v2` **Link Origin** — откуда взята ссылка (raw / rendered HTML) — вместе со сравнением raw и rendered (#39)
 - [x] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
-- [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
+- [x] `v2` **Image Details: real / display dimensions** — реальный размер из файла (всегда), отображаемый — с `crawl.render_images` → `spider url`
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
 - [x] `v2` **SERP Snippet** — эмуляция сниппета Google с обрезкой по пикселям (без редактирования) → `spider url`
 - [ ] `v3` **Rendered Page** — скриншот отрендеренной страницы

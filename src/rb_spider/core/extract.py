@@ -47,6 +47,7 @@ class Resource:
     alt: str | None = None  # images
     alt_attr: bool | None = None  # images: the alt attribute exists
     sized: bool | None = None  # images: width and height attributes are both set
+    background: bool = False  # images: a CSS background-image (inline style or computed after rendering)
 
 
 @dataclass
@@ -70,6 +71,7 @@ class Page:
     uncrawlable: list[tuple[str, str]] = field(default_factory=list)  # (javascript: / onclick…, text) — not followable
     custom: list[tuple] = field(default_factory=list)  # custom_values rows: (kind, name, value, n)
     events: list[tuple] = field(default_factory=list)  # render_events rows: (kind, message, resource)
+    images: list[tuple] = field(default_factory=list)  # rendered_images rows: (image, real w, h, display w, h)
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -421,7 +423,28 @@ def _resources(url: str, tree: LexborHTMLParser, srcset: bool) -> list[Resource]
         add(media.attributes.get("src"), "media")
     for iframe in tree.css("iframe[src]"):
         add(iframe.attributes.get("src"), "iframe")
+    for node in tree.css("[style]"):  # inline CSS backgrounds; stylesheets' ones only a rendered page shows
+        style = node.attributes.get("style") or ""
+        if "url(" in style and "background" in style.lower():
+            for href in _CSS_URL.findall(style):
+                add(href, "image", background=True)
     return found
+
+
+_CSS_URL = re.compile(r"""url\(\s*["']?([^"')]+?)["']?\s*\)""")
+
+
+def image_size(body: bytes) -> tuple[int, int] | None:
+    """An image's real width and height from its header (PNG, JPEG, GIF, WebP, AVIF, SVG…); None — can't tell."""
+    import io
+
+    import imagesize  # small, pure Python: reads only the header
+
+    try:
+        width, height = imagesize.get(io.BytesIO(body))
+    except Exception:  # a broken or unknown file is data, not a crash
+        return None
+    return (width, height) if width > 0 and height > 0 else None
 
 
 # --- security (#29)

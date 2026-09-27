@@ -61,6 +61,30 @@ _INSERT_FRAME = """(el, html) => {
 }"""
 
 
+# Images as laid out (only loaded ones: an image the browser skipped has no real size) and CSS background images.
+_IMAGES = """(limit) => {
+  const images = [];
+  for (const img of document.images) {
+    if (images.length >= limit) break;
+    if (!img.complete || !img.naturalWidth) continue;
+    const box = img.getBoundingClientRect();
+    images.push([img.currentSrc || img.src, img.naturalWidth, img.naturalHeight,
+                 Math.round(box.width), Math.round(box.height)]);
+  }
+  const backgrounds = new Set();
+  for (const el of document.querySelectorAll('*')) {
+    if (backgrounds.size >= limit) break;
+    const value = getComputedStyle(el).backgroundImage;
+    if (!value || value === 'none') continue;
+    for (const m of value.matchAll(/url\\(["']?([^"')]+)["']?\\)/g)) {
+      if (m[1].startsWith('http')) backgrounds.add(m[1]);
+    }
+  }
+  return {images, backgrounds: [...backgrounds]};
+}"""
+_MAX_IMAGES = 200  # per page: <img> sizes and background images
+
+
 @dataclass
 class Rendered:
     """What the browser made of a page."""
@@ -69,6 +93,9 @@ class Rendered:
     final_url: str  # where the page ended up: another URL than requested — JavaScript navigated away
     console: list[tuple[str, str]] = field(default_factory=list)  # (error | warning, text): console and exceptions
     resources: list[tuple[str, str]] = field(default_factory=list)  # (URL, robots.txt | failed: … | HTTP 404)
+    # loaded <img>: (URL, real width, real height, display width, display height) — crawl.render_images
+    images: list[tuple[str, int, int, int, int]] = field(default_factory=list)
+    backgrounds: list[str] = field(default_factory=list)  # CSS background-image URLs (computed styles)
 
 
 def same_page(a: str, b: str) -> bool:
@@ -163,11 +190,14 @@ class Renderer:
         console: bool = True,
         flatten_shadow_dom: bool = True,
         flatten_iframes: bool = True,
+        images: bool = False,
         allowed: Callable[[str], Awaitable[bool]] | None = None,
     ) -> None:
         self.tabs, self.wait_ms, self.timeout_ms, self.browser = tabs, wait_ms, timeout_s * 1000, browser
         self.console, self.flatten_shadow_dom, self.flatten_iframes = console, flatten_shadow_dom, flatten_iframes
         self.allowed = allowed
+        # images load only when their real vs display size is wanted: skipping them makes rendering much faster
+        self.skipped = _SKIPPED_RESOURCES - {"image"} if images else _SKIPPED_RESOURCES
         self.used_browser: str | None = None
         self.context_options: dict[str, Any] = viewport_options(viewport)
         if headers:
@@ -228,7 +258,7 @@ class Renderer:
                     aborted.add(request.url)
                     note(resources, (request.url, "robots.txt"))
                     await route.abort()
-                elif request.resource_type in _SKIPPED_RESOURCES:
+                elif request.resource_type in self.skipped:
                     aborted.add(request.url)
                     await route.abort()
                 else:
@@ -265,8 +295,10 @@ class Renderer:
                     await _flatten_frames(page)
                 if self.flatten_shadow_dom:
                     await page.evaluate(_FLATTEN_SHADOW)
+                found = await page.evaluate(_IMAGES, _MAX_IMAGES)
                 html = (await page.content()).encode()
-                return Rendered(html, page.url, console, resources)
+                images = [tuple(row) for row in found["images"]]
+                return Rendered(html, page.url, console, resources, images, found["backgrounds"])
             except Exception as exc:  # timeout, crash, navigation error: data, not a failed crawl
                 log.warning("rendering %s failed: %s", url, str(exc).splitlines()[0] if str(exc) else type(exc))
                 return None

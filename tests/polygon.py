@@ -242,6 +242,23 @@ RESOURCES = {
     "/big.js": 2_200_000,  # over thresholds.resource_max_mb (2)
 }
 _IMG = '<img src="{src}" alt="{alt}" width="10" height="10">'
+
+
+def _png(width: int, height: int) -> bytes:
+    """A real (black, grayscale) PNG: its header gives the real size, and a browser can draw it."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    rows = b"".join(b"\0" + b"\0" * width for _ in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+
+
+# images with a real size (#40): served as PNG files, not zero bytes
+PNG_IMAGES = {"/img/real.png": _png(800, 600), "/img/hero.png": _png(40, 20), "/img/bg.png": _png(40, 20)}
 IMAGE_TRAPS: dict[str, str] = {
     "/i-images": _html(
         "i-images",
@@ -258,7 +275,10 @@ IMAGE_TRAPS: dict[str, str] = {
         + _IMG.format(src="/private/hidden.png", alt="Закрытая robots.txt")  # blocked resource
         + _IMG.format(src="{local}/img/gone.png", alt="Чужая пропавшая"),  # external 404
     ),
-}
+    # a CSS background in the style attribute: found without rendering (Background Images)
+    "/i-background": _html("i-background", body=f"<h1>{H1.format('i-background')}</h1><h2>{H2.format('i-background')}</h2>"
+                           '<div style="background-image: url(\'/img/bg.png\')">баннер</div>'),
+}  # fmt: skip
 # JS rendering (#15): title, h1 and a link exist only after the script runs. Not linked from the main
 # graph — a crawl with rendering starts right at /js-only, so the other traps' expectations stay put.
 _JS = (
@@ -325,12 +345,17 @@ JS_PAGES: dict[str, str] = {
                        '<iframe src="/js/framed"></iframe>'),
     "/js/framed": _html("js-framed", "/js/frame-target"),
     "/js/frame-target": _html("js-frame-target", "/js/"),
+    # a background from a stylesheet (seen only after rendering) and an 800×600 image shown at 100×75
+    "/js/images": _html("js-images", "/js/", head=_head("js-images", extra="<style>.hero {background-image: "
+                        "url(/img/hero.png)}</style>"), body=f"<h1>{H1.format('js-images')}</h1><h2>{H2.format('js-images')}"
+                        '</h2><div class="hero">баннер</div><img src="/img/real.png" width="100" height="75" alt="Большая">'),
     # not linked: crawl.render_viewport — the title says how wide the window was
     "/js/viewport": _js("js-viewport", "document.title = 'width ' + window.innerWidth;"),
 }  # fmt: skip
 JS_LINKED = ("/js/noindex", "/js/nofollow", "/js/canonical-changed", "/js/canonical-added", "/js/title-added",
              "/js/title-updated", "/js/description-added", "/js/description-updated", "/js/h1-added", "/js/h1-updated",
-             "/js/links", "/js/content", "/js/errors", "/js/blocked", "/js/redirect", "/js/shadow", "/js/frame")  # fmt: skip
+             "/js/links", "/js/content", "/js/errors", "/js/blocked", "/js/redirect", "/js/shadow", "/js/frame",
+             "/js/images")  # fmt: skip
 JS_PAGES["/js/"] = _html("js-hub", *JS_LINKED)
 JS_NO_CANONICAL = {"/js/canonical-added"}
 # the rendered crawl from /js/: issue code -> pages (every JavaScript rule; the old AJAX scheme is in the main graph)
@@ -797,6 +822,7 @@ REACHABLE = {
     *IMAGE_TRAPS,
     *RESOURCES,
     "/img/broken.png",
+    "/img/bg.png",
     *URL_TRAPS,
     *HREFLANG_TRAPS,
     "/hl/header",
@@ -940,6 +966,8 @@ EXPECTED_ISSUES = {
     "images_missing_size": {"/img/nosize.png", "/logo.png", "/pic.png"},  # the h1-alt and no-anchor traps too
     "internal_blocked_resource": {"/img/broken.png", "/private/hidden.png"},
     "external_blocked_resource": {"LOCAL/img/gone.png"},
+    "images_background": {"/img/bg.png"},
+    "images_incorrectly_sized": set(),  # needs rendering with crawl.render_images — tests/test_javascript.py
     # URL
     "url_multiple_slashes": {"/u//double"},
     "url_contains_space": {"/u/with space"},
@@ -1023,6 +1051,8 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     SEEN_HEADERS.append({k.lower(): v for k, v in request.headers.items()})
     if request.path == "/slow":
         await asyncio.sleep(SLOW_S)
+    if request.path in PNG_IMAGES:
+        return web.Response(body=PNG_IMAGES[request.path], content_type="image/png")
     if request.path in RESOURCES:
         kind = {".css": "text/css", ".js": "text/javascript"}.get(PurePosixPath(request.path).suffix, "image/png")
         return web.Response(body=b"\0" * RESOURCES[request.path], content_type=kind)

@@ -364,6 +364,14 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
             return conn.execute(sa.select(sa.func.count()).select_from(links).where(where)).scalar_one()
 
         target = sa.alias(pages, "t")
+        shown = (  # as the rendered page laid the image out (crawl.render_images): one row per image
+            sa.select(storage.rendered_images.c.crawl_id, storage.rendered_images.c.url, storage.rendered_images.c.image,
+                      sa.func.max(storage.rendered_images.c.display_width).label("display_width"),
+                      sa.func.max(storage.rendered_images.c.display_height).label("display_height"))
+            .where(storage.rendered_images.c.crawl_id == crawl_id, storage.rendered_images.c.url == url)
+            .group_by(storage.rendered_images.c.crawl_id, storage.rendered_images.c.url, storage.rendered_images.c.image)
+            .subquery("shown")
+        )  # fmt: skip
         resources = conn.execute(
             sa.select(
                 links.c.target,
@@ -371,11 +379,25 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
                 links.c.alt,
                 links.c.alt_attr,
                 links.c.sized,
+                links.c.origin,
                 target.c.status_code,
                 target.c.bytes,
+                target.c.image_width.label("real_width"),
+                target.c.image_height.label("real_height"),
+                shown.c.display_width,
+                shown.c.display_height,
             )
             .select_from(
-                links.outerjoin(target, sa.and_(target.c.crawl_id == links.c.crawl_id, target.c.url == links.c.target))
+                links.outerjoin(
+                    target, sa.and_(target.c.crawl_id == links.c.crawl_id, target.c.url == links.c.target)
+                ).outerjoin(
+                    shown,
+                    sa.and_(
+                        shown.c.crawl_id == links.c.crawl_id,
+                        shown.c.url == links.c.source,
+                        shown.c.image == links.c.target,
+                    ),
+                )
             )
             .where(links.c.crawl_id == crawl_id, links.c.source == url, links.c.kind.in_(RESOURCE_KINDS))
             .order_by(links.c.kind, links.c.target)

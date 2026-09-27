@@ -183,14 +183,17 @@ class Parser:
         check: bool,
         raw: bytes | None = None,
         js_redirect: str | None = None,
+        backgrounds: list[str] | None = None,
     ) -> Reading:
         self.parsed += 1
+        backgrounds = backgrounds or []
         if check or not body or not self.workers or self.parsed <= PARSE_POOL_AFTER:
-            return self.reader.read(url, status_code, headers, body, check=check, raw=raw, js_redirect=js_redirect)
+            return self.reader.read(url, status_code, headers, body, check=check, raw=raw, js_redirect=js_redirect,
+                                    backgrounds=backgrounds)  # fmt: skip
         if self.pool is None:
             self._hide_main()
             self.pool = ProcessPoolExecutor(self.workers, initializer=init_worker, initargs=(self.reader,))
-        call = functools.partial(read_in_worker, url, status_code, headers, body, raw, js_redirect)
+        call = functools.partial(read_in_worker, url, status_code, headers, body, raw, js_redirect, backgrounds)
         return await asyncio.get_running_loop().run_in_executor(self.pool, call)
 
     def _hide_main(self) -> None:
@@ -323,7 +326,7 @@ async def _run(
                  user_agent=user_agent, headers=settings.headers, browser=settings.render_browser,
                  viewport=settings.render_viewport, console=settings.render_console,
                  flatten_shadow_dom=settings.render_flatten_shadow_dom,
-                 flatten_iframes=settings.render_flatten_iframes,
+                 flatten_iframes=settings.render_flatten_iframes, images=settings.render_images,
                  allowed=robots.allowed if settings.robots == "respect" else None)
         if settings.render != "never" else None
     )  # fmt: skip
@@ -492,7 +495,8 @@ async def _run(
             elif result is not None:
                 source, raw = result.html, body
         reading = await parser.read(ctx.request.url, response.status_code, headers, source, check=check, raw=raw,
-                                    js_redirect=js_redirect)  # fmt: skip
+                                    js_redirect=js_redirect,
+                                    backgrounds=result.backgrounds if result and raw is not None else None)  # fmt: skip
         page = reading.page
         rendered = raw is not None if attempted else None
         if result is not None:
@@ -570,9 +574,11 @@ class AutoRender:
 
 
 def _render_events(page: Page, result: render.Rendered) -> None:
-    """The browser's console messages and resources it couldn't load: counts on the page, rows in render_events."""
+    """The browser's console messages and resources it couldn't load (counts on the page, rows in render_events), and
+    the images it laid out (rendered_images)."""
     page.events = [(level, text, None) for level, text in result.console]
     page.events += [("blocked" if why == "robots.txt" else "failed", why, url) for url, why in result.resources]
+    page.images = [(normalize_url(src), *sizes) for src, *sizes in result.images if src.startswith("http")]
     page.onpage |= {
         "js_errors": sum(level == "error" for level, _ in result.console),
         "js_warnings": sum(level == "warning" for level, _ in result.console),

@@ -1196,6 +1196,19 @@ def _image_rules() -> list[Rule]:
             "length(alt) > :alt_max_chars", "' — ' || max(length(alt)) || ' симв.'"),
         img("images_missing_size", "Missing Size Attributes", "opportunity", "low",
             "У <img> не заданы width и height: страница «прыгает» при загрузке (CLS).", "NOT sized"),
+        img("images_background", "Background Images", "warning", "low",
+            "Картинка задана CSS-фоном (background-image), а не <img>: у неё нет alt, и поисковик в картинках её "
+            "обычно не индексирует. Фоны из стилей видны только с рендерингом, из атрибута style — всегда.",
+            "origin = 'c'"),
+        Rule("images_incorrectly_sized", "Images", "Images: Incorrectly Sized Images", "opportunity", "low",
+             "Картинка больше, чем показана на странице, — шире или выше в thresholds.image_oversize_ratio (2) раза и "
+             "больше: лишние байты; отдайте картинку нужного размера (srcset). Нужны рендеринг и crawl.render_images.",
+             _run_sql(sa.text(
+                 "SELECT image, min(real_width || '×' || real_height || ' → ' || display_width || '×' || display_height"
+                 " || ', ' || url) FROM rendered_images WHERE crawl_id = :crawl_id AND display_width > 0"
+                 " AND display_height > 0 AND (real_width > display_width * :image_oversize_ratio"
+                 " OR real_height > display_height * :image_oversize_ratio) GROUP BY image ORDER BY image")),
+             (RENDERED, "crawl.render_images")),
         blocked("internal_blocked_resource", "Internal Blocked Resource", "high", external=False),
         blocked("external_blocked_resource", "External Blocked Resource", "medium", external=True),
     ]  # fmt: skip

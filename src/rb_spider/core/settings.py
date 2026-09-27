@@ -219,6 +219,13 @@ class CrawlSettings(BaseModel):
     render_flatten_iframes: bool = Field(
         True, description="Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes)."
     )
+    render_images: bool = Field(
+        False,
+        description=(
+            "Загружать картинки в браузере при рендеринге: медленнее, зато видны реальные и отображаемые размеры "
+            "картинок (Image Details, «Images: Incorrectly Sized Images»); по умолчанию картинки не грузятся."
+        ),
+    )
     render_tabs: int = Field(
         4, ge=1, le=50, description="Сколько вкладок браузера открыто одновременно при рендеринге."
     )
@@ -669,6 +676,14 @@ class ThresholdSettings(BaseModel):
     )
     resource_max_mb: float = Field(
         2, gt=0, description="JS / CSS больше стольких МБ — «Validation: Resource Over 2MB»."
+    )
+    image_oversize_ratio: float = Field(
+        2,
+        ge=1,
+        description=(
+            "Картинка шире или выше, чем показана на странице, больше чем во столько раз — «Images: Incorrectly Sized "
+            "Images» (2 — запас на экраны высокой плотности)."
+        ),
     )
     js_content_min_words: int = Field(
         10,

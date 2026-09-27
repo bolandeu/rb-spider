@@ -156,3 +156,40 @@ def test_javascript_rules_are_not_checked_without_rendering(base_url: str, engin
     skipped = {rule.code: rule.requires for rule in issues.not_checked(engine, crawl_id)}
     assert skipped["js_title_updated"] == ("crawl.render!=never",)
     assert "js_ajax_meta_fragment" not in skipped  # needs no browser
+
+
+# --- images (#40) ------------------------------------------------------------------
+
+
+@needs_playwright
+def test_background_images_from_stylesheets_are_found_when_rendered(base_url: str, rendered) -> None:
+    engine, crawl_id = rendered
+    with engine.connect() as conn:
+        rows = conn.execute(sa.text(
+            "SELECT target, origin FROM links WHERE crawl_id = :c AND source = :s AND kind = 'image'"),
+            {"c": crawl_id, "s": f"{base_url}/js/images"}).all()  # fmt: skip
+    assert set(rows) == {(f"{base_url}/img/hero.png", "css background"), (f"{base_url}/img/real.png", None)}
+
+
+@needs_playwright
+def test_incorrectly_sized_images_need_images_loaded(base_url: str, engine) -> None:
+    settings = _settings(render="always", render_images=True, max_depth=1)
+    crawl_id = crawl_site(engine, f"{base_url}/js/images", "polygon", settings).crawl_id
+    _, rows = issues.urls_with(engine, crawl_id, "images_incorrectly_sized")
+    assert [(row["url"], row["detail"]) for row in rows] == [
+        (f"{base_url}/img/real.png", f"800×600 → 100×75, {base_url}/js/images")
+    ]
+    runner = CliRunner()
+    result = runner.invoke(app, ["--json", "url", f"{base_url}/js/images", "--crawl", str(crawl_id)],
+                           env={"SPIDER_DB_PATH": str(engine.url.database)})  # fmt: skip
+    [image] = [r for r in json.loads(result.stdout)["resources"] if r["target"].endswith("/img/real.png")]
+    assert (image["real_width"], image["real_height"], image["display_width"], image["display_height"]) == (
+        800, 600, 100, 75)  # fmt: skip
+
+
+@needs_playwright
+def test_without_render_images_sizes_are_not_checked(base_url: str, rendered) -> None:
+    engine, crawl_id = rendered
+    assert "images_incorrectly_sized" in {rule.code for rule in issues.not_checked(engine, crawl_id)}
+    pages = _pages(engine, crawl_id, base_url)
+    assert (pages["/img/real.png"]["image_width"], pages["/img/real.png"]["image_height"]) == (800, 600)

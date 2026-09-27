@@ -130,6 +130,9 @@ pages = sa.Table(
     # the old AJAX crawling scheme: <meta name="fragment"> and <a href="…#!…"> links
     sa.Column("ajax_meta_fragment", sa.Boolean),
     sa.Column("hashbang_links", sa.Integer),
+    # images: the real size, from the file's header (Image Details)
+    sa.Column("image_width", sa.Integer),
+    sa.Column("image_height", sa.Integer),
     # the response: time from sending the request to its headers, Last-Modified, all headers (JSON, lower-case names)
     sa.Column("response_ms", sa.Integer),
     sa.Column("last_modified", sa.String),
@@ -233,7 +236,8 @@ link_rows = sa.Table(
     ),  # hyperlinks: nav | header | footer | sidebar (custom.link_positions); NULL — content
     sa.Column("path", sa.String),  # hyperlinks: the landmark ancestors, /nav.menu/… (collect.link_path)
     sa.Column("path_type", sa.String),  # hyperlinks: a | p | r | l — the view spells them out (Path Type)
-    # hyperlinks of a rendered page: b — in the server's HTML too, r — added by JavaScript; NULL — not rendered
+    # hyperlinks of a rendered page: b — in the server's HTML too, r — added by JavaScript; NULL — not rendered.
+    # images: c — a CSS background image
     sa.Column("origin", sa.String),
     sa.Index("link_rows_by_source", "crawl_id", "source_id"),
     sa.Index("link_rows_by_target", "crawl_id", "target_id"),
@@ -267,7 +271,9 @@ links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never w
     sa.Column("position", sa.String),
     sa.Column("path", sa.String),
     sa.Column("path_type", sa.String),
-    sa.Column("origin", sa.String),  # html | rendered | html & rendered (Link Origin)
+    sa.Column(
+        "origin", sa.String
+    ),  # hyperlinks: html | rendered | html & rendered (Link Origin); images: css background
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(
@@ -325,6 +331,20 @@ render_events = sa.Table(
     sa.Column("message", sa.String),  # console text; for resources why: robots.txt, HTTP 404, failed: …
     sa.Column("resource", sa.String),  # blocked / failed: the resource's URL
     sa.Index("render_events_by_url", "crawl_id", "url"),
+)
+# Images as a rendered page laid them out (crawl.render_images): real size against the size shown (Incorrectly Sized
+# Images, Image Details). At most 200 per page.
+rendered_images = sa.Table(
+    "rendered_images",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),  # the page
+    sa.Column("image", sa.String, nullable=False),
+    sa.Column("real_width", sa.Integer),
+    sa.Column("real_height", sa.Integer),
+    sa.Column("display_width", sa.Integer),
+    sa.Column("display_height", sa.Integer),
+    sa.Index("rendered_images_by_url", "crawl_id", "url"),
 )
 # Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
 near_duplicates = sa.Table(
@@ -476,6 +496,8 @@ _INSERT_LINK_ROWS = (
 )
 _INSERT_CUSTOM = _insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"])
 _INSERT_EVENTS = _insert_json(render_events, ["crawl_id", "url", "kind", "message", "resource"])
+_INSERT_IMAGES = _insert_json(rendered_images, ["crawl_id", "url", "image", "real_width", "real_height", "display_width",
+                                                "display_height"])  # fmt: skip
 _INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
 _MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
@@ -490,6 +512,7 @@ def _timestamp() -> str:
 class _Batch:
     custom: list[tuple] = field(default_factory=list)
     events: list[tuple] = field(default_factory=list)
+    images: list[tuple] = field(default_factory=list)
     sitemap_files: list[dict] = field(default_factory=list)
     sitemap_urls: list[tuple] = field(default_factory=list)
     pages: list[tuple] = field(default_factory=list)
@@ -566,6 +589,7 @@ class PageWriter:
         self._batch.pages.append(tuple(row.get(column) for column in _PAGE_COLUMNS))
         self._batch.custom.extend((self.crawl_id, page.url, *values) for values in page.custom)
         self._batch.events.extend((self.crawl_id, page.url, *values) for values in page.events)
+        self._batch.images.extend((self.crawl_id, page.url, *values) for values in page.images)
         self._batch.done.append(page.url)
         self.count += 1
         if len(self._batch.pages) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
@@ -619,7 +643,8 @@ class PageWriter:
                     data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
                     for sql in statements:
                         conn.exec_driver_sql(sql, (data,))
-            for rows, sql in ((batch.custom, _INSERT_CUSTOM), (batch.events, _INSERT_EVENTS)):
+            for rows, sql in ((batch.custom, _INSERT_CUSTOM), (batch.events, _INSERT_EVENTS),
+                              (batch.images, _INSERT_IMAGES)):  # fmt: skip
                 for chunk in range(0, len(rows), _JSON_CHUNK):
                     conn.exec_driver_sql(sql, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
             if batch.sitemap_files:
@@ -652,6 +677,9 @@ def reset_for_respider(engine: sa.Engine, crawl_id: int, targets: list[str]) -> 
         conn.execute(sa.delete(link_rows).where(link_rows.c.crawl_id == crawl_id, link_rows.c.source_id.in_(ids)))
         conn.execute(
             sa.delete(custom_values).where(custom_values.c.crawl_id == crawl_id, custom_values.c.url.in_(targets))
+        )
+        conn.execute(
+            sa.delete(rendered_images).where(rendered_images.c.crawl_id == crawl_id, rendered_images.c.url.in_(targets))
         )
         conn.execute(
             sa.delete(render_events).where(render_events.c.crawl_id == crawl_id, render_events.c.url.in_(targets))

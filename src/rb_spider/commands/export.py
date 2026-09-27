@@ -68,14 +68,18 @@ def url(
     JSON: `{crawl_id, page: {url, status_code, response_ms, last_modified, headers,
     indexable, indexability_status, title, …все колонки страницы}, request_headers,
     issues: [{code, name, type, priority, detail}], inlinks,
-    outlinks, resources: [{target, kind, alt, alt_attr, sized, status_code, bytes}],
+    outlinks, resources: [{target, kind, alt, alt_attr, sized, origin, status_code, bytes,
+    real_width, real_height, display_width, display_height}],
     metrics: [{source, name, value, text}], serp, structured_data}`; `inlinks` / `outlinks` —
     число обычных ссылок на страницу и с неё, `metrics` — от обогатителей (`spider enrich`).
     `serp` — сниппет Google: `{url, title, title_px, title_truncated, description,
     description_px, description_truncated}` (обрезка по порогам в пикселях обхода).
     Микроразметка (обход с `collect.structured_data`): в page — `sd_types`, счётчики и
     `sd_messages` ([важность, где, тип, свойство, текст]); `structured_data` — сами объекты
-    разметки, если обход шёл с `--store-html`, иначе null. URL нет в обходе — выход 2.
+    разметки, если обход шёл с `--store-html`, иначе null. Картинки (Image Details):
+    real_* — настоящий размер из файла, display_* — как показана на странице (рендеринг с
+    `crawl.render_images`), origin `css background` — фоновая картинка. URL нет в
+    обходе — выход 2.
     """
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)

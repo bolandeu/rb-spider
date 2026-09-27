@@ -15,7 +15,15 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from .custom import CustomRules, LinkPlacer
-from .extract import Page, missing_security_headers, normalize_url, parse_page, sniffed_mismatch
+from .extract import (
+    Page,
+    Resource,
+    image_size,
+    missing_security_headers,
+    normalize_url,
+    parse_page,
+    sniffed_mismatch,
+)
 
 if TYPE_CHECKING:
     from .settings import CollectSettings, CrawlSettings, CustomSettings, RewriteSettings
@@ -190,11 +198,13 @@ class PageReader:
         check: bool,
         raw: bytes | None = None,
         js_redirect: str | None = None,
+        backgrounds: Sequence[str] = (),
     ) -> Reading:
-        """A checked URL (`check`) is not read: status, headers and redirect target only.
+        """A checked URL (`check`) is not read: status, headers and redirect target only (and an image's size).
 
         A rendered page: `body` is the DOM and `raw` the server's HTML, compared with it (raw_* columns, Link
-        Origin). `js_redirect` — the browser ended up on this URL instead: the page's own data is its raw HTML.
+        Origin); `backgrounds` — the CSS background images the browser found. `js_redirect` — the browser ended up
+        on this URL instead: the page's own data is its raw HTML.
         """
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash,
@@ -206,6 +216,13 @@ class PageReader:
             page.refresh_url, page.refresh_kind = js_redirect, "javascript"
         if raw is not None and not check:
             self._compare_raw(page, status_code, headers, raw)
+        if backgrounds:
+            known = {r.url for r in page.resources if r.background}
+            page.resources += [
+                Resource(u, "image", background=True) for u in dict.fromkeys(backgrounds) if u not in known
+            ]
+        if status_code == 200 and (page.content_type or "").startswith("image/") and (size := image_size(body)):
+            page.onpage["image_width"], page.onpage["image_height"] = size
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
                         "headers": json.dumps(lower, ensure_ascii=False), "last_modified": lower.get("last-modified"),
@@ -329,7 +346,8 @@ class PageReader:
             option = self.kinds[resource.kind]
             if option.store:
                 rows.append(link_row(page.url, resource.url, resource.kind, self.scope.internal(resource.url),
-                                     alt=resource.alt, alt_attr=resource.alt_attr, sized=resource.sized))  # fmt: skip
+                                     alt=resource.alt, alt_attr=resource.alt_attr, sized=resource.sized,
+                                     origin="c" if resource.background else None))  # fmt: skip
             if option.follow and not self.listed:
                 check.append(resource.url)
         return check, rows
@@ -355,8 +373,15 @@ def init_worker(reader: PageReader) -> None:
 
 
 def read_in_worker(
-    url: str, status_code: int, headers: dict[str, str], body: bytes, raw: bytes | None, js_redirect: str | None
+    url: str,
+    status_code: int,
+    headers: dict[str, str],
+    body: bytes,
+    raw: bytes | None,
+    js_redirect: str | None,
+    backgrounds: Sequence[str],
 ) -> Reading:
     if _reader is None:
         raise RuntimeError("init_worker was not called in this process")
-    return _reader.read(url, status_code, headers, body, check=False, raw=raw, js_redirect=js_redirect)
+    return _reader.read(url, status_code, headers, body, check=False, raw=raw, js_redirect=js_redirect,
+                        backgrounds=backgrounds)  # fmt: skip

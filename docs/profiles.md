@@ -80,6 +80,7 @@ concurrency = 10
 | `crawl.render_console` | `bool` | `true` | Записывать ошибки и предупреждения консоли браузера при рендеринге (JavaScript Error Reporting). |
 | `crawl.render_flatten_shadow_dom` | `bool` | `true` | Читать содержимое Shadow DOM веб-компонентов как часть страницы (Flatten Shadow DOM). |
 | `crawl.render_flatten_iframes` | `bool` | `true` | Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes). |
+| `crawl.render_images` | `bool` | `false` | Загружать картинки в браузере при рендеринге: медленнее, зато видны реальные и отображаемые размеры картинок (Image Details, «Images: Incorrectly Sized Images»); по умолчанию картинки не грузятся. |
 | `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при рендеринге. |
 | `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при рендеринге. |
 | `crawl.render_browser` | `str \| None` | — | Путь к браузеру (Chromium / Chrome) для рендеринга; не задано — сборка Playwright, иначе самая свежая из кэша Playwright (ms-playwright), иначе установленный Google Chrome. |
@@ -165,6 +166,7 @@ concurrency = 10
 | `thresholds.soft_404_patterns` | `list[str]` | `["\\b404\\b", "not found", "page (does not|doesn't|no longer) exist", "не найден", "не существует", "нет такой страницы", "страница удалена"]` | Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — «Content: Soft 404 Pages». |
 | `thresholds.document_max_mb` | `float` | `2` | HTML-страница больше стольких МБ — «Validation: HTML Document Over 2MB» (Googlebot читает 2 МБ). |
 | `thresholds.resource_max_mb` | `float` | `2` | JS / CSS больше стольких МБ — «Validation: Resource Over 2MB». |
+| `thresholds.image_oversize_ratio` | `float` | `2` | Картинка шире или выше, чем показана на странице, больше чем во столько раз — «Images: Incorrectly Sized Images» (2 — запас на экраны высокой плотности). |
 | `thresholds.js_content_min_words` | `int` | `10` | После JS на странице хотя бы столько новых слов — «JavaScript: Contains JavaScript Content». |
 | `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
 | `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |

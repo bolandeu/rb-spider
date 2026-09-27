@@ -522,12 +522,16 @@ def url_details(data: dict) -> None:
             console.print(f"  {m['source']}.{m['name']}: {value}")
     if data["resources"]:
         table = Table(box=None, pad_edge=False, title="Ресурсы", title_justify="left")
-        for column in ("код", "тип", "КБ", "URL", "alt"):
+        for column in ("код", "тип", "КБ", "URL", "alt, размер"):
             table.add_column(column)
         for r in data["resources"]:
             size = f"{r['bytes'] / 1024:.0f}" if r["bytes"] is not None else "—"
             status = str(r["status_code"]) if r["status_code"] is not None else "—"
-            table.add_row(status, r["kind"], size, r["target"], r["alt"] or "")
+            dims = f"{r['real_width']}×{r['real_height']}" if r.get("real_width") else ""
+            if r.get("display_width") is not None:
+                dims += f" → {r['display_width']}×{r['display_height']}"  # as shown on the page
+            kind = "фон" if r.get("origin") == "css background" else r["kind"]
+            table.add_row(status, kind, size, r["target"], " ".join(filter(None, [r["alt"], dims])))
         console.print(table)
 
 
