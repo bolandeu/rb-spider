@@ -14,13 +14,14 @@ from . import options
 
 app = output.group(
     "Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы, заголовки, "
-    "консоль JavaScript."
+    "консоль JavaScript, PageSpeed."
 )
 CrawlArg = typer.Argument(None, help="Номер обхода (`spider crawls list`); по умолчанию — последний.")
 LimitOption = typer.Option(100, "--limit", min=1, help="Сколько строк показать (всего — в поле total).")
 Canonicals = StrEnum("Canonicals", {name: name for name in reports.CANONICALS})
 Keywords = StrEnum("Keywords", {name: name for name in reports.META_KEYWORDS})
 Javascript = StrEnum("Javascript", {name: name for name in reports.JAVASCRIPT})
+Pagespeed = StrEnum("Pagespeed", {name: name for name in [*reports.PAGESPEED, "coverage"]})
 _KEYWORDS_HELP = (
     "all — с keywords; missing — без; multiple — несколько тегов; duplicate — одинаковые на разных страницах."
 )
@@ -270,6 +271,42 @@ def javascript(
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         total, rows = reports.javascript(engine, crawl_id, only.value, normalize_url(url) if url else None, limit)
     _list(ctx, crawl_id, "javascript", total, rows, only=only.value)
+
+
+@app.command("pagespeed")
+@output.guard
+def pagespeed(
+    ctx: typer.Context,
+    crawl_id: int | None = CrawlArg,
+    only: Pagespeed = typer.Option(
+        "opportunities",
+        "--only",
+        help="opportunities — какие аудиты не пройдены и на скольких страницах; pages — замеренные страницы и их "
+        "оценка; coverage — неиспользуемые байты CSS и JS по файлам.",
+    ),
+    limit: int = LimitOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """PageSpeed Opportunities Summary и CSS / JavaScript Coverage Summary по замерам `spider lighthouse`.
+
+    Сводка по выборке страниц: что тормозит сайт чаще всего и какие файлы тянут
+    неиспользуемый код. Проблемы конкретной страницы — `spider url <url>` (поле
+    lighthouse), все аудиты построчно — `spider export lighthouse`.
+
+    Примеры:
+      spider report pagespeed
+      spider report pagespeed --only coverage
+      spider --json report pagespeed --only pages
+
+    JSON: `{crawl_id, report, only, total, rows}`; opportunities — `[{audit, pages, example}]`,
+    pages — `[{url, strategy, performance}]`, coverage — `[{kind, resource, pages,
+    unused_bytes, total_bytes}]`. Замеров нет — пустой список.
+    """
+    with storage.database() as engine:
+        crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+        total, rows = reports.pagespeed(engine, crawl_id, only.value, limit)
+    _list(ctx, crawl_id, "pagespeed", total, rows, only=only.value)
 
 
 @output.guard

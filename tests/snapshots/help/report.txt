@@ -2,7 +2,7 @@
  Usage: spider report [OPTIONS] COMMAND [ARGS]...                                                   
                                                                                                     
  Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы,           
- заголовки, консоль JavaScript.                                                                     
+ заголовки, консоль JavaScript, PageSpeed.                                                          
                                                                                                     
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │
@@ -22,5 +22,7 @@
 │                 URL их отдают.                                                                   │
 │ javascript      Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при        │
 │                 рендеринге.                                                                      │
+│ pagespeed       PageSpeed Opportunities Summary и CSS / JavaScript Coverage Summary по замерам   │
+│                 `spider lighthouse`.                                                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

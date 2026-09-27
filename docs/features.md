@@ -283,35 +283,35 @@
 
 ### PageSpeed — скорость (PageSpeed Insights / Lighthouse)
 
-- [ ] `v3` **Document Request Latency** — задержка основного документа: редиректы, медленный ответ, нет сжатия _(SF: Opportunity, Medium)_
-- [ ] `v3` **LCP Request Discovery** — ресурс LCP (крупнейший элемент экрана) обнаруживается поздно _(SF: Opportunity, Medium)_
-- [ ] `v3` **Render Blocking Requests** — скрипты/стили блокируют первую отрисовку _(SF: Opportunity, Medium)_
-- [ ] `v3` **Network Dependency Tree** — длинные цепочки загрузки на критическом пути _(SF: Opportunity, Medium)_
-- [ ] `v3` **Use Efficient Cache Lifetimes** — ресурсы без нормального HTTP-кэширования _(SF: Opportunity, Medium)_
-- [ ] `v3` **Layout Shift Culprits** — элементы сдвигают вёрстку при загрузке (CLS) _(SF: Opportunity, Medium)_
-- [ ] `v3` **Improve Image Delivery** — картинки можно отдавать легче (формат, размер, сжатие) _(SF: Opportunity, Medium)_
-- [ ] `v3` **Forced Reflow** — принудительный пересчёт раскладки тормозит отрисовку _(SF: Opportunity, Medium)_
-- [ ] `v3` **Legacy JavaScript** — лишние полифиллы для старых браузеров _(SF: Opportunity, Medium)_
-- [ ] `v3` **Duplicated JavaScript** — одна и та же JS-библиотека в нескольких бандлах _(SF: Opportunity, Medium)_
-- [ ] `v3` **Avoid Enormous Network Payloads** — слишком большой общий вес страницы _(SF: Opportunity, Medium)_
-- [ ] `v3` **Minify CSS** — CSS не минифицирован _(SF: Opportunity, Medium)_
-- [ ] `v3` **Minify JavaScript** — JS не минифицирован _(SF: Opportunity, Medium)_
-- [ ] `v3` **Reduce Unused CSS** — много неиспользуемого CSS _(SF: Opportunity, Medium)_
-- [ ] `v3` **Reduce Unused JavaScript** — много неиспользуемого JS _(SF: Opportunity, Medium)_
-- [ ] `v3` **Reduce JavaScript Execution Time** — выполнение JS дольше 2 секунд _(SF: Opportunity, Medium)_
-- [ ] `v3` **Minimize Main-Thread Work** — перегружен главный поток браузера _(SF: Opportunity, Medium)_
-- [ ] `v3` **Optimize DOM Size** — слишком большой DOM, пересчёт стилей > 40 мс _(SF: Opportunity, Low)_
-- [ ] `v3` **Font Display** — шрифты «мигают» или невидимы при загрузке _(SF: Opportunity, Low)_
+- [x] `v3` **Document Request Latency** — задержка основного документа: редиректы, медленный ответ, нет сжатия _(SF: Opportunity, Medium)_
+- [x] `v3` **LCP Request Discovery** — ресурс LCP (крупнейший элемент экрана) обнаруживается поздно _(SF: Opportunity, Medium)_
+- [x] `v3` **Render Blocking Requests** — скрипты/стили блокируют первую отрисовку _(SF: Opportunity, Medium)_
+- [x] `v3` **Network Dependency Tree** — длинные цепочки загрузки на критическом пути _(SF: Opportunity, Medium)_
+- [x] `v3` **Use Efficient Cache Lifetimes** — ресурсы без нормального HTTP-кэширования _(SF: Opportunity, Medium)_
+- [x] `v3` **Layout Shift Culprits** — элементы сдвигают вёрстку при загрузке (CLS) _(SF: Opportunity, Medium)_
+- [x] `v3` **Improve Image Delivery** — картинки можно отдавать легче (формат, размер, сжатие) _(SF: Opportunity, Medium)_
+- [x] `v3` **Forced Reflow** — принудительный пересчёт раскладки тормозит отрисовку _(SF: Opportunity, Medium)_
+- [x] `v3` **Legacy JavaScript** — лишние полифиллы для старых браузеров _(SF: Opportunity, Medium)_
+- [x] `v3` **Duplicated JavaScript** — одна и та же JS-библиотека в нескольких бандлах _(SF: Opportunity, Medium)_
+- [x] `v3` **Avoid Enormous Network Payloads** — слишком большой общий вес страницы _(SF: Opportunity, Medium)_
+- [x] `v3` **Minify CSS** — CSS не минифицирован _(SF: Opportunity, Medium)_
+- [x] `v3` **Minify JavaScript** — JS не минифицирован _(SF: Opportunity, Medium)_
+- [x] `v3` **Reduce Unused CSS** — много неиспользуемого CSS _(SF: Opportunity, Medium)_
+- [x] `v3` **Reduce Unused JavaScript** — много неиспользуемого JS _(SF: Opportunity, Medium)_
+- [x] `v3` **Reduce JavaScript Execution Time** — выполнение JS дольше 2 секунд _(SF: Opportunity, Medium)_
+- [x] `v3` **Minimize Main-Thread Work** — перегружен главный поток браузера _(SF: Opportunity, Medium)_
+- [x] `v3` **Optimize DOM Size** — слишком большой DOM, пересчёт стилей > 40 мс _(SF: Opportunity, Low)_
+- [x] `v3` **Font Display** — шрифты «мигают» или невидимы при загрузке _(SF: Opportunity, Low)_
 
 ### Mobile — мобильная версия
 
 Проверки через Lighthouse (PSI) — `v3`. Три пункта определяются по самому HTML без Lighthouse, поэтому вынесены в `v2`.
 
 - [x] `v2` **Viewport Not Set** — нет `<meta name="viewport">` или в нём нет `width=` _(SF: Issue, High)_
-- [ ] `v3` **Content Not Sized Correctly** — контент шире или уже экрана телефона _(SF: Issue, High)_
-- [ ] `v3` **Illegible Font Size** — слишком мелкий шрифт для мобильных _(SF: Issue, High)_
+- [x] `v3` **Content Not Sized Correctly** — контент шире или уже экрана телефона _(SF: Issue, High)_
+- [x] `v3` **Illegible Font Size** — слишком мелкий шрифт для мобильных _(SF: Issue, High)_
 - [x] `v2` **Contains Unsupported Plugins** — Flash, Silverlight, Java-апплеты (`<object>`, `<embed>`) _(SF: Issue, High)_
-- [ ] `v3` **Target Size** — слишком маленькие или тесные элементы для нажатия пальцем _(SF: Issue, Medium)_
+- [x] `v3` **Target Size** — слишком маленькие или тесные элементы для нажатия пальцем _(SF: Issue, Medium)_
 - [x] `v2` **Mobile Alternate Link** — есть `rel="alternate" media=…` на отдельную мобильную версию _(SF: Warning, High)_
 
 ### Accessibility — доступность (axe-core)
@@ -508,7 +508,7 @@
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
 - [x] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации → `spider url` (объекты — при `--store-html`)
 - [x] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
-- [ ] `v3` **Lighthouse Details** — метрики PSI по URL
+- [x] `v3` **Lighthouse Details** — метрики Lighthouse по URL → `spider url` (поле lighthouse; локальный Lighthouse, PSI — #42)
 - [ ] `backlog` **Accessibility Details**, **Spelling & Grammar Details**
 - [ ] `backlog` **N-grams** — частоты фраз из 1–6 слов (нужен сохранённый HTML)
 - [x] `v2` **Crawl Path** — кратчайший путь, которым краулер нашёл URL → `spider report crawl-path`
@@ -747,8 +747,8 @@
 - [x] `v2` **JavaScript: Chrome Console Log Summary**
 - [x] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL → `spider report headers [--cookies]`
 - [x] `v2` **Crawl Path Report** — кратчайший путь обнаружения URL → `spider report crawl-path`
-- [ ] `v3` **PageSpeed: Opportunities Summary, CSS / JavaScript Coverage Summary**
-- [ ] `v3` **Mobile** — выгрузки с деталями Lighthouse
+- [x] `v3` **PageSpeed: Opportunities Summary, CSS / JavaScript Coverage Summary** → `spider report pagespeed`
+- [x] `v3` **Mobile** — выгрузки с деталями Lighthouse → `spider export lighthouse`
 - [ ] `backlog` **Segments Overview** (не подтверждено)
 - [ ] `backlog` **Accessibility Violations Summary**
 
@@ -785,7 +785,7 @@
 - [ ] `v3` **Google Search Console** — Search Analytics (клики, показы, CTR, позиция), URL Inspection API; на основе пакета `google-search-console`
 - [ ] `v3` **Яндекс.Вебмастер** — аналог GSC для Яндекса; на основе пакета `yandex-webmaster` (в SF нет)
 - [ ] `v3` **PageSpeed Insights** — CrUX (полевые Core Web Vitals) + Lighthouse (лабораторные), mobile/desktop
-- [ ] `v3` **Lighthouse локально** — без API, работает за авторизацией
+- [x] `v3` **Lighthouse локально** — без API, работает за авторизацией → `spider lighthouse` (выборка типовых страниц; Node.js + npm `lighthouse`)
 - [ ] `backlog` **Majestic / Ahrefs / Moz** — внешние ссылочные метрики по URL / поддомену / домену
 - [ ] `backlog` **AI: OpenAI, Gemini, Ollama, Anthropic** — промпты к каждой странице, эмбеддинги; только через `llmkit` (мост пользователя к LLM-провайдерам: цепочки моделей, кэш, расходы, ключи), своих клиентов провайдеров в spider нет
 - [ ] `v3` **Google Analytics 4** — сессии, вовлечённость, конверсии по URL (Data API)

@@ -72,7 +72,8 @@ def doctor(
     `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
     если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
-    при `crawl.auth = basic`.
+    при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
+    (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет).
 
     Примеры:
       spider doctor
@@ -107,6 +108,7 @@ def doctor(
     settings_check, needed = _settings_check(root, config)
     checks.append(settings_check)
     checks.extend(_auth_checks(needed))
+    checks.append(_lighthouse_check(root, config))
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(
@@ -129,3 +131,21 @@ def _database_check() -> dict:
     except CliError as exc:
         return {"name": "database", "ok": False, "detail": f"{exc.message} {exc.action or ''}".strip()}
     return {"name": "database", "ok": True, "detail": f"PostgreSQL {shown}"}
+
+
+def _lighthouse_check(root: Path | None, config: ProjectConfig | None) -> dict:
+    """Lighthouse for `spider lighthouse`: optional — its absence doesn't make the environment unhealthy."""
+    from ..core import lighthouse
+
+    try:
+        data = services.read_project_data(root) if root and config else None
+        lh = settings.resolve(root, project_data=data).settings.lighthouse
+    except CliError:  # broken settings are the settings check's to report
+        return {"name": "lighthouse", "ok": True, "detail": "не проверялось: настройки не собрались"}
+    found = lighthouse.available(lh)
+    detail = (
+        f"{lh.command} → {found}"
+        if found
+        else (f"не найден ({lh.command}) — нужен только для `spider lighthouse`: npm install -g lighthouse")
+    )
+    return {"name": "lighthouse", "ok": True, "detail": detail}

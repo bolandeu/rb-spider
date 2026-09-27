@@ -1103,6 +1103,90 @@ def _javascript_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+# Screaming Frog's PageSpeed opportunities by the Lighthouse (13) audit that answers each: failed = score under 0.9.
+PAGESPEED = (
+    ("document-latency-insight", "Document Request Latency", "medium",
+     "Основной документ отдаётся медленно: редиректы, долгий ответ сервера или нет сжатия."),
+    ("lcp-discovery-insight", "LCP Request Discovery", "medium",
+     "Ресурс крупнейшего элемента экрана (LCP) браузер находит поздно: нет fetchpriority=high / preload, lazy-load."),
+    ("render-blocking-insight", "Render Blocking Requests", "medium",
+     "Скрипты и стили блокируют первую отрисовку: нет defer / async, стили не разделены по media."),
+    ("network-dependency-tree-insight", "Network Dependency Tree", "medium",
+     "Длинные цепочки загрузки на критическом пути: ресурсы грузятся друг за другом."),
+    ("cache-insight", "Use Efficient Cache Lifetimes", "medium",
+     "Статические ресурсы без нормального HTTP-кэширования: при повторном заходе качаются снова."),
+    ("cls-culprits-insight", "Layout Shift Culprits", "medium",
+     "Элементы сдвигают вёрстку при загрузке (CLS): картинки без размеров, вставки, шрифты."),
+    ("image-delivery-insight", "Improve Image Delivery", "medium",
+     "Картинки можно отдавать легче: современный формат, нужный размер, сжатие."),
+    ("forced-reflow-insight", "Forced Reflow", "medium",
+     "Скрипт читает геометрию DOM сразу после изменения — принудительный пересчёт раскладки."),
+    ("legacy-javascript-insight", "Legacy JavaScript", "medium",
+     "Полифиллы и преобразования для старых браузеров, которые современным не нужны."),
+    ("duplicated-javascript-insight", "Duplicated JavaScript", "medium",
+     "Одна и та же JS-библиотека в нескольких бандлах."),
+    ("total-byte-weight", "Avoid Enormous Network Payloads", "medium",
+     "Страница весит слишком много (медиана по HTTP Archive — 1,7–1,9 МБ)."),
+    ("unminified-css", "Minify CSS", "medium", "CSS не минифицирован."),
+    ("unminified-javascript", "Minify JavaScript", "medium", "JavaScript не минифицирован."),
+    ("unused-css-rules", "Reduce Unused CSS", "medium", "Много CSS, который страница не использует."),
+    ("unused-javascript", "Reduce Unused JavaScript", "medium", "Много JavaScript, который страница не выполняет."),
+    ("bootup-time", "Reduce JavaScript Execution Time", "medium", "Выполнение JavaScript занимает больше 2 секунд."),
+    ("mainthread-work-breakdown", "Minimize Main-Thread Work", "medium",
+     "Главный поток браузера занят дольше 4 секунд при загрузке."),
+    ("dom-size-insight", "Optimize DOM Size", "low", "Большой DOM: пересчёт стилей и раскладки дольше 40 мс."),
+    ("font-display-insight", "Font Display", "low", "Шрифты «мигают» или невидимы при загрузке (нет font-display)."),
+)  # fmt: skip
+_AUDIT_FINDINGS = (
+    "SELECT url, min(coalesce(display, '')) FROM lighthouse_audits WHERE crawl_id = :crawl_id AND audit = '{audit}'"
+    " AND score < 0.9 GROUP BY url ORDER BY url"
+)
+
+
+def _lighthouse_rules() -> list[Rule]:
+    """PageSpeed and the Mobile audits of `spider lighthouse` (not checked until it has run for the crawl)."""
+    how = " Данные — `spider lighthouse` (выборка типовых страниц); детали — `spider lighthouse --show`."
+
+    def audit(audit_id: str) -> RuleFinder:
+        return _run_sql(sa.text(_AUDIT_FINDINGS.format(audit=audit_id)))
+
+    rules = [Rule(f"pagespeed_{audit_id.removesuffix('-insight').replace('-', '_')}", "PageSpeed", f"PageSpeed: {name}",
+                  "opportunity", priority, description + how, audit(audit_id), ("data:lighthouse",))
+             for audit_id, name, priority, description in PAGESPEED]  # fmt: skip
+    rules += [
+        Rule("mobile_content_not_sized", "Mobile", "Mobile: Content Not Sized Correctly", "issue", "high",
+             "Контент шире экрана телефона: появляется горизонтальная прокрутка." + how,
+             audit("spider-content-width"), ("data:mobile-measures",)),
+        Rule("mobile_illegible_font_size", "Mobile", "Mobile: Illegible Font Size", "issue", "high",
+             "Больше 40 % текста мельче 12 px: на телефоне его трудно читать." + how,
+             audit("spider-font-size"), ("data:mobile-measures",)),
+        Rule("mobile_target_size", "Mobile", "Mobile: Target Size", "issue", "medium",
+             "Ссылки и кнопки слишком маленькие или стоят слишком тесно для пальца." + how,
+             audit("target-size"), ("data:lighthouse",)),
+    ]  # fmt: skip
+    return rules
+
+
+LIGHTHOUSE_CODES = {r.code for r in _lighthouse_rules()}
+# the Lighthouse audits (and spider's own mobile measures) the rules above judge
+CHECKED_AUDITS = (*(a[0] for a in PAGESPEED), "target-size", "spider-content-width", "spider-font-size")
+
+
+def refresh(engine: sa.Engine, crawl_id: int, codes: set[str], thresholds: ThresholdSettings | None = None) -> int:
+    """Recompute some rules only (their findings replaced) — after data collected on request, without a full
+    `analyze`. Returns their number of findings."""
+    thresholds = thresholds or ThresholdSettings()
+    skipped = {r.code for r in not_checked(engine, crawl_id)}
+    found = 0
+    with engine.begin() as conn:
+        conn.execute(sa.delete(storage.issues).where(storage.issues.c.crawl_id == crawl_id,
+                                                     storage.issues.c.code.in_(codes)))  # fmt: skip
+        for r in RULES:
+            if r.code in codes and r.code not in skipped and isinstance(r.find, SqlFinder):
+                found += r.find.store(conn, crawl_id, r.code, thresholds)
+    return found
+
+
 def _validation_mobile_rules() -> list[Rule]:
     def v(code, name, kind, description, where, detail="NULL", requires=("collect.html_validation",)) -> Rule:
         return Rule(code, "Validation", f"Validation: {name}", kind, "high", description,
@@ -1227,6 +1311,7 @@ RULES += _structured_rules()
 RULES += _sitemap_rules()
 RULES += _validation_mobile_rules()
 RULES += _javascript_rules()
+RULES += _lighthouse_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -1244,7 +1329,16 @@ def collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
         crawl_settings = Settings.model_validate(snapshot or {})
     except ValidationError:  # a snapshot from an older spider: assume the defaults
         crawl_settings = Settings()
-    return settings_module.flatten(crawl_settings.model_dump())
+    flat = settings_module.flatten(crawl_settings.model_dump())
+    # data collected on request after the crawl: `data:<what>` is true when the crawl has it
+    with engine.connect() as conn:
+        audits = conn.execute(
+            sa.text("SELECT min(audit) FROM lighthouse_audits WHERE crawl_id = :c AND audit LIKE 'spider-%'"
+                    " UNION ALL SELECT min(url) FROM lighthouse_audits WHERE crawl_id = :c"), {"c": crawl_id},
+        ).scalars().all()  # fmt: skip
+    flat["data:lighthouse"] = audits[1] is not None
+    flat["data:mobile-measures"] = audits[0] is not None
+    return flat
 
 
 def _met(collected: dict[str, Any], requirement: str) -> bool:

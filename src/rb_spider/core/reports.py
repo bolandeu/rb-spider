@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from . import storage
 from .errors import InvalidArguments
 from .export import cookies_of
+from .issues import CHECKED_AUDITS
 
 OWN = "NOT coalesce(p.external, FALSE)"
 HTML_OK = f"{OWN} AND p.parsed AND p.status_code = 200 AND p.content_type LIKE '%html%'"
@@ -240,3 +241,45 @@ def javascript(engine: sa.Engine, crawl_id: int, only: str, url: str | None = No
         f" AND kind IN {kinds} ORDER BY rowid"
     )
     return _rows(engine, query, {"crawl_id": crawl_id, "url": url}, limit)
+
+
+# --- pagespeed (spider lighthouse) -----------------------------------------------------------------
+
+PAGESPEED = {
+    # Opportunities Summary: each failed audit — how many measured pages fail it
+    "opportunities": "SELECT audit, count(DISTINCT url) AS pages, min(url) AS example FROM lighthouse_audits"  # noqa: S608 — fixed audit ids
+    " WHERE crawl_id = :crawl_id AND score < 0.9 AND audit IN ("
+    + ", ".join(f"'{a}'" for a in CHECKED_AUDITS)
+    + ") GROUP BY audit ORDER BY pages DESC, audit",
+    # the pages measured, with their performance score (mobile / desktop)
+    "pages": "SELECT url, strategy, score AS performance FROM lighthouse_audits WHERE crawl_id = :crawl_id"
+    " AND audit = 'category:performance' ORDER BY score, url",
+}
+
+
+def pagespeed(engine: sa.Engine, crawl_id: int, only: str, limit: int | None = None) -> tuple[int, list[dict]]:
+    """PageSpeed Opportunities Summary or the measured pages' scores; `coverage` — CSS / JavaScript Coverage
+    Summary: unused bytes per stylesheet / script, from the unused-css / unused-javascript audits' resources."""
+    if only == "coverage":
+        return _coverage(engine, crawl_id, limit)
+    if only not in PAGESPEED:
+        raise InvalidArguments(f"--only: one of {', '.join([*PAGESPEED, 'coverage'])}.")
+    return _rows(engine, PAGESPEED[only], {"crawl_id": crawl_id}, limit)
+
+
+def _coverage(engine: sa.Engine, crawl_id: int, limit: int | None) -> tuple[int, list[dict]]:
+    """Unused bytes per resource, summed over the measured pages (the items are at most 20 per page: small)."""
+    totals: dict[tuple[str, str], list[int]] = {}
+    query = sa.text("SELECT audit, items FROM lighthouse_audits WHERE crawl_id = :crawl_id AND items IS NOT NULL"
+                    " AND audit IN ('unused-css-rules', 'unused-javascript')")  # fmt: skip
+    with engine.connect() as conn:
+        for audit, raw in conn.execute(query, {"crawl_id": crawl_id}):
+            for item in json.loads(raw):
+                if "url" in item:
+                    entry = totals.setdefault(("css" if audit == "unused-css-rules" else "js", item["url"]), [0, 0, 0])
+                    entry[0] += 1
+                    entry[1] += int(item.get("wastedBytes") or 0)
+                    entry[2] += int(item.get("totalBytes") or 0)
+    rows = [{"kind": kind, "resource": url, "pages": n, "unused_bytes": wasted, "total_bytes": total}
+            for (kind, url), (n, wasted, total) in sorted(totals.items(), key=lambda kv: -kv[1][1])]  # fmt: skip
+    return len(rows), rows[: limit or None]

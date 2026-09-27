@@ -606,7 +606,7 @@ class CompareSettings(BaseModel):
 
 
 EXPORT_DATASETS = ["pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates",
-                   "custom", "sitemap-urls", "javascript", "rendered-source", "screenshots"]  # fmt: skip
+                   "custom", "sitemap-urls", "javascript", "rendered-source", "screenshots", "lighthouse"]  # fmt: skip
 
 
 class ExportSettings(BaseModel):
@@ -766,6 +766,41 @@ class ThresholdSettings(BaseModel):
         return patterns
 
 
+class LighthouseSettings(BaseModel):
+    """`spider lighthouse`: page speed and mobile audits by Lighthouse run on this machine (Node.js + npm lighthouse)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: str = Field(
+        "lighthouse",
+        description=(
+            "Как запускать Lighthouse: команда из PATH (`npm install -g lighthouse`) или, например, "
+            '"npx --yes lighthouse" — без установки.'
+        ),
+    )
+    strategy: Literal["mobile", "desktop"] = Field(
+        "mobile", description="Мобильный (как Googlebot Smartphone) или десктопный замер; mobile — ещё и замеры Mobile."
+    )
+    per_template: int = Field(
+        1,
+        ge=1,
+        le=20,
+        description=(
+            "Сколько страниц брать на шаблон, когда URL не заданы: шаблон — папка и глубина пути (все /catalog/x/y — "
+            "один), страницы — с наибольшим числом входящих ссылок; главная — всегда."
+        ),
+    )
+    max_pages: int = Field(20, ge=1, le=10000, description="Не больше стольких страниц выборки за запуск.")
+    timeout_s: int = Field(120, ge=10, le=900, description="Сколько секунд ждать Lighthouse на одной странице.")
+    chrome: str | None = Field(
+        None,
+        description=(
+            "Путь к Chrome / Chromium для Lighthouse; не задано — crawl.render_browser, иначе Chromium из кэша "
+            "Playwright, иначе установленный Chrome."
+        ),
+    )
+
+
 class Settings(BaseModel):
     """Everything a crawl can be configured with. Sections are TOML tables: `[crawl]`, `[thresholds]`."""
 
@@ -786,6 +821,10 @@ class Settings(BaseModel):
     )
     rewrite: RewriteSettings = Field(
         default_factory=RewriteSettings, description="Переписывание найденных URL: параметры, замены, регистр."
+    )
+    lighthouse: LighthouseSettings = Field(
+        default_factory=LighthouseSettings,
+        description="Скорость и мобильные проверки Lighthouse (`spider lighthouse`).",
     )
     thresholds: ThresholdSettings = Field(
         default_factory=ThresholdSettings, description="Пороги проверок; пересчёт без обхода — `spider analyze`."

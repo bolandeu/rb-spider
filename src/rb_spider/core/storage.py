@@ -338,6 +338,21 @@ render_events = sa.Table(
     sa.Column("resource", sa.String),  # blocked / failed: the resource's URL
     sa.Index("render_events_by_url", "crawl_id", "url"),
 )
+# `spider lighthouse`: every audit of every page Lighthouse measured (and spider's own mobile measures, `spider-*`),
+# per strategy. Items — up to 20 of the audit's resources as JSON (URL, wasted bytes / ms), for the reports.
+lighthouse_audits = sa.Table(
+    "lighthouse_audits",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("strategy", sa.String, nullable=False),  # mobile | desktop
+    sa.Column("audit", sa.String, nullable=False),  # Lighthouse's audit id; category:<name> — a category's score
+    sa.Column("score", sa.Float),  # 0–1; NULL — informative / not applicable
+    sa.Column("value", sa.Float),  # numericValue (ms, bytes, CLS…)
+    sa.Column("display", sa.String),  # displayValue as Lighthouse words it
+    sa.Column("items", sa.String),
+    sa.Index("lighthouse_audits_by_url", "crawl_id", "url"),
+)
 # Images as a rendered page laid them out (crawl.render_images): real size against the size shown (Incorrectly Sized
 # Images, Image Details). At most 200 per page.
 rendered_images = sa.Table(

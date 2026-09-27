@@ -378,6 +378,24 @@ JS_EXPECTED = {
     "js_errors": {"/js/errors"},
     "internal_redirection_javascript": {"/js/redirect"},
 }
+
+
+# Lighthouse (#44): crawled from /lh/ (not linked from the main graph); the fake lighthouse (tests/fake_lighthouse.py)
+# fails the audit a page is named after, the mobile measures are real — a page wider than a phone, one of tiny text
+def _lh_audits() -> list[str]:
+    from rb_spider.core.issues import PAGESPEED
+
+    return [a[0] for a in PAGESPEED] + ["target-size"]
+
+
+LH_PAGES: dict[str, str] = {f"/lh/{audit}": _html(f"lh-{audit}", "/lh/") for audit in _lh_audits()}
+LH_PAGES["/lh/wide"] = _html("lh-wide", "/lh/", body=f"<h1>{H1.format('lh-wide')}</h1><h2>{H2.format('lh-wide')}</h2>"
+                             '<div style="width: 2000px">широкий блок</div>')  # fmt: skip
+LH_PAGES["/lh/tiny"] = _html("lh-tiny", "/lh/", head=_head("lh-tiny", extra="<style>body {font-size: 8px}</style>"))
+LH_PAGES["/lh/"] = _html("lh-hub", *LH_PAGES)
+LH_EXPECTED = {f"pagespeed_{a.removesuffix('-insight').replace('-', '_')}": {f"/lh/{a}"} for a in _lh_audits()[:-1]}
+LH_EXPECTED |= {"mobile_target_size": {"/lh/target-size"}, "mobile_content_not_sized": {"/lh/wide"},
+                "mobile_illegible_font_size": {"/lh/tiny"}}  # fmt: skip
 # the old AJAX crawling scheme (no rendering needed): in the main graph
 AJAX_TRAPS: dict[str, str] = {
     "/ajax-hashbang": _html("ajax-hashbang", "/", "/a#!/catalog"),
@@ -778,6 +796,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_PAGES.items()},
     **{path: (200, {}, html) for path, html in AJAX_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in LH_PAGES.items()},
     "/private/app.js": (200, {"Content-Type": "text/javascript"}, "document.title = 'из закрытого скрипта';"),
     **{path.partition("?")[0]: (200, {}, html) for path, html in URL_TRAPS.items()},
     **{path: (200, {}, html) for path, html in HREFLANG_TRAPS.items()},
@@ -1036,6 +1055,8 @@ EXPECTED_ISSUES = {
     **{code: set() for code in JS_EXPECTED},
     "js_ajax_scheme_urls": {"/ajax-hashbang"},
     "js_ajax_meta_fragment": {"/ajax-fragment"},
+    # PageSpeed and Mobile (Lighthouse): measured on request only — see LH_EXPECTED
+    **{code: set() for code in LH_EXPECTED},
 }
 
 # A test may change the site between two crawls (compare, re-spider): path -> route, consulted first.

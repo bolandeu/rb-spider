@@ -21,6 +21,7 @@ from .commands import (
     init,
     insecure,
     issues,
+    lighthouse,
     link_score,
     links,
     pagination,
@@ -61,6 +62,7 @@ app.add_typer(report.app, name="report")
 app.command(name="robots-test")(report.robots_test)
 app.command(name="link-score")(link_score.link_score)
 app.command(name="source")(source.source)
+app.command(name="lighthouse")(lighthouse.lighthouse)
 
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)

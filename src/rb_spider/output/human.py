@@ -535,6 +535,14 @@ def url_details(data: dict) -> None:
             kind = "фон" if r.get("origin") == "css background" else r["kind"]
             table.add_row(status, kind, size, r["target"], " ".join(filter(None, [r["alt"], dims])))
         console.print(table)
+    for strategy, found in (data.get("lighthouse") or {}).items():
+        score = found["categories"].get("performance")
+        metrics = ", ".join(f"{k} {round(v) if k != 'cls' else round(v, 3)}" for k, v in found["metrics"].items()
+                            if v is not None)  # fmt: skip
+        console.print(f"[bold]Lighthouse ({strategy})[/bold]: {round(100 * score) if score is not None else '—'}"
+                      f"{' · ' + metrics if metrics else ''}")  # fmt: skip
+        for audit in found["failed"]:
+            console.print(f"  {audit['audit']}: {audit['display'] or audit['score']}")
 
 
 def query_table(data: dict) -> None:
@@ -610,3 +618,26 @@ def page_source(data: dict) -> None:
             print("… (diff обрезан)")
     else:
         print(data["html"])
+
+
+def lighthouse_plan(data: dict) -> None:
+    console.print(f"Lighthouse ({data['strategy']}) замерит {len(data['urls'])} стр. обхода #{data['crawl_id']}:")
+    for url in data["urls"]:
+        console.print(f"  {url}")
+
+
+def lighthouse_progress(page: dict) -> None:
+    """One measured page, as it comes (stderr: the result table goes to stdout)."""
+    if not page["ok"]:
+        err_console.print(f"[red]✗[/red] {page['url']} — {page['error']}")
+        return
+    score = f"{round(100 * page['performance'])}" if page["performance"] is not None else "—"
+    lcp = page["metrics"].get("lcp_ms")
+    lcp_text = f", LCP {lcp / 1000:.1f} с" if lcp is not None else ""
+    err_console.print(f"[green]✓[/green] {page['url']} — {score}{lcp_text}, не пройдено: {len(page['failed'])}")
+
+
+def lighthouse_done(data: dict) -> None:
+    ok = sum(p["ok"] for p in data["pages"])
+    console.print(f"Lighthouse ({data['strategy']}), обход #{data['crawl_id']}: замерено {ok} из {len(data['pages'])}"
+                  f" стр., находок PageSpeed / Mobile: {data['findings']} — `spider issues`")  # fmt: skip

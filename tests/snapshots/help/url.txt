@@ -26,7 +26,9 @@
  real_* — настоящий размер из файла, display_* — как показана на странице (рендеринг с              
  `crawl.render_images`), origin `css background` — фоновая картинка. В page —                       
  `link_score` (после `spider link-score`) и `screenshot` — путь к скриншоту (с                      
- `crawl.render_screenshots`). URL нет в обходе — выход 2.                                           
+ `crawl.render_screenshots`). `lighthouse` — замеры `spider lighthouse` по стратегиям:              
+ `{mobile: {categories, metrics, failed: [{audit, score, display}]}}`, null — не                    
+ замерялась. URL нет в обходе — выход 2.                                                            
                                                                                                     
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    URL      <str>  URL из обхода, например https://example.com/catalog/. [required]            │

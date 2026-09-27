@@ -9,7 +9,8 @@
  `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —                 
  настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,                   
  если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта               
- при `crawl.auth = basic`.                                                                          
+ при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse                             
+ (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет).                
                                                                                                     
  Примеры:                                                                                           
    spider doctor                                                                                    

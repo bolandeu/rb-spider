@@ -1,0 +1,51 @@
+                                                                                                    
+ Usage: spider lighthouse [OPTIONS] [urls]...                                                       
+                                                                                                    
+ Скорость и мобильные проверки страниц: Lighthouse на этой машине (как PageSpeed Insights, без      
+ ключа API).                                                                                        
+                                                                                                    
+ Проблемы скорости обычно общие для шаблона — одни и те же скрипты, стили и                         
+ картинки на всех карточках. Поэтому без URL замеряется выборка типовых посадочных:                 
+ главная и по `lighthouse.per_template` страниц на шаблон (папка и глубина пути) с                  
+ наибольшим числом входящих ссылок, не больше `lighthouse.max_pages`. Конкретные                    
+ страницы — аргументами или `--list`, все — `--all`. Итог — проверки групп PageSpeed                
+ (19) и Mobile (`spider issues`); повторный запуск заменяет замеры этих страниц.                    
+ `--dry-run` — только показать, какие страницы будут замерены.                                      
+                                                                                                    
+ Нужны Node.js и Lighthouse: `npm install -g lighthouse` или                                        
+ `--set lighthouse.command="npx --yes lighthouse"`. Chrome — `lighthouse.chrome`,                   
+ иначе `crawl.render_browser` или Chromium из кэша Playwright. Mobile: ширина                       
+ контента и размер шрифта меряются в браузере (нужен `rb-spider`).                                  
+                                                                                                    
+ Примеры:                                                                                           
+   spider lighthouse --dry-run                                                                      
+   spider lighthouse                                                                                
+   spider lighthouse https://example.com/ https://example.com/catalog/ --strategy desktop           
+                                                                                                    
+ JSON: `{crawl_id, strategy, dry_run, pages: [{url, ok, error, performance, metrics: {lcp_ms,       
+ fcp_ms, cls, tbt_ms, speed_index_ms}, failed: [аудиты]}], findings}`; с `--dry-run` —              
+ `{crawl_id, strategy, dry_run, urls}`. Lighthouse не найден — выход 1,                             
+ `LIGHTHOUSE_UNAVAILABLE`; URL не из обхода или `--all` вместе с URL — выход 2.                     
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   urls      <str>  Какие страницы обхода замерить; по умолчанию — выборка.                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --crawl           <int>             Номер обхода; по умолчанию — последний.                      │
+│ --list            <str>             Файл со списком URL (как у `spider crawl --list`); - —       │
+│                                     stdin.                                                       │
+│ --all                               Все HTML-страницы обхода (долго: ~10–30 с на страницу).      │
+│ --strategy        <mobile|desktop>  mobile или desktop (ключ lighthouse.strategy, по умолчанию   │
+│                                     mobile).                                                     │
+│ --dry-run                           Показать, что будет сделано, ничего не меняя.                │
+│ --profile         <str>             Профиль настроек: встроенный (`spider profiles list`) или из │
+│                                     `.spider/profiles/`.                                         │
+│ --config          <path>            TOML-файл настроек поверх профиля (формат как у профиля).    │
+│ --set             KEY=VALUE         Переопределить любой ключ: `--set crawl.max_urls=500`; можно │
+│                                     повторять.                                                   │
+│ --json                              Вывод в JSON для агентов и скриптов (одна строка-конверт     │
+│                                     `{ok, ...}`).                                                │
+│ --quiet                             Печатать только основной результат, без пояснений.           │
+│ --help                              Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

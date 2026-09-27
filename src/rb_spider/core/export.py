@@ -28,7 +28,7 @@ from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings, ThresholdSettings
 
 DATASETS = ("pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates", "custom",
-            "sitemap-urls", "javascript", "rendered-source", "screenshots")  # fmt: skip
+            "sitemap-urls", "javascript", "rendered-source", "screenshots", "lighthouse")  # fmt: skip
 # Bulk Export «Links» by issue: the link rows behind a link rule (Screaming Frog exports the links, not the pages)
 LINK_ISSUES = {
     "links_internal_nofollow_outlinks": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
@@ -221,6 +221,9 @@ _EXTRA = {
                                                                   "secure", "httponly", "samesite"], _cookies),
     "source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False),
     "text": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=True),
+    "lighthouse": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url, strategy, audit, score, value, display, items FROM lighthouse_audits WHERE crawl_id = :crawl_id"
+        " ORDER BY url, strategy, audit"),
     "rendered-source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False, rendered=True),
     "screenshots": lambda conn, crawl_id: _sql_table(conn, crawl_id,
         "SELECT url, screenshot FROM pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"),
@@ -475,7 +478,31 @@ def url_details(engine: sa.Engine, crawl_id: int, url: str) -> dict:
             "metrics": enrich.metrics_of(engine, crawl_id, url),
             "serp": serp.snippet(url, page.get("title"), page.get("meta_description"), _thresholds(engine, crawl_id))
             if page.get("parsed") and (page.get("title") or page.get("meta_description")) else None,
-            "structured_data": _structured_items(engine, crawl_id, url)}  # fmt: skip
+            "structured_data": _structured_items(engine, crawl_id, url),
+            "lighthouse": lighthouse_of(engine, crawl_id, url)}  # fmt: skip
+
+
+def lighthouse_of(engine: sa.Engine, crawl_id: int, url: str) -> dict | None:
+    """Lighthouse Details of a page (`spider lighthouse`): per strategy the category scores, the metrics and the
+    audits that failed; None — not measured."""
+    table = storage.lighthouse_audits
+    metrics = {"largest-contentful-paint": "lcp_ms", "first-contentful-paint": "fcp_ms", "cumulative-layout-shift": "cls",
+               "total-blocking-time": "tbt_ms", "speed-index": "speed_index_ms"}  # fmt: skip
+    with engine.connect() as conn:
+        rows = conn.execute(sa.select(table.c.strategy, table.c.audit, table.c.score, table.c.value, table.c.display)
+                            .where(table.c.crawl_id == crawl_id, table.c.url == url)).all()  # fmt: skip
+    if not rows:
+        return None
+    found: dict[str, dict] = {}
+    for strategy, audit, score, value, display in rows:
+        entry = found.setdefault(strategy, {"categories": {}, "metrics": {}, "failed": []})
+        if audit.startswith("category:"):
+            entry["categories"][audit.removeprefix("category:")] = score
+        elif audit in metrics:
+            entry["metrics"][metrics[audit]] = value
+        elif score is not None and score < 0.9 and audit in issues.CHECKED_AUDITS:
+            entry["failed"].append({"audit": audit, "score": score, "display": display})
+    return found
 
 
 def _thresholds(engine: sa.Engine, crawl_id: int) -> ThresholdSettings:
