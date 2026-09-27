@@ -35,6 +35,7 @@ class Link:
     path_type: str | None = (
         None  # how the href is written: a — absolute, p — //protocol-relative, r — /root, l — relative
     )
+    origin: str | None = None  # rendered pages: b — in the raw HTML too, r — only after JavaScript (Link Origin)
 
 
 @dataclass
@@ -68,6 +69,7 @@ class Page:
     mobile_alternates: list[str] = field(default_factory=list)  # <link rel="alternate" media="…"> targets
     uncrawlable: list[tuple[str, str]] = field(default_factory=list)  # (javascript: / onclick…, text) — not followable
     custom: list[tuple] = field(default_factory=list)  # custom_values rows: (kind, name, value, n)
+    events: list[tuple] = field(default_factory=list)  # render_events rows: (kind, message, resource)
     onpage: dict = field(default_factory=dict)  # extra `pages` columns: _onpage(), _directives_and_canonical()
 
     @classmethod
@@ -272,6 +274,8 @@ def _onpage(tree: LexborHTMLParser) -> dict:
         "meta_description_outside_head": sum(m.mem_id not in in_head for m in descriptions),
         "meta_keywords": (keywords[0].attributes.get("content") or "").strip() if keywords else None,
         "meta_keywords_count": len(keywords),
+        # the old AJAX crawling scheme (withdrawn in 2015): <meta name="fragment" content="!">
+        "ajax_meta_fragment": any((m.attributes.get("name") or "").lower() == "fragment" for m in named),
         "h1": h1_text,
         "h1_count": len(h1s),
         "h1_from_alt": h1_from_alt,
@@ -562,6 +566,11 @@ def _mobile(url: str, tree: LexborHTMLParser) -> tuple[dict, list[str]]:
     return {"viewport": viewport, "plugins": plugins}, alternates
 
 
+def _hashbang_links(tree: LexborHTMLParser) -> int:
+    """Links written in the old AJAX crawling scheme: `#!` URLs."""
+    return sum("#!" in (a.attributes.get("href") or "") for a in tree.css("a[href]"))
+
+
 _JS_NAVIGATION = re.compile(r"location|window\.open", re.IGNORECASE)
 
 
@@ -636,6 +645,7 @@ def parse_page(
                     page.refresh_url, page.refresh_kind = refresh, "meta"
                 break
     page.links = _links(url, tree, keep_fragments=keep_fragments, invalid=invalid_links, placer=placer)
+    page.onpage["hashbang_links"] = _hashbang_links(tree) if b"#!" in body else 0
     if custom is not None and custom.active:
         page.custom = custom.before_content(tree, body)
     page.resources = _resources(url, tree, srcset)

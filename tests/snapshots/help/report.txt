@@ -2,7 +2,7 @@
  Usage: spider report [OPTIONS] COMMAND [ARGS]...                                                   
                                                                                                     
  Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы,           
- заголовки.                                                                                         
+ заголовки, консоль JavaScript.                                                                     
                                                                                                     
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                      │
@@ -20,5 +20,7 @@
 │ forms           Forms: формы сайта — на какой странице и куда отправляются, по HTTP или HTTPS.   │
 │ headers         HTTP Header Summary / Cookie Summary: заголовки ответов (или cookies) и сколько  │
 │                 URL их отдают.                                                                   │
+│ javascript      Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при        │
+│                 рендеринге.                                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

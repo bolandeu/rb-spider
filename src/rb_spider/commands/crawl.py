@@ -50,7 +50,7 @@ def crawl(
     render: Render | None = typer.Option(
         None,
         "--render",
-        help="JS-рендеринг HTML-страниц браузером: never или always (ключ crawl.render, по умолчанию never).",
+        help="JS-рендеринг HTML-страниц браузером: never, always или auto (ключ crawl.render, по умолчанию never).",
     ),
     store_html: bool | None = typer.Option(
         None, "--store-html", help="Сохранить HTML страниц сжатым рядом с базой (ключ crawl.store_html)."
@@ -107,7 +107,11 @@ def crawl(
     редиректы и ресурсы проверяются как обычно. Нужен `rb-spider[render]`; браузер
     находится сам — сборка Playwright, любой Chromium из кэша Playwright или Google
     Chrome (свой путь — crawl.render_browser). Вкладок — crawl.render_tabs, ожидание
-    скриптов — crawl.render_wait_ms. Медленнее обычного обхода в разы.
+    скриптов — crawl.render_wait_ms, окно — crawl.render_viewport. Медленнее обычного
+    обхода в разы. `--render auto` — рендерит первые crawl.render_auto_sample страниц
+    и продолжает, только если JS на них что-то поменял. С рендерингом работают
+    проверки группы JavaScript (исходный HTML против отрендеренного, JS-редиректы,
+    ошибки консоли — `spider report javascript`).
 
     Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
@@ -116,7 +120,7 @@ def crawl(
     `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
     finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
     detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код
-    выхода 2; `--render always` без Playwright — код 1, `RENDER_UNAVAILABLE`.
+    выхода 2; `--render always|auto` без Playwright — код 1, `RENDER_UNAVAILABLE`.
     """
     resolved = options.resolve(
         ctx,
@@ -161,3 +165,4 @@ def crawl(
 class Render(StrEnum):
     never = "never"
     always = "always"
+    auto = "auto"

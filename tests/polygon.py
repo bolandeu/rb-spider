@@ -272,6 +272,93 @@ JS_TRAPS: dict[str, str] = {
     "/js-target": _html("js-target", dead_end=True),
 }
 
+
+# JavaScript raw vs rendered (#39): crawled with rendering from /js/ (not linked from the main graph). Each page's
+# script changes one thing; the server's HTML is otherwise a clean page.
+def _js(slug: str, script: str, *, head: str | None = None, body: str | None = None) -> str:
+    return _html(slug, "/js/", head=head, body=(body if body is not None else
+                 f"<h1>{H1.format(slug)}</h1><h2>{H2.format(slug)}</h2>") + f"<script>{script}</script>")  # fmt: skip
+
+
+def _set_meta(name: str, value: str) -> str:
+    return f"document.querySelector('meta[name={name}]').setAttribute('content', '{value}');"
+
+
+JS_WORDS = " ".join(["слово"] * 30)
+JS_PAGES: dict[str, str] = {
+    "/js/noindex": _js("js-noindex", _set_meta("robots", "index, follow"),
+                       head=_head("js-noindex", extra=_robots("noindex"))),
+    "/js/nofollow": _js("js-nofollow", _set_meta("robots", "index, follow"),
+                        head=_head("js-nofollow", extra=_robots("nofollow"))),
+    "/js/canonical-changed": _js("js-canonical-changed",
+                                 "document.querySelector('link[rel=canonical]').href = '/js/canonical-target';"),
+    "/js/canonical-target": _html("js-canonical-target", "/js/"),
+    "/js/canonical-added": _js("js-canonical-added", "const c = document.createElement('link'); "
+                               "c.rel = 'canonical'; c.href = location.href; document.head.append(c);"),
+    "/js/title-added": _js("js-title-added", f"document.title = '{TITLE.format('js-title-added')}';",
+                           head=_no_title("js-title-added")),
+    "/js/title-updated": _js("js-title-updated", f"document.title = '{TITLE.format('js-title-updated, новый')}';"),
+    "/js/description-added": _js("js-description-added", "const m = document.createElement('meta'); "
+                                 f"m.name = 'description'; m.content = '{DESCRIPTION.format('js-description-added')}'; "
+                                 "document.head.append(m);", head=_no_description("js-description-added")),
+    "/js/description-updated": _js("js-description-updated",
+                                   _set_meta("description", DESCRIPTION.format("js-description-updated, новое"))),
+    "/js/h1-added": _js("js-h1-added", "const h = document.createElement('h1'); "
+                        f"h.textContent = '{H1.format('js-h1-added')}'; document.body.prepend(h);",
+                        body=f"<h2>{H2.format('js-h1-added')}</h2>"),
+    "/js/h1-updated": _js("js-h1-updated", f"document.querySelector('h1').textContent = '{H1.format('js-h1, новый')}';"),
+    "/js/links": _js("js-links", "const a = document.createElement('a'); a.href = '/js/linked'; "
+                     "a.textContent = 'ссылка'; document.body.append(a);"),
+    "/js/linked": _html("js-linked", "/js/"),
+    "/js/content": _js("js-content", f"const p = document.createElement('p'); p.textContent = '{JS_WORDS}'; "
+                       "document.body.append(p);"),
+    "/js/errors": _js("js-errors", "console.error('polygon: broken widget'); undefinedFunction();"),
+    "/js/blocked": _js("js-blocked", "", head=_head("js-blocked", extra='<script src="/private/app.js"></script>')),
+    "/js/redirect": _js("js-redirect", "location.replace('/js/landing');"),
+    "/js/landing": _html("js-landing", "/js/"),
+    # web components and frames: their content counts only when flattened (crawl.render_flatten_*)
+    "/js/shadow": _js("js-shadow", "const host = document.getElementById('host'); const root = "
+                      "host.attachShadow({mode: 'open'}); root.innerHTML = '<a href=\"/js/shadow-target\">тень</a>';",
+                      body=f"<h1>{H1.format('js-shadow')}</h1><h2>{H2.format('js-shadow')}</h2><div id=\"host\"></div>"),
+    "/js/shadow-target": _html("js-shadow-target", "/js/"),
+    "/js/frame": _html("js-frame", "/js/", body=f"<h1>{H1.format('js-frame')}</h1><h2>{H2.format('js-frame')}</h2>"
+                       '<iframe src="/js/framed"></iframe>'),
+    "/js/framed": _html("js-framed", "/js/frame-target"),
+    "/js/frame-target": _html("js-frame-target", "/js/"),
+    # not linked: crawl.render_viewport — the title says how wide the window was
+    "/js/viewport": _js("js-viewport", "document.title = 'width ' + window.innerWidth;"),
+}  # fmt: skip
+JS_LINKED = ("/js/noindex", "/js/nofollow", "/js/canonical-changed", "/js/canonical-added", "/js/title-added",
+             "/js/title-updated", "/js/description-added", "/js/description-updated", "/js/h1-added", "/js/h1-updated",
+             "/js/links", "/js/content", "/js/errors", "/js/blocked", "/js/redirect", "/js/shadow", "/js/frame")  # fmt: skip
+JS_PAGES["/js/"] = _html("js-hub", *JS_LINKED)
+JS_NO_CANONICAL = {"/js/canonical-added"}
+# the rendered crawl from /js/: issue code -> pages (every JavaScript rule; the old AJAX scheme is in the main graph)
+JS_EXPECTED = {
+    "js_noindex_only_original": {"/js/noindex"},
+    "js_nofollow_only_original": {"/js/nofollow"},
+    "js_canonical_mismatch": {"/js/canonical-changed"},
+    "js_ajax_scheme_urls": set(),
+    "js_ajax_meta_fragment": set(),
+    "js_blocked_resources": {"/js/blocked"},
+    "js_links": {"/js/links", "/js/shadow", "/js/frame"},
+    "js_content": {"/js/content", "/js/frame"},  # the frame's text becomes the page's
+    "js_title_only_rendered": {"/js/title-added"},
+    "js_title_updated": {"/js/title-updated"},
+    "js_description_only_rendered": {"/js/description-added"},
+    "js_description_updated": {"/js/description-updated"},
+    "js_h1_only_rendered": {"/js/h1-added"},
+    "js_h1_updated": {"/js/h1-updated"},
+    "js_canonical_only_rendered": {"/js/canonical-added"},
+    "js_errors": {"/js/errors"},
+    "internal_redirection_javascript": {"/js/redirect"},
+}
+# the old AJAX crawling scheme (no rendering needed): in the main graph
+AJAX_TRAPS: dict[str, str] = {
+    "/ajax-hashbang": _html("ajax-hashbang", "/", "/a#!/catalog"),
+    "/ajax-fragment": _html("ajax-fragment", head=_head("ajax-fragment", extra='<meta name="fragment" content="!">')),
+}
+
 # URL checks (#26): the address itself is the trap. Keys are what a link's href says; ROUTES serves them
 # by path (the server sees the decoded path, without the query).
 LONG_PATH = "/u/" + "long-" * 20
@@ -584,7 +671,7 @@ FLAKY_FAILS = 2
 FLAKY_SEEN: dict[str, int] = {}
 BASIC_AUTH = "Basic " + __import__("base64").b64encode(b"stage:pa55").decode()
 
-NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4"}  # /dup-3, /dup-4: the canonical is in the Link header
+NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4", *JS_NO_CANONICAL}  # /dup-3, /dup-4: canonical in the Link header
 
 ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     "/": (
@@ -625,6 +712,7 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
             "/r-noindex-thin",
             *SECURITY_TRAPS,
             "/sd/",
+            *AJAX_TRAPS,
         ),
     ),
     "/a": (200, {}, _html("a", "/c")),
@@ -663,6 +751,9 @@ ROUTES: dict[str, tuple[int, dict[str, str], str]] = {
     **{path: (200, {}, html) for path, html in LINK_TRAPS.items()},
     **{path: (200, {}, html) for path, html in IMAGE_TRAPS.items()},
     **{path: (200, {}, html) for path, html in JS_TRAPS.items()},
+    **{path: (200, {}, html) for path, html in JS_PAGES.items()},
+    **{path: (200, {}, html) for path, html in AJAX_TRAPS.items()},
+    "/private/app.js": (200, {"Content-Type": "text/javascript"}, "document.title = 'из закрытого скрипта';"),
     **{path.partition("?")[0]: (200, {}, html) for path, html in URL_TRAPS.items()},
     **{path: (200, {}, html) for path, html in HREFLANG_TRAPS.items()},
     "/hl/header": (200, {"Link": HREFLANG_HEADER}, _html("hl-header")),
@@ -715,6 +806,7 @@ REACHABLE = {
     *VALIDATION_TRAPS,
     "/l-invalid",
     "/r-noindex-thin",
+    *AJAX_TRAPS,
 }
 
 # Other sites' URLs a full crawl checks (not crawls); "LOCAL" stands for http://localhost:port.
@@ -912,6 +1004,10 @@ EXPECTED_ISSUES = {
     "mobile_viewport_not_set": {"/m-no-viewport"},
     "mobile_unsupported_plugins": {"/m-plugin"},
     "mobile_alternate_link": {"/m-alternate"},
+    # JavaScript: this crawl isn't rendered — see JS_EXPECTED; the old AJAX scheme needs no browser
+    **{code: set() for code in JS_EXPECTED},
+    "js_ajax_scheme_urls": {"/ajax-hashbang"},
+    "js_ajax_meta_fragment": {"/ajax-fragment"},
 }
 
 # A test may change the site between two crawls (compare, re-spider): path -> route, consulted first.

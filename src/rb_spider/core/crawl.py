@@ -59,7 +59,7 @@ from .errors import (
 from .extract import Page, normalize_url
 from .queue import MemoryQueue
 from .render import Renderer
-from .scope import PageReader, Reading, Scope, init_worker, link_row, read_in_worker
+from .scope import PageReader, Reading, Scope, init_worker, js_changed, link_row, read_in_worker
 from .settings import CrawlSettings, Settings
 
 PROGRESS_EVERY_S = 5.0
@@ -67,6 +67,7 @@ PROGRESS_EVERY_S = 5.0
 # (and tests) stay in one process: spawning workers costs more than it saves there.
 PARSE_POOL_AFTER = 200
 PROXY_CREDENTIAL = "proxy"
+log = logging.getLogger(__name__)
 
 # Crawlee warns that passing our own Configuration sets it globally as a side effect — intended
 # here (one crawl per process), so the warning is noise for the user.
@@ -172,14 +173,24 @@ class Parser:
         self.pool: ProcessPoolExecutor | None = None
         self.parsed = 0
 
-    async def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
+    async def read(
+        self,
+        url: str,
+        status_code: int,
+        headers: dict[str, str],
+        body: bytes,
+        *,
+        check: bool,
+        raw: bytes | None = None,
+        js_redirect: str | None = None,
+    ) -> Reading:
         self.parsed += 1
         if check or not body or not self.workers or self.parsed <= PARSE_POOL_AFTER:
-            return self.reader.read(url, status_code, headers, body, check=check)
+            return self.reader.read(url, status_code, headers, body, check=check, raw=raw, js_redirect=js_redirect)
         if self.pool is None:
             self._hide_main()
             self.pool = ProcessPoolExecutor(self.workers, initializer=init_worker, initargs=(self.reader,))
-        call = functools.partial(read_in_worker, url, status_code, headers, body)
+        call = functools.partial(read_in_worker, url, status_code, headers, body, raw, js_redirect)
         return await asyncio.get_running_loop().run_in_executor(self.pool, call)
 
     def _hide_main(self) -> None:
@@ -309,9 +320,14 @@ async def _run(
     concurrency = settings.concurrency
     renderer = (
         Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms, timeout_s=settings.timeout_s,
-                 user_agent=user_agent, headers=settings.headers, browser=settings.render_browser)
-        if settings.render == "always" else None
+                 user_agent=user_agent, headers=settings.headers, browser=settings.render_browser,
+                 viewport=settings.render_viewport, console=settings.render_console,
+                 flatten_shadow_dom=settings.render_flatten_shadow_dom,
+                 flatten_iframes=settings.render_flatten_iframes,
+                 allowed=robots.allowed if settings.robots == "respect" else None)
+        if settings.render != "never" else None
     )  # fmt: skip
+    auto = AutoRender(settings.render, settings.render_auto_sample)
     # a handler may first wait for a free browser tab: every tab busy with pages ahead of it
     render_wait_s = (settings.timeout_s + settings.render_wait_ms / 1000) * -(-concurrency // settings.render_tabs)
     crawler = HttpCrawler(
@@ -465,12 +481,24 @@ async def _run(
         headers = dict(response.headers)
         if ctx.request.url.startswith("https://") and any(k.lower() == "strict-transport-security" for k in headers):
             hsts_hosts.add(urlsplit(ctx.request.url).hostname or "")
-        source, rendered = body, None
-        if renderer and not check and response.status_code == 200 and _is_html(headers):
-            dom = await renderer.render(ctx.request.url)
-            source, rendered = dom or body, dom is not None
-        reading = await parser.read(ctx.request.url, response.status_code, headers, source, check=check)
+        source, raw, js_redirect, result = body, None, None, None
+        attempted = False
+        if renderer and not check and response.status_code == 200 and _is_html(headers) and auto.wanted():
+            attempted = True
+            result = await renderer.render(ctx.request.url)
+            if result is not None and not render.same_page(result.final_url, ctx.request.url):
+                final = normalize_url(result.final_url)  # a script navigated away: a JavaScript redirect
+                js_redirect = final if final.startswith(("http://", "https://")) else None
+            elif result is not None:
+                source, raw = result.html, body
+        reading = await parser.read(ctx.request.url, response.status_code, headers, source, check=check, raw=raw,
+                                    js_redirect=js_redirect)  # fmt: skip
         page = reading.page
+        rendered = raw is not None if attempted else None
+        if result is not None:
+            _render_events(page, result)
+            if raw is not None:
+                auto.seen(js_changed(page))
         page.bytes = len(body)  # the response's size, not the rendered DOM's
         page.onpage["response_ms"] = response_ms.pop(ctx.request.url, None)
         if page.redirect_url and page.redirect_url != page.url:
@@ -523,6 +551,35 @@ async def _run(
         await queue.drop()
 
 
+class AutoRender:
+    """crawl.render = auto: render the first `sample` HTML pages; if JavaScript changed none of them, stop."""
+
+    def __init__(self, mode: str, sample: int) -> None:
+        self.mode, self.sample, self.started, self.needed = mode, sample, 0, mode == "always"
+
+    def wanted(self) -> bool:
+        if self.needed or self.mode == "never":
+            return self.needed
+        self.started += 1
+        return self.started <= self.sample
+
+    def seen(self, changed: bool) -> None:
+        if changed and not self.needed:
+            log.info("render = auto: JavaScript changes pages, rendering the rest of the crawl")
+            self.needed = True
+
+
+def _render_events(page: Page, result: render.Rendered) -> None:
+    """The browser's console messages and resources it couldn't load: counts on the page, rows in render_events."""
+    page.events = [(level, text, None) for level, text in result.console]
+    page.events += [("blocked" if why == "robots.txt" else "failed", why, url) for url, why in result.resources]
+    page.onpage |= {
+        "js_errors": sum(level == "error" for level, _ in result.console),
+        "js_warnings": sum(level == "warning" for level, _ in result.console),
+        "blocked_resources": sum(why == "robots.txt" for _, why in result.resources),
+    }
+
+
 def _blocked(url: str, robots: RobotsGate, scope: Scope) -> Page:
     """A URL robots.txt closes: never fetched, stored with the rule that closed it."""
     page = Page.blocked_by_robots(url)
@@ -559,7 +616,7 @@ def _ready(settings: Settings) -> None:
     http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
     if settings.crawl.ca_bundle and not Path(settings.crawl.ca_bundle).is_file():
         raise InvalidArguments(f"crawl.ca_bundle: no file '{settings.crawl.ca_bundle}'.")
-    if settings.crawl.render == "always":
+    if settings.crawl.render != "never":
         render.ensure_available()
     if settings.collect.near_duplicates and importlib.util.find_spec("datasketch") is None:
         raise NearDuplicatesUnavailable

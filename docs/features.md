@@ -59,7 +59,7 @@
 - [x] `MVP` **Internal Redirection (3XX)** — внутренний URL отдаёт серверный редирект (301, 302…) _(SF: Warning, Low)_
 - [x] `MVP` **Internal Redirection (Meta Refresh)** — редирект через `<meta http-equiv="refresh">` на стороне браузера _(SF: Warning, Low)_
 - [x] `MVP` **Internal Redirection (HTTP Refresh)** — редирект через HTTP-заголовок `Refresh` _(SF: Warning, Low)_
-- [ ] `v2` **Internal Redirection (JavaScript)** — редирект, выполняемый JavaScript (нужен рендеринг и сравнение URL до/после) _(SF: Warning, Low)_
+- [x] `v2` **Internal Redirection (JavaScript)** — редирект, выполняемый JavaScript (нужен рендеринг и сравнение URL до/после) _(SF: Warning, Low)_
 - [x] `MVP` **External No Response** — внешняя ссылка не ответила _(SF: Warning, Low)_
 - [x] `MVP` **External Client Error (4XX)** — внешняя ссылка отдаёт 4xx (битая) _(SF: Warning, Low)_
 - [x] `MVP` **External Server Error (5XX)** — внешняя ссылка отдаёт 5xx _(SF: Warning, Low)_
@@ -210,22 +210,22 @@
 
 ### JavaScript — сравнение raw и rendered HTML
 
-- [ ] `v2` **Noindex Only in Original HTML** — noindex есть в исходном HTML, но исчезает после JS _(SF: Issue, High)_
-- [ ] `v2` **Nofollow Only in Original HTML** — nofollow есть в исходном HTML, но исчезает после JS _(SF: Issue, High)_
-- [ ] `v2` **Canonical Mismatch** — canonical в исходном и отрендеренном HTML разный _(SF: Issue, High)_
-- [ ] `v2` **Uses Old AJAX Crawling Scheme URLs** — URL со старой схемой AJAX `#!` (отменена в 2015) _(SF: Issue, Medium)_
-- [ ] `v2` **Uses Old AJAX Crawling Scheme Meta Fragment Tag** — на странице `<meta name="fragment">` старой AJAX-схемы _(SF: Issue, Medium)_
-- [ ] `v2` **Pages with Blocked Resources** — ресурсы страницы (JS, CSS, картинки) заблокированы при рендеринге _(SF: Warning, High)_
-- [ ] `v2` **Contains JavaScript Links** — ссылки, которые появляются только после выполнения JS _(SF: Warning, Medium)_
-- [ ] `v2` **Contains JavaScript Content** — текст, который появляется только после выполнения JS _(SF: Warning, Medium)_
-- [ ] `v2` **Page Title Only in Rendered HTML** — title есть только после JS _(SF: Warning, Medium)_
-- [ ] `v2` **Page Title Updated by JavaScript** — JS меняет title _(SF: Warning, Medium)_
-- [ ] `v2` **Meta Description Only in Rendered HTML** — meta description есть только после JS _(SF: Warning, Medium)_
-- [ ] `v2` **Meta Description Updated by JavaScript** — JS меняет meta description _(SF: Warning, Medium)_
-- [ ] `v2` **H1 Only in Rendered HTML** — h1 есть только после JS _(SF: Warning, Medium)_
-- [ ] `v2` **H1 Updated by JavaScript** — JS меняет h1 _(SF: Warning, Medium)_
-- [ ] `v2` **Canonical Only in Rendered HTML** — canonical есть только после JS _(SF: Warning, Low)_
-- [ ] `v2` **Pages With JavaScript Errors** — ошибки JS в консоли браузера при рендеринге _(SF: Warning, Low)_
+- [x] `v2` **Noindex Only in Original HTML** — noindex есть в исходном HTML, но исчезает после JS _(SF: Issue, High)_
+- [x] `v2` **Nofollow Only in Original HTML** — nofollow есть в исходном HTML, но исчезает после JS _(SF: Issue, High)_
+- [x] `v2` **Canonical Mismatch** — canonical в исходном и отрендеренном HTML разный _(SF: Issue, High)_
+- [x] `v2` **Uses Old AJAX Crawling Scheme URLs** — URL со старой схемой AJAX `#!` (отменена в 2015) _(SF: Issue, Medium)_
+- [x] `v2` **Uses Old AJAX Crawling Scheme Meta Fragment Tag** — на странице `<meta name="fragment">` старой AJAX-схемы _(SF: Issue, Medium)_
+- [x] `v2` **Pages with Blocked Resources** — ресурсы страницы (JS, CSS, картинки) заблокированы при рендеринге _(SF: Warning, High)_
+- [x] `v2` **Contains JavaScript Links** — ссылки, которые появляются только после выполнения JS _(SF: Warning, Medium)_
+- [x] `v2` **Contains JavaScript Content** — текст, который появляется только после выполнения JS _(SF: Warning, Medium)_
+- [x] `v2` **Page Title Only in Rendered HTML** — title есть только после JS _(SF: Warning, Medium)_
+- [x] `v2` **Page Title Updated by JavaScript** — JS меняет title _(SF: Warning, Medium)_
+- [x] `v2` **Meta Description Only in Rendered HTML** — meta description есть только после JS _(SF: Warning, Medium)_
+- [x] `v2` **Meta Description Updated by JavaScript** — JS меняет meta description _(SF: Warning, Medium)_
+- [x] `v2` **H1 Only in Rendered HTML** — h1 есть только после JS _(SF: Warning, Medium)_
+- [x] `v2` **H1 Updated by JavaScript** — JS меняет h1 _(SF: Warning, Medium)_
+- [x] `v2` **Canonical Only in Rendered HTML** — canonical есть только после JS _(SF: Warning, Low)_
+- [x] `v2` **Pages With JavaScript Errors** — ошибки JS в консоли браузера при рендеринге _(SF: Warning, Low)_
 
 ### Links — ссылки
 
@@ -470,7 +470,7 @@
 - [x] `v2` **Hreflang: Contains Hreflang, Missing** — hreflang из HTML, HTTP-заголовка и sitemap (`xhtml:link`, при `sitemaps.crawl`) (`spider overview`, `spider hreflang --only missing`)
 - [x] `v2` **Structured Data: Contains, Missing, JSON-LD / Microdata / RDFa URLs** — типы и формат разметки (`spider overview`, колонки `pages.sd_*`; сбор — `collect.structured_data`)
 - [x] `v2` **Sitemaps: URLs In Sitemap** — какие URL есть в sitemap → `spider sitemaps show --only urls`, `spider overview`
-- [ ] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
+- [x] `v2` **JavaScript: колонки raw vs rendered** — word count, title, description, h1, canonical, meta robots до и после JS
 - [x] `MVP` **Links: колонки** — crawl depth, inlinks / unique inlinks, outlinks / unique outlinks, external outlinks, % of total
 - [ ] `v3` **Links: Link Score** — внутренний «PageRank» 0–100
 - [x] `v2` **Custom Search / Custom Extraction** — вкладки с результатами пользовательских поисков и извлечений → `spider custom`
@@ -497,7 +497,7 @@
 - [x] `MVP` **URL Details** — сводка по URL: код, тип, размер, глубина, число ссылок
 - [x] `MVP` **Inlinks / Outlinks** — ссылки с колонками: анкор, alt, follow, target, rel, код ответа цели
 - [x] `v2` **Link Path, Link Position** — путь предков ссылки (`collect.link_path`), её зона (nav, header, footer, sidebar, content) → `spider links`
-- [ ] `v2` **Link Origin** — откуда взята ссылка (raw / rendered HTML) — вместе со сравнением raw и rendered (#39)
+- [x] `v2` **Link Origin** — откуда взята ссылка (raw / rendered HTML) — вместе со сравнением raw и rendered (#39)
 - [x] `MVP` **Image Details** — картинки страницы: alt, размеры в атрибутах, вес
 - [ ] `v2` **Image Details: real / display dimensions** — реальные и отображаемые размеры, потенциальная экономия (нужен рендеринг)
 - [x] `MVP` **Resources** — JS/CSS/картинки, подключённые на странице
@@ -507,7 +507,7 @@
 - [x] `MVP` **HTTP Headers** — заголовки запроса и ответа
 - [x] `v2` **Duplicate Details** — пары дублей и почти-дублей с процентом сходства и diff → `spider duplicates [--url … --diff]`
 - [x] `v2` **Structured Data Details** — дерево свойств разметки и ошибки валидации → `spider url` (объекты — при `--store-html`)
-- [ ] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
+- [x] `v2` **Chrome Console Log** — ошибки и предупреждения JS при рендеринге
 - [ ] `v3` **Lighthouse Details** — метрики PSI по URL
 - [ ] `backlog` **Accessibility Details**, **Spelling & Grammar Details**
 - [ ] `backlog` **N-grams** — частоты фраз из 1–6 слов (нужен сохранённый HTML)
@@ -572,11 +572,11 @@
 ### Рендеринг (Spider > Rendering)
 
 - [x] `MVP` **Rendering mode: Text Only / JavaScript** (#15) → `crawl.render = "never" | "always"`, вкладки — `crawl.render_tabs`
-- [ ] `v2` **Автовыбор рендеринга** → `render = "auto"` (AdaptivePlaywrightCrawler, см. spec.md)
+- [x] `v2` **Автовыбор рендеринга** → `crawl.render = "auto"` + `render_auto_sample` (свой детерминированный выбор по первым страницам, см. spec.md)
 - [x] `MVP` **AJAX Timeout** (#15) — сколько ждать JS после загрузки → `crawl.render_wait_ms`
-- [ ] `v2` **Window Size** (viewport, пресеты Googlebot desktop/mobile) → `render_options.viewport`
-- [ ] `v2` **JavaScript Error Reporting** → `render_options.console_log`
-- [ ] `v2` **Flatten Shadow DOM**, **Flatten iframes** → `render_options.flatten_shadow_dom`, `render_options.flatten_iframes`
+- [x] `v2` **Window Size** (desktop / mobile / ШxВ) → `crawl.render_viewport`
+- [x] `v2` **JavaScript Error Reporting** → `crawl.render_console`
+- [x] `v2` **Flatten Shadow DOM**, **Flatten iframes** → `crawl.render_flatten_shadow_dom`, `crawl.render_flatten_iframes`
 - [ ] `v3` **Rendered Page Screenshots** → `render_options.screenshots`
 - [ ] `backlog` **Old AJAX Crawling Scheme** (`_escaped_fragment_`)
 - [ ] `backlog` **Archive Website** (сохранение сайта как папки или WARC)
@@ -720,7 +720,7 @@
 - [x] `v2` **Links: выгрузки по проблемам** (nofollow, без анкора, localhost, картинки, 4xx / 5xx, смешанное содержимое) → `spider export links --issue`
 - [x] `v2` **Queued URLs** — очередь необойдённых URL → `spider export queued`
 - [x] `v2` **Path Type** — ссылки по типу пути: абсолютные, протокол-относительные, от корня, относительные → колонка `path_type` у ссылок
-- [x] `v2` **Security, Canonicals, Directives, Images, Content, Structured Data, Sitemaps, Custom Search, Custom Extraction** — выгрузки по фильтрам вкладок: находки любой проверки (`export pages|issues|links --issue`), пары почти-дублей (`export duplicates`), `export custom`, `export sitemap-urls`; JavaScript — с #39
+- [x] `v2` **Security, Canonicals, Directives, Images, Content, Structured Data, Sitemaps, Custom Search, Custom Extraction** — выгрузки по фильтрам вкладок: находки любой проверки (`export pages|issues|links --issue`), пары почти-дублей (`export duplicates`), `export custom`, `export sitemap-urls`; JavaScript — `export javascript` (#39)
 - [ ] `backlog` **RDF-тройки микроразметки** — выгрузка троек; сама разметка страницы — в `spider url`
 - [x] `v2` **Web: All Page Source, All Page Text** (нужен `--store-html`) → `spider export source|text`
 - [x] `v2` **Web: All HTTP Response Headers, All Cookies** → `spider export headers|cookies` (заголовки запроса одинаковы для обхода — в `spider url`)
@@ -744,7 +744,7 @@
 - [x] `v2` **SERP Summary** — URL, title, description, длины и ширина в пикселях → `spider serp summary`
 - [x] `v2` **Orphan Pages** — URL из sitemap, не найденные обходом (источники GA/GSC — позже) → `spider sitemaps show --only orphans`
 - [x] `v2` **Structured Data: Validation Errors & Warnings (Summary), Google Rich Results Features (Summary)** → `spider structured [--report validation|features]`
-- [ ] `v2` **JavaScript: Chrome Console Log Summary**
+- [x] `v2` **JavaScript: Chrome Console Log Summary**
 - [x] `v2` **HTTP Header Summary, Cookie Summary** — уникальные заголовки / cookies × число URL → `spider report headers [--cookies]`
 - [x] `v2` **Crawl Path Report** — кратчайший путь обнаружения URL → `spider report crawl-path`
 - [ ] `v3` **PageSpeed: Opportunities Summary, CSS / JavaScript Coverage Summary**

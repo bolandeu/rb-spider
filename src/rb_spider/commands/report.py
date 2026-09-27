@@ -13,12 +13,14 @@ from ..core.extract import normalize_url
 from . import options
 
 app = output.group(
-    "Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы, заголовки."
+    "Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы, заголовки, "
+    "консоль JavaScript."
 )
 CrawlArg = typer.Argument(None, help="Номер обхода (`spider crawls list`); по умолчанию — последний.")
 LimitOption = typer.Option(100, "--limit", min=1, help="Сколько строк показать (всего — в поле total).")
 Canonicals = StrEnum("Canonicals", {name: name for name in reports.CANONICALS})
 Keywords = StrEnum("Keywords", {name: name for name in reports.META_KEYWORDS})
+Javascript = StrEnum("Javascript", {name: name for name in reports.JAVASCRIPT})
 _KEYWORDS_HELP = (
     "all — с keywords; missing — без; multiple — несколько тегов; duplicate — одинаковые на разных страницах."
 )
@@ -229,6 +231,45 @@ def headers(
         rows = reports.headers_summary(engine, crawl_id, cookies)
     output.emit_success(ctx, {"crawl_id": crawl_id, "cookies": cookies, "rows": rows},
                         render_human=output.human.report_headers)  # fmt: skip
+
+
+@app.command("javascript")
+@output.guard
+def javascript(
+    ctx: typer.Context,
+    crawl_id: int | None = CrawlArg,
+    only: Javascript = typer.Option(
+        "console",
+        "--only",
+        help="console — ошибки и предупреждения консоли браузера; resources — ресурсы, которые браузер не "
+        "загрузил (robots.txt, ошибка, 4xx / 5xx).",
+    ),
+    url: str | None = typer.Option(None, "--url", help="Только эта страница, каждое сообщение отдельной строкой."),
+    limit: int = LimitOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при рендеринге.
+
+    Есть только у обхода с рендерингом (`--render always|auto`). Одинаковые сообщения
+    сгруппированы: сколько страниц их выдали и пример страницы. Ресурсы, закрытые
+    robots.txt (kind blocked), браузер не загружал, как не загрузил бы Googlebot — это
+    проверка «JavaScript: Pages with Blocked Resources». Всё построчно — `spider export
+    javascript`.
+
+    Примеры:
+      spider report javascript
+      spider report javascript --only resources
+      spider --json report javascript --url https://example.com/app
+
+    JSON: `{crawl_id, report, only, total, rows}`; console — rows `[{kind, message, pages,
+    example}]`, resources — `[{resource, kind, reason, pages, example}]`, с `--url` —
+    `[{kind, message, resource}]`. kind: error | warning | blocked | failed.
+    """
+    with storage.database() as engine:
+        crawl_id = storage.resolve_crawl_id(engine, crawl_id)
+        total, rows = reports.javascript(engine, crawl_id, only.value, normalize_url(url) if url else None, limit)
+    _list(ctx, crawl_id, "javascript", total, rows, only=only.value)
 
 
 @output.guard

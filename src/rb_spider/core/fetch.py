@@ -104,7 +104,9 @@ class Fetcher:
 
             self.renderer = Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms,
                                      timeout_s=settings.timeout_s, user_agent=user_agent, headers=settings.headers,
-                                     browser=settings.render_browser)  # fmt: skip
+                                     browser=settings.render_browser, viewport=settings.render_viewport,
+                                     console=False, flatten_shadow_dom=settings.render_flatten_shadow_dom,
+                                     flatten_iframes=settings.render_flatten_iframes)  # fmt: skip
 
     async def fetch(self, url: str) -> FetchResult:
         result = FetchResult(normalize_url(url))
@@ -141,8 +143,8 @@ class Fetcher:
         source = body
         is_html = "html" in (result.content_type or "text/html")
         if self.renderer is not None and status == 200 and is_html:
-            dom = await self.renderer.render(url)
-            source, result.rendered = dom or body, dom is not None
+            rendered = await self.renderer.render(url)
+            source, result.rendered = rendered.html if rendered else body, rendered is not None
         page = parse_page(url, status, headers, source, content_exclude=self.settings.content_exclude)
         result.seo = {key: page.title if key == "title" else page.onpage.get(key) for key in _SEO_FIELDS}
         result.refresh_url = page.refresh_url

@@ -1,0 +1,37 @@
+                                                                                                    
+ Usage: spider report javascript [OPTIONS] [crawl_id]                                               
+                                                                                                    
+ Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при рендеринге.              
+                                                                                                    
+ Есть только у обхода с рендерингом (`--render always|auto`). Одинаковые сообщения                  
+ сгруппированы: сколько страниц их выдали и пример страницы. Ресурсы, закрытые                      
+ robots.txt (kind blocked), браузер не загружал, как не загрузил бы Googlebot — это                 
+ проверка «JavaScript: Pages with Blocked Resources». Всё построчно — `spider export                
+ javascript`.                                                                                       
+                                                                                                    
+ Примеры:                                                                                           
+   spider report javascript                                                                         
+   spider report javascript --only resources                                                        
+   spider --json report javascript --url https://example.com/app                                    
+                                                                                                    
+ JSON: `{crawl_id, report, only, total, rows}`; console — rows `[{kind, message, pages,             
+ example}]`, resources — `[{resource, kind, reason, pages, example}]`, с `--url` —                  
+ `[{kind, message, resource}]`. kind: error | warning | blocked | failed.                           
+                                                                                                    
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│   crawl_id      <int>  Номер обхода (`spider crawls list`); по умолчанию — последний.            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --only         <console|resources>  console — ошибки и предупреждения консоли браузера;          │
+│                                     resources — ресурсы, которые браузер не загрузил             │
+│                                     (robots.txt, ошибка, 4xx / 5xx).                             │
+│                                     [default: console]                                           │
+│ --url          <str>                Только эта страница, каждое сообщение отдельной строкой.     │
+│ --limit        <int range> [x>=1]   Сколько строк показать (всего — в поле total).               │
+│                                     [default: 100]                                               │
+│ --json                              Вывод в JSON для агентов и скриптов (одна строка-конверт     │
+│                                     `{ok, ...}`).                                                │
+│ --quiet                             Печатать только основной результат, без пояснений.           │
+│ --help                              Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

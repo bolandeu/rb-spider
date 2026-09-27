@@ -1,6 +1,6 @@
                                                                                                     
  Usage: spider export [OPTIONS] [what]:<pages|links|issues|queued|headers|cookies                   
-                      |source|text|duplicates|custom|sitemap-urls>                                  
+                      |source|text|duplicates|custom|sitemap-urls|javascript>                       
                                                                                                     
  Выгрузить данные обхода в CSV, JSON или Excel: URL, ссылки, находки и другие наборы.               
                                                                                                     
@@ -10,7 +10,9 @@
  ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),                
  headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —             
  нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /                     
- Extraction), sitemap-urls (URL из sitemap). `--issue` у links — ссылки, из-за которых              
+ Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и                           
+ незагруженные ресурсы при рендеринге — Chrome Console Log). `--issue` у links — ссылки, из-за      
+ которых                                                                                            
  сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.                            
                                                                                                     
  Примеры:                                                                                           
@@ -30,8 +32,8 @@
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   what      <pages|links|issues|queued|headers|cooki  Что выгрузить: pages, links, issues,       │
 │             es|source|text|duplicates|custom|sitemap  queued, headers, cookies, source, text,    │
-│             -urls>                                    duplicates, custom, sitemap-urls; по       │
-│                                                       умолчанию pages.                           │
+│             -urls|javascript>                         duplicates, custom, sitemap-urls,          │
+│                                                       javascript; по умолчанию pages.            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --crawl             <int>            Номер обхода; по умолчанию — последний.                     │

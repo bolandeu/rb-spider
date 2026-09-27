@@ -186,26 +186,52 @@ class CrawlSettings(BaseModel):
             "записывать как 307 на https-адрес (HSTS Policy); false — скачивать и видеть настоящий редирект."
         ),
     )
-    render: Literal["never", "always"] = Field(
+    render: Literal["never", "always", "auto"] = Field(
         "never",
         description=(
             "JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и "
-            "открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS."
+            "открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS; auto — "
+            "первые render_auto_sample HTML-страниц рендерятся, и если JS ни на одной ничего не поменял (ссылки, "
+            "текст, title, description, h1, canonical, robots), остальные читаются без браузера."
         ),
     )
+    render_auto_sample: int = Field(
+        20,
+        ge=1,
+        le=1000,
+        description="Сколько первых HTML-страниц отрендерить при render = auto, чтобы решить, нужен ли JS.",
+    )
+    render_viewport: str = Field(
+        "desktop",
+        pattern=r"^(desktop|mobile|\d{2,5}x\d{2,5})$",
+        description=(
+            "Размер окна браузера при рендеринге (Window Size): desktop — 1366×768, mobile — 411×731 как у Googlebot "
+            "Smartphone (сенсорный экран), или ШИРИНАxВЫСОТА, например 1920x1080."
+        ),
+    )
+    render_console: bool = Field(
+        True,
+        description="Записывать ошибки и предупреждения консоли браузера при рендеринге (JavaScript Error Reporting).",
+    )
+    render_flatten_shadow_dom: bool = Field(
+        True, description="Читать содержимое Shadow DOM веб-компонентов как часть страницы (Flatten Shadow DOM)."
+    )
+    render_flatten_iframes: bool = Field(
+        True, description="Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes)."
+    )
     render_tabs: int = Field(
-        4, ge=1, le=50, description="Сколько вкладок браузера открыто одновременно при render = always."
+        4, ge=1, le=50, description="Сколько вкладок браузера открыто одновременно при рендеринге."
     )
     render_wait_ms: int = Field(
         0,
         ge=0,
         le=60000,
-        description="Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always.",
+        description="Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при рендеринге.",
     )
     render_browser: str | None = Field(
         None,
         description=(
-            "Путь к браузеру (Chromium / Chrome) для render = always; не задано — сборка Playwright, иначе самая "
+            "Путь к браузеру (Chromium / Chrome) для рендеринга; не задано — сборка Playwright, иначе самая "
             "свежая из кэша Playwright (ms-playwright), иначе установленный Google Chrome."
         ),
         examples=["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
@@ -643,6 +669,11 @@ class ThresholdSettings(BaseModel):
     )
     resource_max_mb: float = Field(
         2, gt=0, description="JS / CSS больше стольких МБ — «Validation: Resource Over 2MB»."
+    )
+    js_content_min_words: int = Field(
+        10,
+        ge=1,
+        description="После JS на странице хотя бы столько новых слов — «JavaScript: Contains JavaScript Content».",
     )
     sitemap_max_urls: int = Field(
         50000, ge=1, description="Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs»."

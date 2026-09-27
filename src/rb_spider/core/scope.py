@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 # Columns of a `links` row as `PageReader` builds it (the crawl id is added by the writer).
 LINK_FIELDS = (
     "source", "target", "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment",
-    "hreflang", "position", "path", "path_type",
+    "hreflang", "position", "path", "path_type", "origin",
 )  # fmt: skip
 _LINK_DEFAULTS = dict.fromkeys(LINK_FIELDS[4:]) | {"nofollow": False}
 
@@ -180,14 +180,32 @@ class PageReader:
                  "mobile_alternate": collect.mobile_alternate, "css": collect.css, "js": collect.js, "media": collect.media, "iframe": collect.iframes}  # fmt: skip
         self.kinds = {name: _Kind(option.follow, option.store) for name, option in kinds.items()}
 
-    def read(self, url: str, status_code: int, headers: dict[str, str], body: bytes, *, check: bool) -> Reading:
-        """A checked URL (`check`) is not read: status, headers and redirect target only."""
+    def read(
+        self,
+        url: str,
+        status_code: int,
+        headers: dict[str, str],
+        body: bytes,
+        *,
+        check: bool,
+        raw: bytes | None = None,
+        js_redirect: str | None = None,
+    ) -> Reading:
+        """A checked URL (`check`) is not read: status, headers and redirect target only.
+
+        A rendered page: `body` is the DOM and `raw` the server's HTML, compared with it (raw_* columns, Link
+        Origin). `js_redirect` — the browser ended up on this URL instead: the page's own data is its raw HTML.
+        """
         page = parse_page(url, status_code, headers, b"" if check else body,
                           content_exclude=self.content_exclude, srcset=self.srcset, minhash=self.minhash,
                           structured_data=self.structured_data, validate=self.validate,
                           keep_fragments=self.keep_fragments, invalid_links=self.invalid_links,
                           assume_html=self.assume_html, custom=self.custom, placer=self.placer)  # fmt: skip
         page.bytes = len(body)
+        if js_redirect and page.refresh_url is None:
+            page.refresh_url, page.refresh_kind = js_redirect, "javascript"
+        if raw is not None and not check:
+            self._compare_raw(page, status_code, headers, raw)
         lower = {k.lower(): v for k, v in headers.items()}
         page.onpage |= {"external": not self.scope.internal(page.url), "parsed": not check,
                         "headers": json.dumps(lower, ensure_ascii=False), "last_modified": lower.get("last-modified"),
@@ -201,6 +219,24 @@ class PageReader:
         to_check, resource_rows = self._resources_to_check(page)
         page.links, page.resources = [], []  # consumed: don't carry them back to the crawl process
         return Reading(page, follow, to_check, rows + resource_rows)
+
+    def _compare_raw(self, page: Page, status_code: int, headers: dict[str, str], raw: bytes) -> None:
+        """What the server's HTML had before JavaScript ran: raw_* columns, and each link's origin."""
+        before = parse_page(page.url, status_code, headers, raw, content_exclude=self.content_exclude,
+                            validate=False, keep_fragments=self.keep_fragments, invalid_links=self.invalid_links,
+                            assume_html=self.assume_html)  # fmt: skip
+        raw_links = {link.url for link in before.links}
+        for link in page.links:
+            link.origin = "b" if link.url in raw_links else "r"
+        page.onpage |= {
+            "raw_title": before.title,
+            "raw_meta_description": before.onpage.get("meta_description"),
+            "raw_h1": before.onpage.get("h1"),
+            "raw_canonical": before.onpage.get("canonical_url"),
+            "raw_directives": before.onpage.get("robots_directives"),
+            "raw_word_count": before.onpage.get("word_count"),
+            "js_outlinks": sum(link.origin == "r" for link in page.links),
+        }
 
     def _rewrite(self, page: Page) -> None:
         """Every URL the page leads to, as `rewrite.*` has it: links, resources, redirect, refresh, canonical."""
@@ -232,7 +268,8 @@ class PageReader:
             if kind.store:
                 rows.append(link_row(page.url, link.url, "hyperlink", internal, anchor=link.anchor, alt=link.alt,
                                      rel=link.rel, nofollow=link.nofollow, fragment=link.fragment,
-                                     position=link.position, path=link.path, path_type=link.path_type))  # fmt: skip
+                                     position=link.position, path=link.path, path_type=link.path_type,
+                                     origin=link.origin))  # fmt: skip
             nofollow_ok = self.follow_internal_nofollow if internal else self.follow_external_nofollow
             if kind.follow and (not link.nofollow or nofollow_ok) and not self.listed:
                 follow.append(link.url)
@@ -301,12 +338,25 @@ class PageReader:
 _reader: PageReader | None = None  # a worker process's own copy, set by `init_worker`
 
 
+_RAW_PAIRS = (("raw_meta_description", "meta_description"), ("raw_h1", "h1"), ("raw_canonical", "canonical_url"),
+              ("raw_directives", "robots_directives"), ("raw_word_count", "word_count"))  # fmt: skip
+
+
+def js_changed(page: Page) -> bool:
+    """A rendered page JavaScript changed: new links, or text, title, description, h1, canonical or directives."""
+    onpage = page.onpage
+    return (bool(onpage.get("js_outlinks")) or page.title != onpage.get("raw_title")
+            or any(onpage.get(raw) != onpage.get(rendered) for raw, rendered in _RAW_PAIRS))  # fmt: skip
+
+
 def init_worker(reader: PageReader) -> None:
     global _reader  # one reader per worker process, handed over once at its start
     _reader = reader
 
 
-def read_in_worker(url: str, status_code: int, headers: dict[str, str], body: bytes) -> Reading:
+def read_in_worker(
+    url: str, status_code: int, headers: dict[str, str], body: bytes, raw: bytes | None, js_redirect: str | None
+) -> Reading:
     if _reader is None:
         raise RuntimeError("init_worker was not called in this process")
-    return _reader.read(url, status_code, headers, body, check=False)
+    return _reader.read(url, status_code, headers, body, check=False, raw=raw, js_redirect=js_redirect)

@@ -113,8 +113,23 @@ pages = sa.Table(
     sa.Column("external_outlinks", sa.Integer),
     sa.Column("internal_nofollow_outlinks", sa.Integer),
     sa.Column("uncrawlable_outlinks", sa.Integer),
-    # crawl.render = "always": True — data from the rendered DOM; False — rendering failed, raw HTML used
+    # crawl.render: True — data from the rendered DOM; False — rendering failed, raw HTML used; NULL — not rendered
     sa.Column("rendered", sa.Boolean),
+    # rendered pages: the server's HTML before JavaScript ran (JavaScript rules), links JS added (Link Origin),
+    # console errors / warnings and resources robots.txt kept from the browser (rows: render_events)
+    sa.Column("raw_title", sa.String),
+    sa.Column("raw_meta_description", sa.String),
+    sa.Column("raw_h1", sa.String),
+    sa.Column("raw_canonical", sa.String),
+    sa.Column("raw_directives", sa.String),
+    sa.Column("raw_word_count", sa.Integer),
+    sa.Column("js_outlinks", sa.Integer),
+    sa.Column("js_errors", sa.Integer),
+    sa.Column("js_warnings", sa.Integer),
+    sa.Column("blocked_resources", sa.Integer),
+    # the old AJAX crawling scheme: <meta name="fragment"> and <a href="…#!…"> links
+    sa.Column("ajax_meta_fragment", sa.Boolean),
+    sa.Column("hashbang_links", sa.Integer),
     # the response: time from sending the request to its headers, Last-Modified, all headers (JSON, lower-case names)
     sa.Column("response_ms", sa.Integer),
     sa.Column("last_modified", sa.String),
@@ -194,7 +209,7 @@ urls = sa.Table(
 )
 LINK_DATA = (
     "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang", "position",
-    "path", "path_type",
+    "path", "path_type", "origin",
 )  # fmt: skip
 link_rows = sa.Table(
     "link_rows",
@@ -218,6 +233,8 @@ link_rows = sa.Table(
     ),  # hyperlinks: nav | header | footer | sidebar (custom.link_positions); NULL — content
     sa.Column("path", sa.String),  # hyperlinks: the landmark ancestors, /nav.menu/… (collect.link_path)
     sa.Column("path_type", sa.String),  # hyperlinks: a | p | r | l — the view spells them out (Path Type)
+    # hyperlinks of a rendered page: b — in the server's HTML too, r — added by JavaScript; NULL — not rendered
+    sa.Column("origin", sa.String),
     sa.Index("link_rows_by_source", "crawl_id", "source_id"),
     sa.Index("link_rows_by_target", "crawl_id", "target_id"),
     # links to a #bookmark are few: Broken Bookmark reads them without scanning every link of the crawl
@@ -250,6 +267,7 @@ links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never w
     sa.Column("position", sa.String),
     sa.Column("path", sa.String),
     sa.Column("path_type", sa.String),
+    sa.Column("origin", sa.String),  # html | rendered | html & rendered (Link Origin)
 )
 # Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
 url_metrics = sa.Table(
@@ -295,6 +313,18 @@ custom_values = sa.Table(
     sa.Column("value", sa.String),
     sa.Column("n", sa.Integer, nullable=False),
     sa.Index("custom_values_by_name", "crawl_id", "kind", "name"),
+)
+# What the browser reported while rendering a page (crawl.render): console errors and warnings, uncaught exceptions,
+# and resources it couldn't load — blocked by robots.txt, failed, or answered 4xx / 5xx. At most 50 of each per page.
+render_events = sa.Table(
+    "render_events",
+    metadata,
+    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("url", sa.String, nullable=False),
+    sa.Column("kind", sa.String, nullable=False),  # error | warning | blocked | failed
+    sa.Column("message", sa.String),  # console text; for resources why: robots.txt, HTTP 404, failed: …
+    sa.Column("resource", sa.String),  # blocked / failed: the resource's URL
+    sa.Index("render_events_by_url", "crawl_id", "url"),
 )
 # Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
 near_duplicates = sa.Table(
@@ -445,6 +475,7 @@ _INSERT_LINK_ROWS = (
     f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
 )
 _INSERT_CUSTOM = _insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"])
+_INSERT_EVENTS = _insert_json(render_events, ["crawl_id", "url", "kind", "message", "resource"])
 _INSERT_SITEMAP_URLS = _insert_json(sitemap_urls, ["crawl_id", "url", "source", "lastmod"])
 _INSERT_QUEUED = _insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], "INSERT OR IGNORE")
 _MARK_DONE = "UPDATE frontier SET done = 1 WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
@@ -458,6 +489,7 @@ def _timestamp() -> str:
 @dataclass
 class _Batch:
     custom: list[tuple] = field(default_factory=list)
+    events: list[tuple] = field(default_factory=list)
     sitemap_files: list[dict] = field(default_factory=list)
     sitemap_urls: list[tuple] = field(default_factory=list)
     pages: list[tuple] = field(default_factory=list)
@@ -533,6 +565,7 @@ class PageWriter:
         }
         self._batch.pages.append(tuple(row.get(column) for column in _PAGE_COLUMNS))
         self._batch.custom.extend((self.crawl_id, page.url, *values) for values in page.custom)
+        self._batch.events.extend((self.crawl_id, page.url, *values) for values in page.events)
         self._batch.done.append(page.url)
         self.count += 1
         if len(self._batch.pages) >= self.batch_size or time.monotonic() - self._last_flush >= self.flush_every_s:
@@ -586,9 +619,9 @@ class PageWriter:
                     data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
                     for sql in statements:
                         conn.exec_driver_sql(sql, (data,))
-            for chunk in range(0, len(batch.custom), _JSON_CHUNK):
-                data = json.dumps(batch.custom[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
-                conn.exec_driver_sql(_INSERT_CUSTOM, (data,))
+            for rows, sql in ((batch.custom, _INSERT_CUSTOM), (batch.events, _INSERT_EVENTS)):
+                for chunk in range(0, len(rows), _JSON_CHUNK):
+                    conn.exec_driver_sql(sql, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),))
             if batch.sitemap_files:
                 conn.execute(sa.insert(sitemap_files), batch.sitemap_files)
             for chunk in range(0, len(batch.sitemap_urls), _JSON_CHUNK):
@@ -619,6 +652,9 @@ def reset_for_respider(engine: sa.Engine, crawl_id: int, targets: list[str]) -> 
         conn.execute(sa.delete(link_rows).where(link_rows.c.crawl_id == crawl_id, link_rows.c.source_id.in_(ids)))
         conn.execute(
             sa.delete(custom_values).where(custom_values.c.crawl_id == crawl_id, custom_values.c.url.in_(targets))
+        )
+        conn.execute(
+            sa.delete(render_events).where(render_events.c.crawl_id == crawl_id, render_events.c.url.in_(targets))
         )
         conn.execute(sa.update(frontier).where(frontier.c.crawl_id == crawl_id, frontier.c.url.in_(targets))
                      .values(done=False))  # fmt: skip

@@ -27,7 +27,7 @@ from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings, ThresholdSettings
 
 DATASETS = ("pages", "links", "issues", "queued", "headers", "cookies", "source", "text", "duplicates", "custom",
-            "sitemap-urls")  # fmt: skip
+            "sitemap-urls", "javascript")  # fmt: skip
 # Bulk Export «Links» by issue: the link rows behind a link rule (Screaming Frog exports the links, not the pages)
 LINK_ISSUES = {
     "links_internal_nofollow_outlinks": "l.kind = 'hyperlink' AND l.internal AND l.nofollow",
@@ -224,6 +224,8 @@ _EXTRA = {
         "SELECT kind, name, url, value, n FROM custom_values WHERE crawl_id = :crawl_id ORDER BY kind, name, url, n"),
     "sitemap-urls": lambda conn, crawl_id: _sql_table(conn, crawl_id,
         "SELECT url, source, lastmod FROM sitemap_urls WHERE crawl_id = :crawl_id ORDER BY url, source"),
+    "javascript": lambda conn, crawl_id: _sql_table(conn, crawl_id,
+        "SELECT url, kind, message, resource FROM render_events WHERE crawl_id = :crawl_id ORDER BY url, kind"),
 }  # fmt: skip
 
 

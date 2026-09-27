@@ -1,5 +1,5 @@
 """Reports over a stored crawl (`spider report …`): canonicals, site structure, response times, crawl path, meta
-keywords, forms, HTTP headers and cookies. Each is SQL over the crawl's tables, or a stream of its pages with small
+keywords, forms, HTTP headers and cookies, the browser's console log. Each is SQL over the crawl's tables, or a stream of its pages with small
 counters (distinct folders up to a depth, header names, cookie names) — never a list of the site's pages.
 """
 
@@ -207,3 +207,33 @@ def headers_summary(engine: sa.Engine, crawl_id: int, cookies: bool = False) -> 
     return [{"name": name, "urls": n, "example": example[name],
              **({"attributes": sorted(attributes[name])} if cookies else {})}
             for name, n in names.most_common()]  # fmt: skip
+
+
+# --- javascript ------------------------------------------------------------------------------------
+
+JAVASCRIPT = {
+    # Chrome Console Log Summary: each console error / warning text and how many pages logged it
+    "console": "SELECT kind, message, count(DISTINCT url) AS pages, min(url) AS example FROM render_events"
+    " WHERE crawl_id = :crawl_id AND kind IN ('error', 'warning') GROUP BY kind, message"
+    " ORDER BY kind = 'warning', pages DESC, message",
+    # resources the browser didn't get: robots.txt (Pages with Blocked Resources), failed, 4xx / 5xx
+    "resources": "SELECT resource, kind, min(message) AS reason, count(DISTINCT url) AS pages, min(url) AS example"
+    " FROM render_events WHERE crawl_id = :crawl_id AND kind IN ('blocked', 'failed') GROUP BY resource, kind"
+    " ORDER BY kind, pages DESC, resource",
+}
+
+
+def javascript(engine: sa.Engine, crawl_id: int, only: str, url: str | None = None,
+               limit: int | None = None) -> tuple[int, list[dict]]:  # fmt: skip
+    """Chrome Console Log Summary (`console`) or the resources rendering couldn't load (`resources`); with `url` —
+    that page's own messages / resources, one row each."""
+    if only not in JAVASCRIPT:
+        raise InvalidArguments(f"--only: one of {', '.join(JAVASCRIPT)}.")
+    if url is None:
+        return _rows(engine, JAVASCRIPT[only], {"crawl_id": crawl_id}, limit)
+    kinds = "('error', 'warning')" if only == "console" else "('blocked', 'failed')"
+    query = (
+        f"SELECT kind, message, resource FROM render_events WHERE crawl_id = :crawl_id AND url = :url"  # noqa: S608
+        f" AND kind IN {kinds} ORDER BY rowid"
+    )
+    return _rows(engine, query, {"crawl_id": crawl_id, "url": url}, limit)

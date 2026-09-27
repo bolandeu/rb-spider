@@ -46,13 +46,15 @@ class Rule:
     priority: Literal["high", "medium", "low"]
     description: str
     find: RuleFinder
-    requires: tuple[str, ...] = ()  # settings keys (collect.*) that must have been on during the crawl
+    # settings keys (collect.*) that must have been on during the crawl, or `key=value` / `key!=value`
+    requires: tuple[str, ...] = ()
 
 
 # Rules look at the site's own URLs unless they say otherwise; on-page checks at the site's HTML pages
 # that answered 200 and were read (not only checked); duplicates among indexable ones (thresholds.duplicates_indexable_only).
 INTERNAL = "NOT coalesce(external, 0)"
 EXTERNAL = "coalesce(external, 0)"
+RENDERED = "crawl.render!=never"  # the JavaScript rules: pages were opened in a browser
 HTML_OK = f"{INTERNAL} AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 # on-page and content checks: HTML_OK, and indexable too while thresholds.issues_indexable_only
 ONPAGE = f"{HTML_OK} AND (indexable OR NOT :issues_indexable_only)"
@@ -378,6 +380,17 @@ RULES: list[Rule] = [
         "low",
         "Редирект через HTTP-заголовок Refresh — хуже серверного 301.",
         _sql("refresh_kind = 'http'", "refresh_url"),
+    ),
+    Rule(
+        "internal_redirection_javascript",
+        "Response Codes",
+        "Internal Redirection (JavaScript)",
+        "warning",
+        "low",
+        "Страница уводит на другой URL скриптом (location…): такой редирект видно только после рендеринга, "
+        "поисковик может его не выполнить — лучше серверный 301.",
+        _sql("refresh_kind = 'javascript'", "refresh_url"),
+        (RENDERED,),
     ),
 ]
 
@@ -1016,6 +1029,80 @@ def _sitemap_rules() -> list[Rule]:
     ]  # fmt: skip
 
 
+def _javascript_rules() -> list[Rule]:
+    """Raw vs rendered HTML: what JavaScript changes on a page (crawl.render), and the old AJAX crawling scheme."""
+
+    def js(code, name, kind, priority, description, where, detail="NULL", requires=(RENDERED,)) -> Rule:
+        return Rule(code, "JavaScript", f"JavaScript: {name}", kind, priority, description,
+                    _sql(f"{HTML_OK} AND {'rendered AND ' if RENDERED in requires else ''}({where})", detail),
+                    requires)  # fmt: skip
+
+    def only_rendered(raw: str, now: str) -> str:
+        return f"trim(coalesce({raw}, '')) = '' AND trim(coalesce({now}, '')) <> ''"
+
+    def updated(raw: str, now: str) -> str:
+        return f"trim(coalesce({raw}, '')) <> '' AND trim(coalesce({now}, '')) <> '' AND {raw} <> {now}"
+
+    def changed(raw: str, now: str) -> str:
+        return f"{raw} || ' → ' || {now}"
+
+    return [
+        js("js_noindex_only_original", "Noindex Only in Original HTML", "issue", "high",
+           "noindex есть в HTML ответа сервера, но скрипт его убирает: Google может увидеть noindex до рендеринга "
+           "и не отрендерить страницу вовсе — она выпадет из индекса.",
+           "raw_directives LIKE '%,noindex,%' AND coalesce(robots_directives, '') NOT LIKE '%,noindex,%'"),
+        js("js_nofollow_only_original", "Nofollow Only in Original HTML", "issue", "high",
+           "nofollow есть в HTML ответа сервера, но скрипт его убирает: поисковик может не пойти по ссылкам.",
+           "raw_directives LIKE '%,nofollow,%' AND coalesce(robots_directives, '') NOT LIKE '%,nofollow,%'"),
+        js("js_canonical_mismatch", "Canonical Mismatch", "issue", "high",
+           "canonical в HTML ответа сервера и после выполнения JS разный: поисковик получает два разных сигнала.",
+           "raw_canonical IS NOT NULL AND canonical_url IS NOT NULL AND raw_canonical <> canonical_url",
+           changed("raw_canonical", "canonical_url")),
+        js("js_ajax_scheme_urls", "Uses Old AJAX Crawling Scheme URLs", "issue", "medium",
+           "Ссылки вида #! или URL с _escaped_fragment_ — схема AJAX-обхода, которую Google отменил в 2015: "
+           "такие адреса больше не индексируются как отдельные страницы.",
+           "hashbang_links > 0 OR instr(url, '_escaped_fragment_=') > 0",
+           "CASE WHEN hashbang_links > 0 THEN hashbang_links || ' ссылок с #!' ELSE '_escaped_fragment_' END", ()),
+        js("js_ajax_meta_fragment", "Uses Old AJAX Crawling Scheme Meta Fragment Tag", "issue", "medium",
+           "На странице <meta name=\"fragment\" content=\"!\"> отменённой в 2015 схемы AJAX-обхода: тег "
+           "ничего не даёт, контент нужно отдавать обычным HTML или рендерингом.", "ajax_meta_fragment", requires=()),
+        js("js_blocked_resources", "Pages with Blocked Resources", "warning", "high",
+           "robots.txt закрывает скрипты, стили или картинки страницы: поисковик отрендерит её без них и может "
+           "увидеть не то, что пользователь. Какие — `spider report javascript --only resources`.",
+           "blocked_resources > 0", "blocked_resources || ' шт.'", (RENDERED, "crawl.robots=respect")),
+        js("js_links", "Contains JavaScript Links", "warning", "medium",
+           "Ссылки, которых нет в HTML ответа сервера, их добавляет JS: поисковик увидит их только после "
+           "рендеринга, позже и не всегда. Какие — `spider links <url>`, колонка origin.",
+           "js_outlinks > 0", "js_outlinks || ' шт.'"),
+        js("js_content", "Contains JavaScript Content", "warning", "medium",
+           "Текст, которого нет в HTML ответа сервера: хотя бы thresholds.js_content_min_words (10) слов добавляет JS.",
+           "coalesce(word_count, 0) - coalesce(raw_word_count, 0) >= :js_content_min_words",
+           "coalesce(raw_word_count, 0) || ' → ' || coalesce(word_count, 0) || ' слов'"),
+        js("js_title_only_rendered", "Page Title Only in Rendered HTML", "warning", "medium",
+           "title нет в HTML ответа сервера, его ставит JS.", only_rendered("raw_title", "title"), "title"),
+        js("js_title_updated", "Page Title Updated by JavaScript", "warning", "medium",
+           "JS меняет title: поисковик может показать исходный.", updated("raw_title", "title"),
+           changed("raw_title", "title")),
+        js("js_description_only_rendered", "Meta Description Only in Rendered HTML", "warning", "medium",
+           "meta description нет в HTML ответа сервера, его ставит JS.",
+           only_rendered("raw_meta_description", "meta_description"), "meta_description"),
+        js("js_description_updated", "Meta Description Updated by JavaScript", "warning", "medium",
+           "JS меняет meta description.", updated("raw_meta_description", "meta_description"),
+           changed("raw_meta_description", "meta_description")),
+        js("js_h1_only_rendered", "H1 Only in Rendered HTML", "warning", "medium",
+           "H1 нет в HTML ответа сервера, его добавляет JS.", only_rendered("raw_h1", "h1"), "h1"),
+        js("js_h1_updated", "H1 Updated by JavaScript", "warning", "medium",
+           "JS меняет H1.", updated("raw_h1", "h1"), changed("raw_h1", "h1")),
+        js("js_canonical_only_rendered", "Canonical Only in Rendered HTML", "warning", "low",
+           "canonical нет в HTML ответа сервера, его добавляет JS: Google советует canonical в исходном HTML.",
+           "raw_canonical IS NULL AND canonical_url IS NOT NULL", "canonical_url"),
+        js("js_errors", "Pages With JavaScript Errors", "warning", "low",
+           "Ошибки в консоли браузера при рендеринге: сломанный скрипт может не показать контент или ссылки. "
+           "Тексты — `spider report javascript`.",
+           "js_errors > 0", "js_errors || ' ошибок'", (RENDERED, "crawl.render_console")),
+    ]  # fmt: skip
+
+
 def _validation_mobile_rules() -> list[Rule]:
     def v(code, name, kind, description, where, detail="NULL", requires=("collect.html_validation",)) -> Rule:
         return Rule(code, "Validation", f"Validation: {name}", kind, "high", description,
@@ -1126,6 +1213,7 @@ RULES += _security_rules()
 RULES += _structured_rules()
 RULES += _sitemap_rules()
 RULES += _validation_mobile_rules()
+RULES += _javascript_rules()
 BY_CODE = {rule.code: rule for rule in RULES}
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -1146,10 +1234,21 @@ def _collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
     return settings_module.flatten(crawl_settings.model_dump())
 
 
+def _met(collected: dict[str, Any], requirement: str) -> bool:
+    """`key` — on during the crawl; `key=value` / `key!=value` — the key had (not) that value."""
+    if "!=" in requirement:
+        key, value = requirement.split("!=", 1)
+        return str(collected.get(key)) != value
+    if "=" in requirement:
+        key, value = requirement.split("=", 1)
+        return str(collected.get(key)) == value
+    return bool(collected.get(requirement))
+
+
 def not_checked(engine: sa.Engine, crawl_id: int) -> list[Rule]:
     """Rules this crawl can't answer: the data they need wasn't collected (`collect.*` off)."""
     collected = _collected(engine, crawl_id)
-    return [r for r in RULES if not all(collected.get(key) for key in r.requires)]
+    return [r for r in RULES if not all(_met(collected, key) for key in r.requires)]
 
 
 def analyze(engine: sa.Engine, crawl_id: int, thresholds: ThresholdSettings | None = None) -> int:

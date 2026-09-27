@@ -120,7 +120,8 @@ def export(
     ссылки), issues (находки с названием и приоритетом), queued (необойдённая очередь),
     headers / cookies (заголовки и cookies ответов), source / text (HTML и текст страниц —
     нужен `--store-html`), duplicates (пары почти-дублей), custom (Custom Search /
-    Extraction), sitemap-urls (URL из sitemap). `--issue` у links — ссылки, из-за которых
+    Extraction), sitemap-urls (URL из sitemap), javascript (ошибки консоли и
+    незагруженные ресурсы при рендеринге — Chrome Console Log). `--issue` у links — ссылки, из-за которых
     сработала проверка ссылок, картинок, 4xx / 5xx, смешанного содержимого.
 
     Примеры:

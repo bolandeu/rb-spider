@@ -74,10 +74,15 @@ concurrency = 10
 | `crawl.auth_user` | `str \| None` | — | Логин для auth = basic. |
 | `crawl.verify_tls` | `bool` | `true` | Проверять сертификат HTTPS; false — принимать и самоподписанные / просроченные (тестовые стенды). |
 | `crawl.respect_hsts` | `bool` | `true` | Как браузер: после ответа с Strict-Transport-Security http-ссылки на тот же хост не скачивать, а записывать как 307 на https-адрес (HSTS Policy); false — скачивать и видеть настоящий редирект. |
-| `crawl.render` | `Literal['never', 'always']` | `"never"` | JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS. |
-| `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при render = always. |
-| `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при render = always. |
-| `crawl.render_browser` | `str \| None` | — | Путь к браузеру (Chromium / Chrome) для render = always; не задано — сборка Playwright, иначе самая свежая из кэша Playwright (ms-playwright), иначе установленный Google Chrome. |
+| `crawl.render` | `Literal['never', 'always', 'auto']` | `"never"` | JS-рендеринг: never — SEO-данные из HTML ответа сервера; always — HTML-страницы с кодом 200 ещё и открываются в браузере (Playwright, `rb-spider[render]`), данные — из DOM после выполнения JS; auto — первые render_auto_sample HTML-страниц рендерятся, и если JS ни на одной ничего не поменял (ссылки, текст, title, description, h1, canonical, robots), остальные читаются без браузера. |
+| `crawl.render_auto_sample` | `int` | `20` | Сколько первых HTML-страниц отрендерить при render = auto, чтобы решить, нужен ли JS. |
+| `crawl.render_viewport` | `str` | `"desktop"` | Размер окна браузера при рендеринге (Window Size): desktop — 1366×768, mobile — 411×731 как у Googlebot Smartphone (сенсорный экран), или ШИРИНАxВЫСОТА, например 1920x1080. |
+| `crawl.render_console` | `bool` | `true` | Записывать ошибки и предупреждения консоли браузера при рендеринге (JavaScript Error Reporting). |
+| `crawl.render_flatten_shadow_dom` | `bool` | `true` | Читать содержимое Shadow DOM веб-компонентов как часть страницы (Flatten Shadow DOM). |
+| `crawl.render_flatten_iframes` | `bool` | `true` | Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes). |
+| `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при рендеринге. |
+| `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при рендеринге. |
+| `crawl.render_browser` | `str \| None` | — | Путь к браузеру (Chromium / Chrome) для рендеринга; не задано — сборка Playwright, иначе самая свежая из кэша Playwright (ms-playwright), иначе установленный Google Chrome. |
 | `crawl.parse_workers` | `int \| None` | — | Сколько отдельных процессов разбирают HTML на больших обходах; 0 — всё в основном процессе; не задано — по числу ядер, не больше 4. |
 | `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
 | `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |
@@ -160,6 +165,7 @@ concurrency = 10
 | `thresholds.soft_404_patterns` | `list[str]` | `["\\b404\\b", "not found", "page (does not|doesn't|no longer) exist", "не найден", "не существует", "нет такой страницы", "страница удалена"]` | Регулярные выражения (без учёта регистра) по title и H1 страницы с кодом 200: совпало — «Content: Soft 404 Pages». |
 | `thresholds.document_max_mb` | `float` | `2` | HTML-страница больше стольких МБ — «Validation: HTML Document Over 2MB» (Googlebot читает 2 МБ). |
 | `thresholds.resource_max_mb` | `float` | `2` | JS / CSS больше стольких МБ — «Validation: Resource Over 2MB». |
+| `thresholds.js_content_min_words` | `int` | `10` | После JS на странице хотя бы столько новых слов — «JavaScript: Contains JavaScript Content». |
 | `thresholds.sitemap_max_urls` | `int` | `50000` | Больше URL в одном файле sitemap — «Sitemaps: Over 50k URLs». |
 | `thresholds.sitemap_max_mb` | `float` | `50` | Файл sitemap больше стольких МБ (без сжатия) — «Sitemaps: Over 50mb». |
 | `thresholds.issues_indexable_only` | `bool` | `false` | Проверки контента (title, description, H1, H2, Content…) только для индексируемых страниц — Ignore Non-Indexable URLs for Issues. |
