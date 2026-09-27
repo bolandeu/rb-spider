@@ -1,6 +1,7 @@
 [project]
 name = "rb-spider"
-version = "0.1.0"
+# Version comes from the git tag vX.Y.Z (uv-dynamic-versioning) — never add `version =`.
+dynamic = ["version"]
 description = "SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO Spider"
 readme = "README.md"
 authors = [{ name = "Roman Bolandau" }]
@@ -35,7 +36,7 @@ structured = ["extruct>=0.18"]
 # Custom Extraction by XPath (`custom.extract` with kind = "xpath")
 xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
-sitemaps = ["rb-sitemap-xml"]
+sitemaps = ["rb-sitemap-xml>=0.1,<0.2"]
 # crawls in PostgreSQL instead of the local SQLite file (`SPIDER_DB_URL`)
 postgres = ["psycopg[binary]>=3.2"]
 # PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
@@ -48,13 +49,26 @@ spider = "rb_spider.cli:main"
 Repository = "https://github.com/bolandeu/spider"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
-# rb-sitemap-xml and gsc are developed next door (docs/spec.md, section 5); outside this checkout install it on its own
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+fallback-version = "0.0.0"
+
+[tool.uv]
+# Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+# Sibling packages by release tag (tools/docs/standard-release.md §5); against an unreleased one
+# locally: `uv pip install -e ../<package>`, uncommitted
 [tool.uv.sources]
-rb-sitemap-xml = { path = "../sitemap-xml", editable = true }
-gsc = { path = "../google-search-console", editable = true }
+rb-sitemap-xml = { git = "https://github.com/bolandeu/sitemap-xml", tag = "v0.1.1" }
+gsc = { git = "https://github.com/bolandeu/google-search-console", tag = "v0.3.0" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rb_spider"]
@@ -65,12 +79,57 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
+    "syrupy>=4.8",
+    "towncrier>=24.8",
     "trustme>=1.2.1",
     "ty>=0.0.80",
 ]
 
+# Changelog from fragments: each change adds changelog.d/+<slug>.<type>.md
+# (`uv run towncrier create +<slug>.<type>.md -c "..."`); scripts/release.py assembles them.
+[tool.towncrier]
+filename = "CHANGELOG.md"
+directory = "changelog.d"
+start_string = "<!-- towncrier release notes start -->\n"
+title_format = "## [{version}] - {project_date}"
+issue_format = "#{issue}"
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecated"
+name = "Deprecated"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
 [tool.pytest.ini_options]
 addopts = "--cov --cov-report=term-missing:skip-covered"
+# tests/test_help.py keeps help snapshots at tests/snapshots/help/<command>.txt
+# (standard §7), not in syrupy's own `__snapshots__/<test file>/` layout, so
+# syrupy warns it "can not relate" each file to its test. It can — by name.
+filterwarnings = ["ignore:(?s).*Can not relate snapshot:UserWarning"]
 
 [tool.coverage.run]
 source = ["src"]

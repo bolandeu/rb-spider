@@ -4,26 +4,27 @@
 
 ## Статус
 
-Этап: **волны MVP (178/178) и v2 (192/192, #26–#41) закрыты.** Обход до 100k URL (~1600–1700 URL/с, ~435 МБ, база ~540 МБ; проверки ~42 с), 171 проверка (MVP + URL, Hreflang, Pagination, Security, Content, Structured Data, Sitemaps, SERP, Validation, Mobile, JavaScript, Images v2), JS-рендеринг с `render = auto` и сравнением исходного HTML с отрендеренным, отчёты (`report …`, `redirects`, `hreflang`, `pagination`, `insecure`, `duplicates`, `structured`, `sitemaps show`, `custom`), `compare`, `crawls respider`, `robots-test`, xlsx и пресеты, `sitemaps build`, SERP в пикселях, PostgreSQL (`SPIDER_DB_URL`, extra `postgres`), extras `near` / `structured` / `sitemaps` (rb-sitemap-xml — путь `../sitemap-xml`) / `xpath` / `gsc`, режим списка, overview/export/query, обогатители, `spider fetch`, скилл и рецепты.
-Волна v3 идёт: сделаны `spider lighthouse` (#44; источники local и PSI — #42, проверки PageSpeed / Mobile — #43), View Source и скриншоты (#51), URL Mapping в `compare` (#53), Link Score. Открыты интеграции #45–#47, #49, #52 (Search Console, Вебмастер, режим API без обхода, GA4) — только по запросу пользователя, через соседние пакеты (`gsc` — путь `../google-search-console`, extra `gsc`; `ywm`), ключи у них, тесты — на их фейковых клиентах; #48 и #50 — `backlog`. Не измерено: скорость 100k после #39–#41 (Mac с закрытой крышкой уходит в тепловой сон — `caffeinate -i`); память и база в норме. Бенч: `scripts/check.sh` + стенд 100k через `bench/measure.py` (~1700 URL/с, ≤ 500 МБ; во время бенча не читать его базу и не гонять тесты; верить `wall_s`). Разбор HTML — узкое место обхода; модули процессов разбора (`scope` → `extract`, `content`, `structured`) не импортируют SQLAlchemy, pydantic, Crawlee, numpy — это проверяет тест. Новые миграции должны работать и на SQLite, и на PostgreSQL (`scripts/check.sh --pg`).
+Этап: **волны MVP (178/178) и v2 (192/192, #26–#41) закрыты.** Обход до 100k URL (~1600–1700 URL/с, ~435 МБ, база ~540 МБ; проверки ~42 с), 171 проверка (MVP + URL, Hreflang, Pagination, Security, Content, Structured Data, Sitemaps, SERP, Validation, Mobile, JavaScript, Images v2), JS-рендеринг с `render = auto` и сравнением исходного HTML с отрендеренным, отчёты (`report …`, `redirects`, `hreflang`, `pagination`, `insecure`, `duplicates`, `structured`, `sitemaps show`, `custom`), `compare`, `crawls respider`, `robots-test`, xlsx и пресеты, `sitemaps build`, SERP в пикселях, PostgreSQL (`SPIDER_DB_URL`, extra `postgres`), extras `near` / `structured` / `sitemaps` (rb-sitemap-xml по тегу) / `xpath` / `gsc`, режим списка, overview/export/query, обогатители, `spider fetch`, скилл и рецепты.
+Волна v3 идёт: сделаны `spider lighthouse` (#44; источники local и PSI — #42, проверки PageSpeed / Mobile — #43), View Source и скриншоты (#51), URL Mapping в `compare` (#53), Link Score. Открыты интеграции #45–#47, #49, #52 (Search Console, Вебмастер, режим API без обхода, GA4) — только по запросу пользователя, через соседние пакеты (`gsc` — по тегу, extra `gsc`; `ywm`), ключи у них, тесты — на их фейковых клиентах; #48 и #50 — `backlog`. Не измерено: скорость 100k после #39–#41 (Mac с закрытой крышкой уходит в тепловой сон — `caffeinate -i`); память и база в норме. Бенч: `scripts/check.sh` + стенд 100k через `bench/measure.py` (~1700 URL/с, ≤ 500 МБ; во время бенча не читать его базу и не гонять тесты; верить `wall_s`). Разбор HTML — узкое место обхода; модули процессов разбора (`scope` → `extract`, `content`, `structured`) не импортируют SQLAlchemy, pydantic, Crawlee, numpy — это проверяет тест. Новые миграции должны работать и на SQLite, и на PostgreSQL (`scripts/check.sh --pg`).
 Этот блок заменяется на месте при смене этапа; история — в git и CHANGELOG.
 
 ## Разработка
 
 ```bash
-uv sync                                   # пишет uv.lock — он коммитится (CI: `uv lock --check`)
+uv sync                                   # пишет uv.lock — он коммитится (гейт: `uv lock --check`)
 uv run spider                             # список команд; `uv run spider <команда> --help`
-uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
-SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest   # после намеренной правки справки или настроек: снимки --help и таблица docs/profiles.md
-scripts/check.sh [--py312] [--linux] [--pg] # всё, что гоняет CI (хук pre-push); --linux — ещё и в Docker, релиз его требует; --pg — тесты на PostgreSQL
-scripts/install_hooks.sh                  # один раз после клонирования: commit-msg и pre-push
+uv run scripts/release.py --check         # гейт целиком — перед каждым коммитом (и хук pre-push)
+uv run pytest --snapshot-update           # после намеренной правки справки: снимки tests/snapshots/help/
+SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest   # после правки настроек: таблица docs/profiles.md
+scripts/check.sh [--py312] [--linux] [--pg] # тесты со всеми extras; --py312 — на Python 3.12, --linux — в Docker, --pg — на PostgreSQL
+scripts/install_hooks.sh                  # один раз после клонирования: git-хуки из .githooks/ (сессии Claude Code — сами)
 ```
 
-Строка проверок — ровно то, что гоняет CI (Linux/macOS; Windows не поддерживается) перед `uv tool install .`. GitHub Actions сейчас не запускаются — проверяет `scripts/check.sh`. Пакет `rb-spider` (модуль `rb_spider`), команда и каталог проекта — `spider` / `.spider/` (`core/version.py`: `CLI_NAME`, `DIST_NAME`). `bench/` — отдельный uv-проект стенда, в пакет не входит.
+**Перед каждым коммитом `uv run scripts/release.py --check` проходит** — это главный гейт (tools/docs/standard-release.md §3): `uv lock --check`, ruff, ty, pytest (покрытие, контракт и снимки справки, форма `auth status`), фрагмент changelog, сборка wheel и установка в одноразовое окружение (`spider --version` = версия сборки), osv-scanner. Упавший шаг назван с выводом — чинить причину, не пропускать шаг. `scripts/check.sh` — дополнительно тесты со всеми extras и на других окружениях. Windows не поддерживается; GitHub Actions не запускаются (CI необязателен, повторяет только гейт). Пакет `rb-spider` (модуль `rb_spider`), команда и каталог проекта — `spider` / `.spider/` (`core/version.py`: `CLI_NAME`, `DIST_NAME`). `bench/` — отдельный uv-проект стенда, в пакет не входит.
 
-Слои (архитектура `cli-builder`): `commands/` — только разбор аргументов → вызов сервиса → `output.emit_success`; логика — `core/`; внешние сервисы — `providers/`; секреты — `credentials/` (keychain + env `SPIDER_<PROVIDER>_<FIELD>`), никогда в `.spider/config.toml`. Группы команд — `output.group(...)`, каждая команда — под `@output.guard`, необратимые — `--dry-run` + `output.require_confirmation`.
+Слои (архитектура `cli-builder`): `commands/` — только разбор аргументов → вызов сервиса → `output.emit_success`; логика — `core/`; внешние сервисы — `providers/`; секреты — `credentials/` (keychain-сервис `spider:<provider>` + env `SPIDER_<PROVIDER>_<FIELD>`; `auth status` — отчёт по §8), никогда в `.spider/config.toml`. Группы команд — `output.group(...)`, каждая команда — под `@output.guard`, необратимые — `--dry-run` + `output.require_confirmation`.
 
-Релиз: `uv run scripts/release.py patch|minor|major` из чистого `main` (версия, дата в CHANGELOG, тег, push — push делает пользователь). `version =` руками не менять.
+Версия — **git-тег** `vX.Y.Z` (uv-dynamic-versioning), строки `version =` в `pyproject.toml` нет и не будет. Релиз: `uv run scripts/release.py patch|minor|major` из чистого `main` — гейт, сборка CHANGELOG из фрагментов, коммит `Release vX.Y.Z`, тег; push делает пользователь. SemVer: пока `0.x`, исправление или совместимая функция — patch, ломающее изменение (команды, флаги, форма `--json`, коды выхода и ошибок) — minor. Соседние пакеты — только по тегу в `[tool.uv.sources]` с диапазоном в зависимостях (`>=0.1,<0.2`), никогда `path =` или `branch`; работа с невыпущенным соседом — `uv pip install -e ../<пакет>`, без коммита.
 
 ## Документы
 
@@ -59,7 +60,7 @@ Docstring команды пишется по-русски, понятно нов
 
 1. **Первая строка** — что делает команда (её видно в списке `spider --help`).
 2. **Когда использовать** и чем отличается от соседних команд.
-3. **Примеры** вызова — 2–3 типичных.
+3. **Примеры** вызова — 2–3 типичных, каждый строкой `Example: {cli} <команда> …` (`{cli}` превращается в `spider`; строку ищет контракт-тест).
 4. **Выход**: что печатается человеку и форма `--json` (ключи верхнего уровня).
 5. **Коды выхода**, если у команды есть свои, помимо общих.
 
@@ -69,14 +70,15 @@ Docstring команды пишется по-русски, понятно нов
 
 | Проверка | Когда | Что ловит |
 | --- | --- | --- |
-| Хук `commit-msg` | каждый коммит `feat` / `fix` — блокирует | у команды изменились опции или логика, а docstring нет; у команды нет docstring |
-| Тесты | перед каждым коммитом (коммитим только зелёное) | нет docstring / `help=` / `description=`; сгенерированные документы разошлись с кодом (генератор с `--check`); снимки `--help` каждой команды — любое изменение текста видно в diff |
+| Хуки Claude Code (`.claude/settings.json`) | после правки файла команды и перед концом хода | у команды изменились опции или логика, а docstring нет |
+| Хук `pre-commit` (`.githooks/`) | каждый коммит — блокирует | то же по staged-файлам; ещё предупреждает, если `src/` менялся без фрагмента changelog |
+| Тесты (`tests/test_help.py`) | в гейте | нет docstring со строкой `Example:`, `help=`, описания группы; снимки `--help` каждой команды и группы — любое изменение текста видно в diff; сгенерированные документы разошлись с кодом |
 
-`refactor` и `perf` по определению не меняют поведение, поэтому хук их пропускает. Если такой коммит на деле меняет поведение — это `feat` или `fix`, а не повод обойти проверку.
+Если хук сработал на правку, которая правда не меняет поведение (`refactor`, `perf`), — `SKIP_DOCSTRING_CHECK=1 git commit …` и сказать об этом, а не обходить молча.
 
 ## Коммиты
 
-Формат — [Conventional Commits](https://www.conventionalcommits.org/ru/): `тип(область): что сделано`, заголовок по-русски, до 72 символов, без точки в конце. Проверяется хуком `commit-msg`.
+Формат — [Conventional Commits](https://www.conventionalcommits.org/ru/): `тип(область): что сделано`, заголовок по-русски, до 72 символов, без точки в конце. Проверяется хуком `commit-msg`; релизный `Release vX.Y.Z` от `release.py` пропускается.
 
 | Тип | Когда |
 | --- | --- |
@@ -91,7 +93,7 @@ Docstring команды пишется по-русски, понятно нов
 
 Области: `crawl`, `extract`, `issues`, `storage`, `config`, `cli`, `export`, `render`, `enrich`, `bench`, `polygon`. `!` после типа/области (`feat(cli)!:`) — ломающее изменение CLI, конфига или схемы БД.
 
-- **Один коммит — одно логическое изменение**, законченное целиком: код + тесты + документация команд + отметка `[x]` в `features.md` + запись в `CHANGELOG.md` (секция `Unreleased`, формат Keep a Changelog) для `feat`/`fix`/`perf` и ломающих изменений.
-- **Коммитим только зелёное**: `uv run pytest`, `uv run ruff check`, `uv run ty check` проходят.
+- **Один коммит — одно логическое изменение**, законченное целиком: код + тесты + документация команд + отметка `[x]` в `features.md` + фрагмент changelog для `feat`/`fix`/`perf` и ломающих изменений: `uv run towncrier create +<slug>.<type>.md -c "…"` (тип — added/changed/deprecated/removed/fixed/security, в slug без точек). `CHANGELOG.md` руками не правится — его собирает `release.py`.
+- **Коммитим только зелёное**: `uv run scripts/release.py --check` проходит.
 - Тело коммита — **зачем** изменение, если это не очевидно из заголовка; что изменилось, видно в diff.
-- После клонирования — `scripts/install_hooks.sh` (git не версионирует `.git/hooks/`).
+- После клонирования — `scripts/install_hooks.sh` (включает версионируемые хуки `.githooks/`).

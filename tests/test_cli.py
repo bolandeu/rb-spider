@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from rb_spider import output
 from rb_spider.cli import app
 from rb_spider.core import services
+from rb_spider.core.errors import InvalidArguments
 
 runner = CliRunner()
 
@@ -118,6 +119,8 @@ def test_config_set_unknown_key_fails_without_persisting(tmp_path: Path) -> None
 
 
 def test_min_version_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pin the installed version: an untagged checkout builds as 0.0.0, which the gate skips.
+    monkeypatch.setattr(services, "installed_version", lambda: "1.0.0")
     init(tmp_path)
     assert invoke("--project", str(tmp_path), "config", "set", "cli.min_version", "99.0.0").exit_code == 0
 
@@ -153,7 +156,8 @@ def test_doctor_reports_config_parse_error(tmp_path: Path) -> None:
     assert config_check["detail"]
 
 
-def test_doctor_reports_incompatible_cli_instead_of_failing(tmp_path: Path) -> None:
+def test_doctor_reports_incompatible_cli_instead_of_failing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(services, "installed_version", lambda: "1.0.0")
     init(tmp_path)
     invoke("--project", str(tmp_path), "config", "set", "cli.min_version", "99.0.0")
 
@@ -185,6 +189,27 @@ def _app_with(command):
 
     test_app.command("cmd")(output.guard(command))
     return test_app
+
+
+def test_report_with_a_problem_keeps_the_payload() -> None:
+    """output.emit_report: data plus ok=false + error, exit code from the problem (auth status uses it)."""
+
+    def report(ctx: typer.Context) -> None:
+        render = lambda d: output.human.echo(f"items: {d['items']}")  # noqa: E731
+        output.emit_report(ctx, {"items": [1]}, render, InvalidArguments("bad"))
+
+    result = runner.invoke(_app_with(report), ["--json", "cmd"])
+    payload = json.loads(result.stdout)
+    assert (result.exit_code, payload["ok"], payload["items"], payload["error"]["code"]) == (
+        2,
+        False,
+        [1],
+        "INVALID_ARGUMENTS",
+    )
+    result = runner.invoke(_app_with(report), ["cmd"])
+    assert result.exit_code == 2
+    assert "items: [1]" in result.stdout
+    assert "bad" in result.stderr
 
 
 def test_unexpected_exception_still_yields_json_envelope() -> None:

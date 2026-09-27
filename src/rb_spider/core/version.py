@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, metadata
+import functools
+from importlib.metadata import PackageNotFoundError, distribution, metadata
 from importlib.metadata import version as pkg_version
 
 _PACKAGE_NAME = __name__.split(".")[0]
@@ -11,6 +12,26 @@ CLI_NAME = "spider"
 DIST_NAME = "rb-spider"
 
 DEV_VERSION = "0.0.0-dev"
+
+
+@functools.cache
+def cli_name() -> str:
+    """The command users type: this package's console script (`[project.scripts]`, copier's `cli_name`).
+
+    It may differ from the Python package name (command `sitemap-xml`,
+    package `rb_sitemap_xml`), so anything that names the command — error
+    actions, `{cli}` in docstrings, `auth status`'s `tool` — uses this, while
+    the keychain service, env var prefix and `.<package>/` project dir keep
+    the package name. A bare source run (nothing installed) falls back to it.
+    """
+    try:
+        entry_points = distribution(_PACKAGE_NAME).entry_points
+    except PackageNotFoundError:
+        return _PACKAGE_NAME
+    for entry_point in entry_points:
+        if entry_point.group == "console_scripts" and entry_point.value.startswith(f"{_PACKAGE_NAME}."):
+            return entry_point.name
+    return _PACKAGE_NAME
 
 
 def package_summary() -> str:

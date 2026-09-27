@@ -6,21 +6,22 @@ from pathlib import Path
 import typer
 
 from .. import output
-from ..core.version import CLI_NAME
+from ..core.version import cli_name
 
 app = output.group("Инструкция spider для ИИ-агентов (SKILL.md).")
 
 _PACKAGE_NAME = __name__.split(".")[0]
+_SKILL_NAME = cli_name()  # matches `name:` in the bundled SKILL.md
 
 # Where each AI tool looks for personal (user-level) and project-level skills.
 _TOOL_TARGETS = {
     "claude-code": {
-        "user": Path.home() / ".claude" / "skills" / CLI_NAME,
-        "project": Path(".claude") / "skills" / CLI_NAME,
+        "user": Path.home() / ".claude" / "skills" / _SKILL_NAME,
+        "project": Path(".claude") / "skills" / _SKILL_NAME,
     },
     "agents": {
-        "user": Path.home() / ".agents" / "skills" / CLI_NAME,
-        "project": Path(".agents") / "skills" / CLI_NAME,
+        "user": Path.home() / ".agents" / "skills" / _SKILL_NAME,
+        "project": Path(".agents") / "skills" / _SKILL_NAME,
     },
 }
 

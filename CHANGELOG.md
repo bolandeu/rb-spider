@@ -2,10 +2,16 @@
 
 Все заметные изменения фиксируются здесь. Формат —
 [Keep a Changelog](https://keepachangelog.com/), версии следуют
-[SemVer](https://semver.org/). Записи добавляются в `Unreleased` в том же
-коммите, что и изменение.
+[SemVer](https://semver.org/) (пока версия `0.x`, ломающее изменение поднимает minor).
 
-## [Unreleased]
+Между релизами этот файл руками не правят: каждое изменение добавляет фрагмент в
+`changelog.d/` (`uv run towncrier create +<slug>.<type>.md -c "..."`, тип —
+added/changed/deprecated/removed/fixed/security), а `scripts/release.py` собирает
+их в новую секцию под меткой.
+
+<!-- towncrier release notes start -->
+
+## [0.1.0] - 2026-09-27
 
 ### Added
 

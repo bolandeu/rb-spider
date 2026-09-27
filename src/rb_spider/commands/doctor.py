@@ -11,7 +11,7 @@ from ..core import crawl as crawl_service
 from ..core import services, settings, storage
 from ..core.errors import CliError, CliTooOld
 from ..core.models import ProjectConfig
-from ..core.version import CLI_NAME, DEV_VERSION, installed_version
+from ..core.version import DEV_VERSION, cli_name, installed_version
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
@@ -38,7 +38,7 @@ def _auth_checks(needed: list[str]) -> list[dict]:
             {
                 "name": f"credential:{provider}",
                 "ok": available,
-                "detail": "" if available else f"run '{CLI_NAME} auth login --provider {provider}'",
+                "detail": "" if available else f"run '{cli_name()} auth login --provider {provider}'",
             }
         )
     return checks

@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# (Re)install this repo's git hooks. .git/hooks/ is not tracked by git, so
-# hooks are lost on every fresh clone — re-run this after cloning, or any
-# time a hook seems to be missing.
+# Point git at the versioned hooks in .githooks/ (git never runs hooks from
+# the working tree on its own). One-time per clone; Claude Code sessions do
+# it automatically via the SessionStart hook in .claude/settings.json.
 set -euo pipefail
 
-hooks_dir="$(git rev-parse --show-toplevel)/.git/hooks"
-
-cat > "$hooks_dir/commit-msg" <<'EOF'
-#!/usr/bin/env bash
-exec python3 "$(git rev-parse --show-toplevel)/scripts/check_commit_msg.py" "$1"
-EOF
-
-# Before a push: everything CI runs (scripts/check.sh) — the local gate while GitHub Actions don't run.
-cat > "$hooks_dir/pre-push" <<'EOF'
-#!/usr/bin/env bash
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
-EOF
-
-rm -f "$hooks_dir/pre-commit"  # the docstring check moved into commit-msg
-chmod +x "$hooks_dir/commit-msg" "$hooks_dir/pre-push"
-echo "Installed commit-msg and pre-push hooks -> $hooks_dir"
+repo_root="$(git rev-parse --show-toplevel)"
+git -C "$repo_root" config core.hooksPath .githooks
+chmod +x "$repo_root"/.githooks/*
+echo "git hooks -> $repo_root/.githooks"

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Versioned commit-msg hook: Conventional Commits subject (AGENTS.md, «Коммиты»).
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check_commit_msg.py" "$1"

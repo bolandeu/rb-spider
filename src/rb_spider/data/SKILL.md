@@ -86,8 +86,10 @@ crawling again.
   structured error instead of hanging.
 - **Credentials** live in the OS keychain or env vars
   (`SPIDER_<PROVIDER>_<FIELD>`), never in arguments or
-  config. Check `auth status --json`; log in with `auth login`; never ask
-  the user to paste a secret into a command line.
+  config. `auth status --check --json` reports every provider (source,
+  status, expiry, quota — never values; exit 3 if a required one isn't
+  ok); log in with `auth login`; never ask the user to paste a secret into
+  a command line.
 - **Destructive commands** are the ones whose `--help` shows `--dry-run`
   and `--yes` (alias `--confirm`): deleting crawls, projects, pruning.
   Always: run with `--dry-run`, show the user, get explicit sign-off, then

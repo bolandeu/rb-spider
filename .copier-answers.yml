@@ -1,7 +1,8 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v1.0.0
-_src_path: /Users/bolandau/.claude/skills/cli-generator
+_commit: v1.2.1
+_src_path: gh:bolandeu/cli-generator
 author_name: Roman Bolandau
+cli_name: spider
 description: SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO
     Spider
 include_auth: true

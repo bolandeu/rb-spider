@@ -1,58 +1,126 @@
-"""`--help` is the documentation for people and agents alike (AGENTS.md, «Документация команд»).
+"""The --help contract: every command's help is complete, and any change to it shows up in review.
 
-Two guarantees:
-- every command has a docstring and every option/argument a `help=`;
-- every command's rendered `--help` matches a committed snapshot, so any change to the text
-  shows up in the diff and gets reviewed. Refresh after an intended change:
-  `SPIDER_UPDATE_SNAPSHOTS=1 uv run pytest tests/test_help.py`.
+Help text is rendered from command docstrings and `typer.Option`/`Argument`
+`help=` strings — it's the documentation agents and humans read, so it's
+tested like an API:
+
+- contract tests: every command (walked from the app's registry, so a new
+  command is covered automatically) has a docstring with an
+  `Example: spider <command> ...` line, every parameter has non-empty help,
+  every group has a description;
+- snapshots: `<command> --help` is stored in tests/snapshots/help/<command>.txt
+  (syrupy). A changed help text fails until the snapshot is refreshed with
+  `uv run pytest --snapshot-update`, which puts the new text in the diff.
+  A new command fails until its snapshot exists; a removed one leaves an
+  orphan file that fails too.
 """
 
 from __future__ import annotations
 
-import os
-import re
+import inspect
+import typing
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-import typer.main
+import typer
+from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
+from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from rb_spider.cli import app
 
-SNAPSHOTS = Path(__file__).parent / "snapshots" / "help"
-# Fixed width and no colour, so the rendering is the same on every machine and in CI.
-HELP_ENV = {"TERMINAL_WIDTH": "100", "COLUMNS": "100", "NO_COLOR": "1", "_TYPER_FORCE_DISABLE_TERMINAL": "1"}
-# Options Typer adds by itself; their help text is not ours to write.
-BUILTIN_PARAMS = {"help", "install_completion", "show_completion"}
+CLI = "spider"
+SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "help"
+# Fixed width and no colour so the rendering doesn't depend on the terminal running the tests.
+HELP_ENV = {"COLUMNS": "100", "NO_COLOR": "1", "TERM": "dumb"}
 
 
-def _commands(command=None, path: tuple[str, ...] = ()):
-    command = command or typer.main.get_command(app)
-    yield path, command
-    for name, sub in sorted((getattr(command, "commands", None) or {}).items()):
-        yield from _commands(sub, (*path, name))
+def _commands(group: typer.Typer, prefix: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Callable]]:
+    for info in group.registered_commands:
+        assert info.callback is not None
+        name = info.name or getattr(info.callback, "__name__", "").replace("_", "-")
+        yield (*prefix, name), info.callback
+    for sub in group.registered_groups:
+        assert sub.name is not None and sub.typer_instance is not None
+        yield from _commands(sub.typer_instance, (*prefix, sub.name))
 
 
-COMMANDS = list(_commands())
-IDS = [" ".join(path) or "spider" for path, _ in COMMANDS]
+def _groups(group: typer.Typer, prefix: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], typer.Typer]]:
+    for sub in group.registered_groups:
+        assert sub.name is not None and sub.typer_instance is not None
+        yield (*prefix, sub.name), sub.typer_instance
+        yield from _groups(sub.typer_instance, (*prefix, sub.name))
 
 
-@pytest.mark.parametrize(("path", "command"), COMMANDS, ids=IDS)
-def test_command_and_params_are_documented(path, command) -> None:
-    assert (command.help or "").strip(), f"`spider {' '.join(path)}` has no docstring"
-    missing = [p.name for p in command.params if p.name not in BUILTIN_PARAMS and not getattr(p, "help", None)]
-    assert not missing, f"`spider {' '.join(path)}`: options without help=: {missing}"
+COMMANDS = dict(_commands(app))
+GROUPS = dict(_groups(app))
+HELP_PAGES = sorted([*COMMANDS, *GROUPS])
 
 
-@pytest.mark.parametrize(("path", "command"), COMMANDS, ids=IDS)
-def test_help_matches_snapshot(path, command) -> None:
-    result = CliRunner().invoke(app, [*path, "--help"], env=HELP_ENV, prog_name="spider")
+def _slug(path: tuple[str, ...]) -> str:
+    return "-".join(path)
+
+
+def _render_help(path: tuple[str, ...]) -> str:
+    result = CliRunner().invoke(app, [*path, "--help"], env=HELP_ENV, prog_name=CLI)
     assert result.exit_code == 0, result.output
-    # The version in the header changes every release; the snapshot is about the text.
-    text = re.sub(r"spider \d+\.\d+\.\d+\S*", "spider <version>", result.output)
-    snapshot = SNAPSHOTS / f"{'_'.join(path) or 'spider'}.txt"
-    if os.environ.get("SPIDER_UPDATE_SNAPSHOTS"):
-        snapshot.parent.mkdir(parents=True, exist_ok=True)
-        snapshot.write_text(text)
-    assert snapshot.exists(), f"no snapshot for `spider {' '.join(path)} --help`; run with SPIDER_UPDATE_SNAPSHOTS=1"
-    assert text == snapshot.read_text(), f"`spider {' '.join(path)} --help` changed; review and refresh the snapshot"
+    # Trailing padding isn't content; keeping it out keeps the diffs readable.
+    return "\n".join(line.rstrip() for line in result.output.splitlines()) + "\n"
+
+
+class HelpSnapshot(SingleFileSnapshotExtension):
+    """One plain-text file per help page: tests/snapshots/help/<command>.txt."""
+
+    _write_mode = WriteMode.TEXT
+    file_extension = "txt"
+
+    @classmethod
+    def dirname(cls, *, test_location) -> str:
+        return str(SNAPSHOT_DIR)
+
+    @classmethod
+    def get_snapshot_name(cls, *, test_location, index=0) -> str:
+        return str(index)
+
+
+@pytest.mark.parametrize("path", HELP_PAGES, ids=_slug)
+def test_help_snapshot(path: tuple[str, ...], snapshot) -> None:
+    assert _render_help(path) == snapshot(extension_class=HelpSnapshot, name=_slug(path))
+
+
+def test_no_orphan_help_snapshots() -> None:
+    stored = {p.stem for p in SNAPSHOT_DIR.glob("*.txt")}
+    expected = {_slug(path) for path in HELP_PAGES}
+    assert stored <= expected, f"snapshots for commands that no longer exist: {sorted(stored - expected)}"
+
+
+@pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
+def test_command_docstring_has_summary_and_example(path: tuple[str, ...]) -> None:
+    doc = inspect.getdoc(COMMANDS[path]) or ""
+    assert doc.strip(), f"`{_slug(path)}` has no docstring — it is the command's --help text"
+    invocation = f"{CLI} {' '.join(path)}"
+    examples = [line for line in doc.splitlines() if line.startswith("Example:")]
+    assert any(invocation in line for line in examples), (
+        f"`{_slug(path)}` docstring needs an `Example: {{cli}} {' '.join(path)} ...` line"
+    )
+
+
+@pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
+def test_every_parameter_has_help(path: tuple[str, ...]) -> None:
+    callback = inspect.unwrap(COMMANDS[path])
+    hints = typing.get_type_hints(callback, include_extras=True)
+    for name, param in inspect.signature(callback).parameters.items():
+        hint = hints.get(name)
+        if hint is typer.Context:
+            continue
+        infos = [m for m in getattr(hint, "__metadata__", ()) if isinstance(m, ParameterInfo)]
+        if isinstance(param.default, ParameterInfo):
+            infos.append(param.default)
+        assert infos, f"`{_slug(path)}` parameter `{name}` must be a typer.Option/Argument with help="
+        assert all((info.help or "").strip() for info in infos), f"`{_slug(path)}` parameter `{name}` has no help"
+
+
+@pytest.mark.parametrize("path", sorted(GROUPS), ids=_slug)
+def test_every_group_has_help(path: tuple[str, ...]) -> None:
+    assert (GROUPS[path].info.help or "").strip(), f"group `{_slug(path)}` has no description"

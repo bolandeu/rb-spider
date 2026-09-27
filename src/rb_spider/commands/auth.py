@@ -1,90 +1,73 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
+from datetime import UTC, datetime
+
 import typer
 
 from .. import output
 from ..core.errors import InvalidArguments
-from ..credentials import manager as credentials
+from ..core.version import DEV_VERSION, cli_name, installed_version
 
-app = output.group("Секреты (пароли прокси, DSN баз) — в системном хранилище ключей, не в файлах проекта.")
+# `auth status` exists in every CLI (tools/docs/standard-release.md §8); a CLI
+# generated without credentials (no credentials/ package, no commands/login.py)
+# reports an empty `credentials` list and exits 0. Detected at runtime so this
+# file needs no template logic — same approach as doctor.py.
+_PACKAGE_NAME = __name__.split(".")[0]
+_HAS_CREDENTIALS = importlib.util.find_spec(f"{_PACKAGE_NAME}.credentials") is not None
 
-
-@app.command("login")
-@output.guard
-def login(
-    ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Имя учётной записи, например proxy-main."),
-    non_interactive: bool = output.NonInteractiveOption,
-    json_output: bool = output.JsonOption,
-    quiet: bool = output.QuietOption,
-) -> None:
-    """Сохранить секрет в системное хранилище ключей (keychain).
-
-    Значение берётся из переменной окружения `SPIDER_<PROVIDER>_API_KEY`,
-    иначе спрашивается интерактивно (с `--non-interactive` — ошибка, код 2).
-
-    Примеры:
-      spider auth login --provider proxy-main
-      SPIDER_PROXY_MAIN_API_KEY=... spider auth login --provider proxy-main --non-interactive
-
-    JSON: `{provider}`.
-    """
-    secret = credentials.read_secret_from_env(provider)
-    if secret is None:
-        if ctx.obj.get("non_interactive") or non_interactive:
-            raise InvalidArguments(
-                f"No credential found in environment for provider '{provider}' and --non-interactive was set."
-            )
-        secret = typer.prompt(f"Enter API key for '{provider}'", hide_input=True)
-    credentials.store_secret(provider, secret)
-    output.emit_success(
-        ctx,
-        {"provider": provider},
-        render_human=lambda d: output.human.echo(f"Stored credential for '{d['provider']}'."),
-    )
-
-
-@app.command("logout")
-@output.guard
-def logout(
-    ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Имя учётной записи, например proxy-main."),
-    json_output: bool = output.JsonOption,
-    quiet: bool = output.QuietOption,
-) -> None:
-    """Удалить секрет из системного хранилища ключей.
-
-    Пример: spider auth logout --provider proxy-main
-
-    JSON: `{provider}`.
-    """
-    credentials.delete_secret(provider)
-    output.emit_success(
-        ctx,
-        {"provider": provider},
-        render_human=lambda d: output.human.echo(f"Removed credential for '{d['provider']}'."),
-    )
+app = output.group(
+    "Секреты (пароли прокси, сайта, базы PostgreSQL) — в системном хранилище ключей, не в файлах проекта."
+)
 
 
 @app.command("status")
 @output.guard
 def auth_status(
     ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Имя учётной записи, например proxy-main."),
+    check: bool = typer.Option(
+        False, "--check", help="Ещё и проверить каждый секрет (не дольше 10 с на провайдера), а не только его наличие."
+    ),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Только этот провайдер: proxy, site или database (по умолчанию — все)."
+    ),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Проверить, доступен ли секрет (из keychain или переменной окружения).
+    """Показать секреты всех провайдеров: откуда берутся и работают ли. Значения не печатаются.
 
-    Пример: spider auth status --provider proxy-main
+    Провайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `site`
+    (пароль сайта при `crawl.auth = basic`) и `database` (пароль `SPIDER_DB_URL`);
+    все необязательные: нужны только при этих настройках. Без `--check` — только
+    наличие (статус `unchecked` или `missing`). С `--check` — проверка без сети:
+    у этих секретов нет API, которое можно спросить, поэтому найденный секрет — `ok`.
 
-    JSON: `{provider, authenticated}`.
+    Коды выхода: 0 — все обязательные провайдеры в порядке (необязательный может
+    отсутствовать); 3 — у обязательного проблема или какой-то секрет `invalid` /
+    `expired`; 2 — неизвестный `--provider`.
+
+    JSON — общий для всех наших инструментов контракт: `tool`, `version`, `checked_at`,
+    `credentials[]` с `provider`, `required`, `fields`, `source`, `source_ref`, `status`,
+    `expires_at`, `quota`, `message`.
+
+    Example: {cli} auth status --check --json
+    Example: {cli} auth status --provider proxy
     """
-    authenticated = credentials.get_secret(provider) is not None
-    output.emit_success(
-        ctx,
-        {"provider": provider, "authenticated": authenticated},
-        render_human=lambda d: output.human.echo(
-            f"{'Authenticated' if d['authenticated'] else 'Not authenticated'} for '{d['provider']}'."
-        ),
-    )
+    tool, version = cli_name(), installed_version() or DEV_VERSION
+    if not _HAS_CREDENTIALS:
+        if provider is not None:
+            raise InvalidArguments(f"Unknown provider '{provider}' ({tool} stores no credentials).")
+        checked_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        payload = {"tool": tool, "version": version, "checked_at": checked_at, "credentials": []}
+        output.emit_report(ctx, payload, lambda _: output.human.echo(f"{tool} stores no credentials."), None)
+        return
+    health = importlib.import_module(f"{_PACKAGE_NAME}.credentials.health")
+    payload, problem = health.status(tool, version, check=check, only=provider)
+    output.emit_report(ctx, payload, health.render, problem)
+
+
+if importlib.util.find_spec(f"{_PACKAGE_NAME}.commands.login") is not None:
+    _login = importlib.import_module(f"{_PACKAGE_NAME}.commands.login")
+    app.command("login")(_login.login)
+    app.command("logout")(_login.logout)
