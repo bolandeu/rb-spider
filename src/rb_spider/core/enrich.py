@@ -12,8 +12,9 @@ under the entry point's name, replacing that plugin's earlier metrics for the cr
 written in batches as they come, so a plugin may yield millions of them. A metric's URL doesn't
 have to be one the crawl found (a URL search engines know but links don't lead to is a finding too).
 
-Secrets a plugin needs are its own business — the convention is spider's keychain
-(`rb_spider.credentials.manager`), never the project config.
+Secrets a plugin needs are its own business, never the project config. Spider's own integrations (Search Console,
+PageSpeed, GA4, Yandex Webmaster) call the sibling tools' libraries (gsc, a GA4 tool, ywm), and those tools keep the keys and logins —
+spider doesn't store or ask for them (docs/spec.md).
 """
 
 from __future__ import annotations
