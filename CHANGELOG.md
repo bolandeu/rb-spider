@@ -11,6 +11,17 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.2.1] - 2026-09-28
+
+### Changed
+
+- Extra `gsc` ставит пакет `rb-google-search-console` (бывший `gsc`, v0.4); `spider doctor` дополнительно показывает внешние программы (`lighthouse`, `npx`) — необязательные, здоровье не портят. Пароли из keychain `rb_spider:<provider>` (до 0.2.0) по-прежнему читаются, но `auth logout` их больше не удаляет.
+
+### Fixed
+
+- В `--help` снова видны квадратные скобки: названия extras (`rb-spider[render]`, `rb-spider[postgres]` …) и разделы конфига (`[custom]`, `[[custom.search]]`) больше не съедаются разметкой.
+
+
 ## [0.2.0] - 2026-09-27
 
 ### Changed

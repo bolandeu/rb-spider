@@ -1,1 +1,0 @@
-Extra `gsc` ставит пакет `rb-google-search-console` (бывший `gsc`, v0.4); `spider doctor` дополнительно показывает внешние программы (`lighthouse`, `npx`) — необязательные, здоровье не портят. Пароли из keychain `rb_spider:<provider>` (до 0.2.0) по-прежнему читаются, но `auth logout` их больше не удаляет.
