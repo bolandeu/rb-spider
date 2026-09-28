@@ -4,7 +4,7 @@
  Показать, что обход прочитал из XML sitemap, и сравнение с найденным по ссылкам.
 
  Sitemap читается в начале обхода с `sitemaps.crawl = true` (extra
- `rb-spider`): найденные через robots.txt и стандартные пути
+ `rb-spider[sitemaps]`): найденные через robots.txt и стандартные пути
  (`sitemaps.discover`) и заданные `sitemaps.urls`; их URL обходятся
  (`sitemaps.follow`). Проблемы — `spider issues`, группа Sitemaps; число URL
  в sitemap и вне — `spider overview`.

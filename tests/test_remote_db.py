@@ -26,10 +26,10 @@ def test_only_postgresql(monkeypatch) -> None:
 
 
 def test_password_comes_from_the_keychain_when_the_url_has_none(monkeypatch) -> None:
-    from rb_spider.credentials import manager
+    from rb_spider.providers import secrets
 
     asked = []
-    monkeypatch.setattr(manager, "get_secret", lambda provider, field="api_key": asked.append(provider) or "s3cret")
+    monkeypatch.setattr(secrets, "password", lambda provider: asked.append(provider) or "s3cret")
     url = storage.remote_url("postgresql://spider@db.example:5433/crawls")
     assert (url.drivername, url.password, url.port, url.database) == ("postgresql+psycopg", "s3cret", 5433, "crawls")
     assert asked == ["database"]

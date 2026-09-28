@@ -47,7 +47,7 @@ from crawlee.proxy_configuration import ProxyConfiguration
 from crawlee.sessions import Session
 from crawlee.storage_clients import MemoryStorageClient
 
-from ..credentials import manager as credentials
+from ..providers import secrets
 from . import issues, render, sitemaps, storage
 from .errors import (
     AuthRequired,
@@ -216,7 +216,7 @@ def proxy_urls(settings: CrawlSettings) -> list[str]:
     """`crawl.proxy_urls` with `{password}` filled from the keychain (`spider auth login --provider proxy`)."""
     if not any("{password}" in url for url in settings.proxy_urls):
         return list(settings.proxy_urls)
-    password = credentials.get_secret(PROXY_CREDENTIAL)
+    password = secrets.password(PROXY_CREDENTIAL)
     if password is None:
         raise AuthRequired(PROXY_CREDENTIAL)
     return [url.replace("{password}", password) for url in settings.proxy_urls]
@@ -252,7 +252,7 @@ def site_auth_header(settings: CrawlSettings) -> dict[str, str]:
     """`crawl.auth = basic`: the Authorization header for the site's own URLs, password from the keychain."""
     if settings.auth != "basic":
         return {}
-    password = credentials.get_secret(SITE_CREDENTIAL)
+    password = secrets.password(SITE_CREDENTIAL)
     if password is None:
         raise AuthRequired(SITE_CREDENTIAL)
     token = base64.b64encode(f"{settings.auth_user or ''}:{password}".encode()).decode()

@@ -3,9 +3,11 @@ from __future__ import annotations
 import functools
 import logging
 import sys
+import weakref
 from collections.abc import Callable
 
 import typer
+from rich.markup import escape
 
 from ..core.errors import Aborted, CliError, InvalidArguments
 from ..core.version import cli_name
@@ -28,11 +30,13 @@ __all__ = [
     "help_if_no_command",
     "human",
     "is_dry_run",
+    "is_guarded",
     "require_confirmation",
     "vecho",
 ]
 
 _CLI_NAME = cli_name()
+_GUARDED: weakref.WeakSet[Callable] = weakref.WeakSet()
 
 # Reusable local options: attach to any command so `<cli> <command> --json`
 # works, on top of the global `<cli> --json <command>` handled by guard().
@@ -88,7 +92,7 @@ def help_if_no_command(ctx: typer.Context) -> None:
 
 def group(help_text: str) -> typer.Typer:
     """Create a command group (`<cli> config ...`) with help-on-no-args behavior."""
-    app = typer.Typer(help=help_text)
+    app = typer.Typer(help=escape(help_text))  # rich would eat `[...]` in the help text
 
     @app.callback(invoke_without_command=True)
     def _default(ctx: typer.Context) -> None:
@@ -216,5 +220,13 @@ def guard(func: Callable) -> Callable:
 
     # Docstrings are the --help text; `{cli}` in their `Example:` lines becomes
     # this CLI's name, so template-born commands need no Jinja rendering.
-    wrapper.__doc__ = (func.__doc__ or "").replace("{cli}", _CLI_NAME) or None
+    # Escaped because Typer renders help as rich markup, which silently drops
+    # anything in brackets (`[[tool.rb.external]]`, `[x]`).
+    wrapper.__doc__ = escape((func.__doc__ or "").replace("{cli}", _CLI_NAME)) or None
+    _GUARDED.add(wrapper)
     return wrapper
+
+
+def is_guarded(func: Callable) -> bool:
+    """Whether `func` is an `output.guard` wrapper — tests/test_help.py requires it of every command."""
+    return func in _GUARDED

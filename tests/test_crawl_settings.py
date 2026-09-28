@@ -129,10 +129,10 @@ def test_rate_cap_from_max_rps_and_crawl_delay() -> None:
 
 def test_proxy_password_comes_from_the_keychain(monkeypatch) -> None:
     settings = CrawlSettings(proxy_urls=["http://user:{password}@proxy.example:8000", "http://open.example:3128"])
-    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: None)
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: None)
     with pytest.raises(AuthRequired):
         proxy_urls(settings)
-    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: "s3cret")
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: "s3cret")
     assert proxy_urls(settings) == ["http://user:s3cret@proxy.example:8000", "http://open.example:3128"]
 
 
@@ -146,7 +146,7 @@ def test_cli_flags(base_url: str) -> None:
 
 
 def test_doctor_asks_for_the_proxy_password_only_when_needed(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(crawl_service.credentials, "get_credential", lambda provider: None)
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: None)
     doctor = lambda: json.loads(CliRunner().invoke(app, ["--project", str(tmp_path), "--json", "doctor"]).stdout)  # noqa: E731
     assert not [c for c in doctor()["checks"] if c["name"].startswith("credential:")]
     CliRunner().invoke(app, ["--project", str(tmp_path), "init"])
@@ -267,19 +267,17 @@ def test_cookies(base_url: str) -> None:
 
 
 def test_basic_auth_only_to_the_site(base_url: str, monkeypatch) -> None:
-    monkeypatch.setattr(
-        crawl_service.credentials, "get_secret", lambda provider: "pa55" if provider == "site" else None
-    )
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: "pa55" if provider == "site" else None)
     assert _pages_of(base_url, "/members/")["/members/"]["status_code"] == 401
     polygon.SEEN_HEADERS.clear()
     assert _pages_of(base_url, "/members/", auth="basic", auth_user="stage")["/members/"]["status_code"] == 200
-    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: None)
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: None)
     with pytest.raises(AuthRequired):
         _pages_of(base_url, "/members/", auth="basic", auth_user="stage")
 
 
 def test_other_sites_never_get_the_password(base_url: str, monkeypatch) -> None:
-    monkeypatch.setattr(crawl_service.credentials, "get_secret", lambda provider: "pa55")
+    monkeypatch.setattr(crawl_service.secrets, "password", lambda provider: "pa55")
     polygon.SEEN_HEADERS.clear()
     _pages_of(base_url, "/l-external", auth="basic", auth_user="stage")
     local = {h.get("host", "") for h in polygon.SEEN_HEADERS if h.get("authorization")}

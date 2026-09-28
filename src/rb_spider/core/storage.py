@@ -499,9 +499,9 @@ def remote_url(url: str) -> sa.URL:
         )
     parsed = parsed.set(drivername="postgresql+psycopg")
     if parsed.password is None and parsed.username:
-        from ..credentials import manager as credentials
+        from ..providers import secrets
 
-        password = credentials.get_secret(DB_CREDENTIAL)
+        password = secrets.password(DB_CREDENTIAL)
         if password:
             parsed = parsed.set(password=password)
     return parsed

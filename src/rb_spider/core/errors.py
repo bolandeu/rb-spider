@@ -66,20 +66,36 @@ class CredentialsUnhealthy(CliError):
 
 
 class DependencyTooOld(CliError):
-    """Another CLI this one calls is missing or older than required (core/deps.py)."""
+    """Another CLI this one calls is missing or older than required (core/deps.py).
 
-    def __init__(self, name: str, installed: str | None, required: str, *, install_url: str | None = None) -> None:
+    `dist` is its distribution name — what `uv tool` knows it by (`rb-serp`
+    for the `serp` command, standard §10). With `install_url` the action is a
+    pinned, runnable install; without it, what to install and no fake URL.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        installed: str | None,
+        required: str | None,
+        *,
+        install_url: str | None = None,
+        dist: str | None = None,
+    ) -> None:
+        dist = dist or name
         found = "is not installed" if installed is None else f"is {installed}"
-        pinned = f'uv tool install --reinstall "git+{install_url}@v{required}"' if install_url else None
-        if installed is not None:
-            action = f"Run 'uv tool upgrade {name}'" + (f" (or '{pinned}')" if pinned else "") + ", then retry."
-        elif pinned:
-            action = f"Run '{pinned}', then retry."
+        need = f"{name} >= {required}" if required else name
+        if install_url:
+            repo = install_url.removesuffix(".git")
+            tag = f"v{required}" if required else "<latest release tag>"
+            action = f"Run 'uv tool install \"{dist} @ git+{repo}.git@{tag}\" --force', then retry."
+        elif installed is not None:
+            action = f"Run 'uv tool upgrade {dist}', then retry."
         else:
-            action = f"Install {name} >= {required} (see its README for the install command), then retry."
+            action = f"Install {need} (distribution {dist}; see its README for the install command), then retry."
         super().__init__(
             "DEPENDENCY_TOO_OLD",
-            f"'{name}' {found}; {_CLI} needs {name} >= {required}.",
+            f"'{name}' {found}; {_CLI} needs {need}.",
             action=action,
             exit_code=1,
         )

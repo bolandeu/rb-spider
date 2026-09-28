@@ -11,7 +11,10 @@
  если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
  при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
  (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
- `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights.
+ `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;
+ `external:<программа>` — внешние программы из `[[tool.rb.external]]` (`lighthouse`, `npx`):
+ версия или «не установлена»; все необязательные, на healthy не влияют. Пароли ищутся и в
+ keychain `rb_spider:<провайдер>`, где их хранил spider до 0.2.0.
 
  Example: spider doctor
  Example: spider --json doctor

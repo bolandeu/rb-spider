@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import ClassVar, Literal
 
+from ..core.version import module_exists
+
 # What a provider's own health check can conclude. `missing` and `unchecked`
 # are decided by `auth status` before a check ever runs.
 HealthStatus = Literal["ok", "invalid", "expired", "quota_exhausted", "unreachable"]
@@ -55,13 +57,35 @@ class Provider:
     # `auth login --provider deploy:example.com`. `auth status` reports each
     # stored target separately and sets `target` before `health_check()`.
     per_target: ClassVar[bool] = False
-    # Older env var names still honoured, field -> name, checked after
-    # <PACKAGE>_<PROVIDER>_<FIELD>. In a subclass keep the annotation (ruff RUF012):
-    #     legacy_env: ClassVar[dict[str, str]] = {"api_key": "XMLRIVER_TOKEN"}
-    # and read credentials with
-    # `manager.get_credential(self.credential_name, env_fields=..., legacy_env=self.legacy_env)`.
+    # Older env var names still honoured, field -> name; looked up after the
+    # keychain unless `legacy_env_first`. In a subclass keep the annotation
+    # (ruff RUF012): legacy_env: ClassVar[dict[str, str]] = {"api_key": "XMLRIVER_TOKEN"}
     legacy_env: ClassVar[dict[str, str]] = {}
+    legacy_env_first: ClassVar[bool] = False
+    # Other CLIs' credential namespaces (their command names) to read this
+    # provider's credential from after our own — e.g. wordstat reading the
+    # key `serp auth login` stored: shared_namespaces = ("serp",). Read-only.
+    shared_namespaces: ClassVar[tuple[str, ...]] = ()
     target: str | None = None
+
+    def credential(self) -> dict[str, str] | None:
+        """This provider's credential, resolved with all of the options above (use it in auth_headers()).
+
+        None in a CLI generated without credentials (include_auth=false): there
+        is no key store to read, so a provider there declares
+        `credential_fields = ()` and never needs one.
+        """
+        manager_module = f"{__name__.split('.')[0]}.credentials.manager"
+        if not module_exists(manager_module):
+            return None
+        manager = importlib.import_module(manager_module)
+        return manager.get_credential(
+            self.credential_name,
+            env_fields=list(self.credential_fields),
+            legacy_env=self.legacy_env,
+            legacy_env_first=self.legacy_env_first,
+            shared_namespaces=self.shared_namespaces,
+        )
 
     @classmethod
     def for_health_check(cls, target: str | None = None) -> Provider:
@@ -95,7 +119,10 @@ def all_providers() -> list[type[Provider]]:
     """Every concrete Provider subclass defined in this package, sorted by name."""
     package = __name__.rsplit(".", 1)[0]
     for module in pkgutil.iter_modules(importlib.import_module(package).__path__):
-        importlib.import_module(f"{package}.{module.name}")
+        # base/http hold only abstract bases; importing http.py would pull in
+        # httpx for CLIs without HTTP providers (their subclasses import it anyway).
+        if module.name not in ("base", "http"):
+            importlib.import_module(f"{package}.{module.name}")
     found: set[type[Provider]] = set()
     pending = list(Provider.__subclasses__())
     while pending:

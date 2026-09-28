@@ -6,7 +6,7 @@
  В sitemap идут индексируемые HTML-страницы сайта с кодом 200 (без страниц
  пагинации 2+); `--include` добавляет noindex, canonicalised, пагинацию, PDF. Больше
  49 999 URL — файлы sitemap-N.xml и индекс sitemap.xml. Нужен extra
- `rb-spider`. Пишет только в каталог `--out`.
+ `rb-spider[sitemaps]`. Пишет только в каталог `--out`.
 
  Example: spider sitemaps build -o public/
  Example: spider sitemaps build 12 -o out/ --lastmod --include pdf

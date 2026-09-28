@@ -6,7 +6,7 @@
  Duplicate Details из Screaming Frog: для проверок `content_exact_duplicates` и
  `content_near_duplicates` из `spider issues`. Точный дубль показан парой со первой
  страницей своей группы, почти-дубль — каждой парой один раз. Почти-дубли есть только
- у обходов с `collect.near_duplicates = true` (extra `rb-spider`); порог сходства
+ у обходов с `collect.near_duplicates = true` (extra `rb-spider[near]`); порог сходства
  и «только индексируемые» — `thresholds.near_duplicate_similarity` и
  `thresholds.duplicates_indexable_only`, меняются через `spider analyze`.
 

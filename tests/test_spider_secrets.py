@@ -1,7 +1,7 @@
 """spider's own secrets in `auth status` (proxy, site, database) and the keychain namespace move.
 
 Before 0.2.0 the keychain held `rb_spider:<provider>` while env vars were `SPIDER_*`; now both
-are `spider`. Old entries are still read, so passwords saved by an older spider keep working.
+are `spider`. Old entries are still read (`shared_namespaces`, read-only), so passwords saved by an older spider keep working.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import json
 import pytest
 
 from rb_spider.credentials import manager as credentials
+from rb_spider.providers import secrets
 
 from .test_auth import by_provider
 from .test_cli import invoke
@@ -44,27 +45,30 @@ def test_all_three_are_optional_and_missing_is_healthy(keychain, monkeypatch: py
         "proxy": (False, "missing"),
         "site": (False, "missing"),
     }
-    assert entries["proxy"]["source_ref"] == "SPIDER_PROXY_API_KEY or keychain service spider:proxy"
+    assert entries["proxy"]["source_ref"] == (
+        "SPIDER_PROXY_API_KEY or keychain service spider:proxy or rb_spider:proxy"
+    )
 
 
 def test_legacy_keychain_entry_is_still_read(keychain) -> None:
     keychain[("rb_spider:proxy", "proxy")] = json.dumps({"api_key": SECRET})
-    assert credentials.get_secret("proxy") == SECRET
+    assert secrets.password("proxy") == SECRET
     code, payload = _status("--check", "--provider", "proxy")
     proxy = by_provider(payload)["proxy"]
     assert (code, proxy["status"], proxy["source"]) == (0, "ok", "keychain")
     assert proxy["source_ref"] == "keychain service rb_spider:proxy"
 
 
-def test_login_stores_under_spider_and_logout_removes_the_legacy_entry_too(keychain) -> None:
+def test_login_stores_under_spider_and_logout_leaves_the_legacy_entry(keychain) -> None:
     keychain[("rb_spider:site", "site")] = json.dumps({"api_key": SECRET})
     login = invoke("auth", "login", "--provider", "site", "--non-interactive", env={"SPIDER_SITE_API_KEY": "new"})
     assert login.exit_code == 0
     assert json.loads(keychain[("spider:site", "site")]) == {"api_key": "new"}
-    assert credentials.get_secret("site") == "new"  # the new entry wins over the legacy one
+    assert secrets.password("site") == "new"  # the new entry wins over the legacy one
     assert invoke("auth", "logout", "--provider", "site").exit_code == 0
-    assert ("spider:site", "site") not in keychain and ("rb_spider:site", "site") not in keychain
-    assert credentials.get_secret("site") is None
+    assert ("spider:site", "site") not in keychain
+    assert ("rb_spider:site", "site") in keychain  # another namespace is only read, never written
+    assert secrets.password("site") == SECRET
 
 
 def test_database_without_db_url_is_ok_with_a_note(keychain, monkeypatch: pytest.MonkeyPatch) -> None:

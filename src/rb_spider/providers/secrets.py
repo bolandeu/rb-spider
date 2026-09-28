@@ -4,6 +4,9 @@ All three are optional: each is needed only with a setting that uses it. A proxy
 site password has no endpoint to ask whether it is right — a crawl is what proves it —
 so their check only confirms the secret is there. The database password is checked
 by connecting to `SPIDER_DB_URL` (when it is set).
+
+Before 0.2.0 the keychain held `rb_spider:<provider>`; such entries are still read
+(`shared_namespaces`, read-only), so passwords saved by an older spider keep working.
 """
 
 from __future__ import annotations
@@ -14,31 +17,36 @@ from .base import Health, Provider
 CHECK_TIMEOUT_S = 10  # credentials.health.CHECK_TIMEOUT: the provider's own client timeout guarantees it
 
 
-class ProxyPassword(Provider):
+class _Secret(Provider):
+    """A password spider needs only with a setting that uses it."""
+
+    abstract = True
+    required = False
+    shared_namespaces = ("rb_spider",)  # the keychain namespace before 0.2.0
+
+
+class ProxyPassword(_Secret):
     """`{password}` in `crawl.proxy_urls` (core/crawl.py, PROXY_CREDENTIAL)."""
 
     name = "proxy"
-    required = False
 
     def health_check(self) -> Health:
         return Health(message="present; only a crawl through the proxy proves it")
 
 
-class SitePassword(Provider):
+class SitePassword(_Secret):
     """The site's HTTP Basic password with `crawl.auth = basic` (core/crawl.py, SITE_CREDENTIAL)."""
 
     name = "site"
-    required = False
 
     def health_check(self) -> Health:
         return Health(message="present; only a crawl of the site proves it")
 
 
-class DatabasePassword(Provider):
+class DatabasePassword(_Secret):
     """The password of `SPIDER_DB_URL` when the URL has none (core/storage.py, DB_CREDENTIAL)."""
 
     name = "database"
-    required = False
 
     def health_check(self) -> Health:
         import sqlalchemy as sa  # heavy: only when actually checking
@@ -64,3 +72,10 @@ class DatabasePassword(Provider):
         finally:
             engine.dispose()
         return Health()
+
+
+def password(name: str) -> str | None:
+    """The secret of provider `name` (proxy, site, database): env, keychain `spider:`, then legacy `rb_spider:`."""
+    provider = {cls.name: cls for cls in (ProxyPassword, SitePassword, DatabasePassword)}[name]
+    credential = provider().credential()
+    return credential.get("api_key") if credential else None

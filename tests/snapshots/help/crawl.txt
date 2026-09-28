@@ -39,14 +39,14 @@
  (выгрузка Screaming Frog или `spider export`) или XML sitemap (`<urlset>`). Результат —
  обычный обход: issues, urls, redirects, links работают.
 
- XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider`) читается в
+ XML sitemap сайта (`sitemaps.crawl`, extra `rb-spider[sitemaps]`) читается в
  начале обхода: его URL тоже обходятся, а проверки группы Sitemaps сравнивают
  его с найденным по ссылкам — `spider sitemaps show`.
 
  JS-сайт (контент, ссылки или title появляются только после скриптов) —
  `--render always`: HTML-страницы с кодом 200 после обычного запроса ещё и
  открываются в браузере, SEO-данные берутся из готового DOM, а коды ответа,
- редиректы и ресурсы проверяются как обычно. Нужен `rb-spider`; браузер
+ редиректы и ресурсы проверяются как обычно. Нужен `rb-spider[render]`; браузер
  находится сам — сборка Playwright, любой Chromium из кэша Playwright или Google
  Chrome (свой путь — crawl.render_browser). Вкладок — crawl.render_tabs, ожидание
  скриптов — crawl.render_wait_ms, окно — crawl.render_viewport. Медленнее обычного

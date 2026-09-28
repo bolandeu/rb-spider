@@ -10,11 +10,16 @@ import keyring.errors
 from keyring.backends import fail
 
 from ..core.errors import CredentialStoreUnavailable
-from ..core.version import CLI_NAME
+from ..core.version import cli_name
 
-# Derived from this package's own name so the module needs no templating.
-_PACKAGE_NAME = __name__.split(".")[0]
 log = logging.getLogger(__name__)
+
+# Everything this CLI stores or reads lives under its namespace — the command
+# name (`cli_name`), not the Python package: keychain service
+# "<namespace>:<provider>", env vars <NAMESPACE>_<PROVIDER>_<FIELD> (`serp` ->
+# SERP_XMLRIVER_API_KEY even though the package is rb_serp). Another tool's
+# namespace can be read too (`Provider.shared_namespaces`), never written.
+NAMESPACE = cli_name()
 
 # A "credential" is a small dict of named fields stored as one JSON blob per
 # provider in the OS keychain. `provider` is whatever identifies the
@@ -25,25 +30,15 @@ log = logging.getLogger(__name__)
 # (username + password) — nothing is special-cased for either shape.
 
 
-# Keychain services and env vars share the command's namespace: `spider:<provider>` and
-# SPIDER_<PROVIDER>_<FIELD>. Before 0.2.0 the keychain used the package name (`rb_spider:<provider>`);
-# such entries are still read, so saved passwords survive the upgrade (`auth login` re-saves under `spider:`).
-_NAMESPACE = CLI_NAME
-_LEGACY_NAMESPACE = _PACKAGE_NAME
+def _service_name(provider: str, namespace: str = NAMESPACE) -> str:
+    return f"{namespace}:{provider}"
 
 
-def _service_name(provider: str) -> str:
-    return f"{_NAMESPACE}:{provider}"
-
-
-def _legacy_service_name(provider: str) -> str:
-    return f"{_LEGACY_NAMESPACE}:{provider}"
-
-
-def _env_var_name(provider: str, field: str) -> str:
+def _env_var_name(provider: str, field: str, namespace: str = NAMESPACE) -> str:
     # Anything that isn't a letter or digit becomes "_", so per-target names
-    # ("deploy:example.com") still give a settable name: SPIDER_DEPLOY_EXAMPLE_COM_API_KEY.
-    return re.sub(r"[^A-Z0-9]", "_", f"{_NAMESPACE}_{provider}_{field}".upper())
+    # ("deploy:example.com") and dashed commands still give a settable name:
+    # SITEMAP_XML_DEPLOY_EXAMPLE_COM_API_KEY.
+    return re.sub(r"[^A-Z0-9]", "_", f"{namespace}_{provider}_{field}".upper())
 
 
 # keyring can't list what it holds, so the names of stored credentials are
@@ -55,7 +50,7 @@ _INDEX_USER = "__stored_credentials__"
 def stored_names() -> list[str]:
     """Names of credentials stored in the keychain by this CLI (env-only ones aren't listed)."""
     try:
-        raw = keyring.get_password(_NAMESPACE, _INDEX_USER)
+        raw = keyring.get_password(NAMESPACE, _INDEX_USER)
     except keyring.errors.KeyringError:
         return []
     return sorted(json.loads(raw)) if raw else []
@@ -65,7 +60,7 @@ def _update_index(provider: str, *, present: bool) -> None:
     names = set(stored_names())
     names = names | {provider} if present else names - {provider}
     try:
-        keyring.set_password(_NAMESPACE, _INDEX_USER, json.dumps(sorted(names)))
+        keyring.set_password(NAMESPACE, _INDEX_USER, json.dumps(sorted(names)))
     except keyring.errors.KeyringError as exc:  # the credential itself is stored; only listing suffers
         log.warning("could not update the stored-credentials index (%s)", exc)
 
@@ -73,7 +68,7 @@ def _update_index(provider: str, *, present: bool) -> None:
 def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
     """Read whichever of `fields` are set as env vars for this provider.
 
-    Env var name: SPIDER_<PROVIDER>_<FIELD>, e.g. SPIDER_PROXY_API_KEY.
+    Env var name: <NAMESPACE>_<PROVIDER>_<FIELD>, e.g. MYCLI_OPENAI_API_KEY.
     """
     result: dict[str, str] = {}
     for field in fields:
@@ -83,27 +78,33 @@ def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
     return result
 
 
-def _stored_at(provider: str) -> tuple[dict[str, str], str]:
-    """The stored fields and the keychain service holding them: `spider:<provider>`, else the legacy one."""
-    for service in (_service_name(provider), _legacy_service_name(provider)):
-        try:
-            stored_raw = keyring.get_password(service, provider)
-        except keyring.errors.KeyringError as exc:
-            # A missing/locked keychain (headless Linux, CI) must not block the
-            # env-var path — that's the whole point of having a fallback.
-            log.warning("OS credential store unavailable (%s); using environment variables only", exc)
-            break
-        if stored_raw:
-            return json.loads(stored_raw), service
-    return {}, _service_name(provider)
+# Set on the first keychain failure in this process (headless Linux, CI): the
+# env-var path must keep working, and a server that supplies every key through
+# env shouldn't log about it on each lookup. Logged once at DEBUG; a WARNING
+# only when a field then turns out to be missing everywhere (_locate).
+_keychain_problem: str | None = None
+_warned_missing = False
 
 
-def _stored(provider: str) -> dict[str, str]:
-    return _stored_at(provider)[0]
+def _stored(provider: str, namespace: str = NAMESPACE) -> dict[str, str]:
+    global _keychain_problem
+    try:
+        stored_raw = keyring.get_password(_service_name(provider, namespace), provider)
+    except keyring.errors.KeyringError as exc:
+        if _keychain_problem is None:
+            _keychain_problem = str(exc)
+            log.debug("OS credential store unavailable (%s); using environment variables only", exc)
+        return {}
+    return json.loads(stored_raw) if stored_raw else {}
 
 
 def get_credential(
-    provider: str, *, env_fields: list[str] | None = None, legacy_env: dict[str, str] | None = None
+    provider: str,
+    *,
+    env_fields: list[str] | None = None,
+    legacy_env: dict[str, str] | None = None,
+    legacy_env_first: bool = False,
+    shared_namespaces: tuple[str, ...] = (),
 ) -> dict[str, str] | None:
     """Resolve the full credential bag for a provider.
 
@@ -111,55 +112,88 @@ def get_credential(
     can override a single field (e.g. a rotated token) without touching the
     rest. `env_fields` lets a multi-field provider (session cookies, host
     credentials, ...) declare its field names explicitly, so env vars are
-    checked even before anything has ever been stored. `legacy_env` maps a
-    field to an older env var name still honoured (`Provider.legacy_env`).
+    checked even before anything has ever been stored. The other keyword
+    arguments mirror the `Provider` attributes of the same names (see
+    `locate_fields` for the order); providers call `Provider.credential()`.
     """
     stored = _stored(provider)
     fields = env_fields or list(stored.keys()) or ["api_key"]
-    located = _locate(provider, fields, legacy_env, stored)
+    located = _locate(provider, fields, legacy_env, legacy_env_first, shared_namespaces, stored)
     merged = {**stored, **{field: value for field, (value, _, _) in located.items()}}
     return merged or None
 
 
 def locate_fields(
-    provider: str, fields: list[str], *, legacy_env: dict[str, str] | None = None
+    provider: str,
+    fields: list[str],
+    *,
+    legacy_env: dict[str, str] | None = None,
+    legacy_env_first: bool = False,
+    shared_namespaces: tuple[str, ...] = (),
 ) -> dict[str, tuple[str, str, str]]:
     """Map each present field to (value, source "env" | "keychain", where: the env var or keychain service).
 
-    Precedence per field: `<PACKAGE>_<PROVIDER>_<FIELD>` env var, then the
-    field's legacy env var (`legacy_env`), then the keychain. For `auth
-    status`, which reports the source and must never print the value.
+    Order per field, first hit wins:
+    1. env var `<NAMESPACE>_<PROVIDER>_<FIELD>`, then the same for each shared namespace;
+    2. keychain `<namespace>:<provider>`, own namespace first, then shared ones;
+    3. the field's legacy env var (`legacy_env`) — or right after 1 with
+       `legacy_env_first` (for a tool whose users still set only the old name
+       while a stale keychain entry exists).
+    For `auth status`, which reports the source and must never print the value.
     """
-    stored, service = _stored_at(provider)
-    return _locate(provider, fields, legacy_env, stored, service)
+    return _locate(provider, fields, legacy_env, legacy_env_first, shared_namespaces, _stored(provider))
 
 
 def _locate(
     provider: str,
     fields: list[str],
     legacy_env: dict[str, str] | None,
-    stored: dict[str, str],
-    service: str | None = None,
+    legacy_env_first: bool,
+    shared_namespaces: tuple[str, ...],
+    own_stored: dict[str, str],
 ) -> dict[str, tuple[str, str, str]]:
-    service = service or _service_name(provider)
-    located: dict[str, tuple[str, str, str]] = {
-        field: (value, "keychain", service) for field, value in stored.items() if field in fields
-    }
+    namespaces = (NAMESPACE, *shared_namespaces)
+    stored = {NAMESPACE: own_stored, **{ns: _stored(provider, ns) for ns in shared_namespaces}}
+    located: dict[str, tuple[str, str, str]] = {}
     for field in fields:
-        for name in (_env_var_name(provider, field), (legacy_env or {}).get(field)):
-            if name and (value := os.environ.get(name)) is not None:
+        env_names = [_env_var_name(provider, field, ns) for ns in namespaces]
+        legacy = [(legacy_env or {})[field]] if field in (legacy_env or {}) else []
+        env_first = env_names + legacy if legacy_env_first else env_names
+        for name in env_first:
+            if (value := os.environ.get(name)) is not None:
                 located[field] = (value, "env", name)
                 break
+        else:
+            for ns in namespaces:
+                if field in stored[ns]:
+                    located[field] = (stored[ns][field], "keychain", _service_name(provider, ns))
+                    break
+            else:
+                for name in [] if legacy_env_first else legacy:
+                    if (value := os.environ.get(name)) is not None:
+                        located[field] = (value, "env", name)
+    _warn_if_keychain_mattered(provider, [field for field in fields if field not in located])
     return located
 
 
-def env_var_name(provider: str, field: str) -> str:
-    return _env_var_name(provider, field)
+def _warn_if_keychain_mattered(provider: str, missing: list[str]) -> None:
+    global _warned_missing
+    if missing and _keychain_problem is not None and not _warned_missing:
+        _warned_missing = True
+        log.warning(
+            "OS credential store unavailable (%s) and %s not set in the environment for '%s'",
+            _keychain_problem,
+            ", ".join(missing),
+            provider,
+        )
 
 
-def keychain_service(provider: str) -> str:
-    """The keychain service a credential is read from: `spider:<provider>`, or the legacy one if only that exists."""
-    return _stored_at(provider)[1]
+def env_var_name(provider: str, field: str, namespace: str = NAMESPACE) -> str:
+    return _env_var_name(provider, field, namespace)
+
+
+def keychain_service(provider: str, namespace: str = NAMESPACE) -> str:
+    return _service_name(provider, namespace)
 
 
 def store_backend() -> str | None:
@@ -185,13 +219,12 @@ def store_credential(provider: str, fields: dict[str, str]) -> None:
 
 
 def delete_credential(provider: str) -> None:
-    for service in (_service_name(provider), _legacy_service_name(provider)):  # the legacy entry would resurface
-        try:
-            keyring.delete_password(service, provider)
-        except keyring.errors.PasswordDeleteError:
-            pass  # already absent — deleting a missing credential is not an error
-        except keyring.errors.KeyringError as exc:
-            raise CredentialStoreUnavailable(provider, str(exc)) from exc
+    try:
+        keyring.delete_password(_service_name(provider), provider)
+    except keyring.errors.PasswordDeleteError:
+        pass  # already absent — deleting a missing credential is not an error
+    except keyring.errors.KeyringError as exc:
+        raise CredentialStoreUnavailable(provider, str(exc)) from exc
     _update_index(provider, present=False)
 
 

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
 from pathlib import Path
 
 import typer
 
 from .. import output
 from ..core import crawl as crawl_service
-from ..core import services, settings, storage
+from ..core import deps, services, settings, storage
 from ..core.errors import CliError, CliTooOld
 from ..core.models import ProjectConfig
-from ..core.version import DEV_VERSION, cli_name, installed_version
+from ..core.version import DEV_VERSION, cli_name, installed_version, module_exists
+from ..providers import secrets
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
@@ -20,7 +20,7 @@ def _auth_checks(needed: list[str]) -> list[dict]:
     """The keychain, plus every credential the resolved settings need (today: the proxy password)."""
     # credentials/ is dropped at generation time when include_auth=false;
     # detecting it at runtime keeps this file free of template logic.
-    if importlib.util.find_spec(f"{_PACKAGE_NAME}.credentials") is None:
+    if not module_exists(f"{_PACKAGE_NAME}.credentials.manager"):
         return []
     credentials = importlib.import_module(f"{_PACKAGE_NAME}.credentials.manager")
 
@@ -33,7 +33,7 @@ def _auth_checks(needed: list[str]) -> list[dict]:
         }
     ]
     for provider in needed:
-        available = credentials.get_credential(provider) is not None
+        available = secrets.password(provider) is not None
         checks.append(
             {
                 "name": f"credential:{provider}",
@@ -74,7 +74,10 @@ def doctor(
     если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
     при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
     (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
-    `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights.
+    `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;
+    `external:<программа>` — внешние программы из `[[tool.rb.external]]` (`lighthouse`, `npx`):
+    версия или «не установлена»; все необязательные, на healthy не влияют. Пароли ищутся и в
+    keychain `rb_spider:<провайдер>`, где их хранил spider до 0.2.0.
 
     Example: spider doctor
     Example: spider --json doctor
@@ -109,6 +112,7 @@ def doctor(
     checks.append(settings_check)
     checks.extend(_auth_checks(needed))
     checks.append(_lighthouse_check(root, config))
+    checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(

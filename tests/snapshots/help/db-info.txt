@@ -5,7 +5,7 @@
 
  По умолчанию база — файл SQLite в папке данных (`SPIDER_DB_PATH` — другой
  путь). `SPIDER_DB_URL=postgresql://пользователь@хост:5432/база` — обходы в
- PostgreSQL (extra `rb-spider`); пароль — в keychain: `spider auth
+ PostgreSQL (extra `rb-spider[postgres]`); пароль — в keychain: `spider auth
  login --provider database` (или прямо в URL). Сохранённый HTML и тогда лежит
  локальным файлом, отдельным для каждой базы.
 

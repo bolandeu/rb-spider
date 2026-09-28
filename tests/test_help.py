@@ -28,6 +28,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
+from rb_spider import output
 from rb_spider.cli import app
 
 CLI = "spider"
@@ -107,6 +108,12 @@ def test_command_docstring_has_summary_and_example(path: tuple[str, ...]) -> Non
 
 
 @pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
+def test_every_command_is_guarded(path: tuple[str, ...]) -> None:
+    # output.guard gives the JSON error envelope, local --json/--quiet and the {cli} substitution in help.
+    assert output.is_guarded(COMMANDS[path]), f"`{_slug(path)}` must be wrapped in @output.guard"
+
+
+@pytest.mark.parametrize("path", sorted(COMMANDS), ids=_slug)
 def test_every_parameter_has_help(path: tuple[str, ...]) -> None:
     callback = inspect.unwrap(COMMANDS[path])
     hints = typing.get_type_hints(callback, include_extras=True)
@@ -124,3 +131,19 @@ def test_every_parameter_has_help(path: tuple[str, ...]) -> None:
 @pytest.mark.parametrize("path", sorted(GROUPS), ids=_slug)
 def test_every_group_has_help(path: tuple[str, ...]) -> None:
     assert (GROUPS[path].info.help or "").strip(), f"group `{_slug(path)}` has no description"
+
+
+def test_help_keeps_brackets() -> None:
+    """Typer renders help as rich markup, which drops `[...]`; output.guard escapes docstrings."""
+
+    def cmd(ctx: typer.Context) -> None:
+        """Declared in [[tool.rb.external]], see [x].
+
+        Example: {cli} cmd
+        """
+
+    probe = typer.Typer()
+    probe.command("cmd")(output.guard(cmd))
+    probe.command("other")(output.guard(cmd))
+    result = CliRunner().invoke(probe, ["cmd", "--help"], env=HELP_ENV)
+    assert "[[tool.rb.external]], see [x]." in result.output

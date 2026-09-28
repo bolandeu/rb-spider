@@ -8,11 +8,15 @@ This local gate is the authoritative check (tools/docs/standard-release.md
 §3): agents run `--check` before committing, CI (if any) runs `--check`,
 and nothing is released unless it passes on the machine cutting the release.
 Gate steps, in order — the first failure stops everything and prints that
-step's name and output:
+step's name and output, then `release: code failed` (exit 1) or, when only
+the vulnerability audit failed, `release: audit failed` (exit 3):
 
     uv lock --check · ruff check · ruff format --check · ty check · pytest ·
-    changelog fragment (at least one in changelog.d/ when anything but
-    uv.lock / .github/ changed since the last tag) · build the wheel and install
+    external dependencies (every program src/ runs is declared in
+    [[tool.rb.external]] and vice versa) ·
+    changelog fragment (at least one in changelog.d/ when anything user-visible
+    changed since the last tag — not uv.lock, .github/, scripts/, tests/,
+    .githooks/, .claude/, AGENTS.md, CLAUDE.md) · build the wheel and install
     it into a throwaway venv with exactly the uv.lock dependency set (`uv export`,
     then the wheel with --no-deps, then `uv pip check` — never resolving from
     an index, so git-sourced deps can't be swapped for a same-named PyPI
@@ -27,12 +31,18 @@ uv-dynamic-versioning); a release bumps the last `v*` tag by `part`. Releasing
 refuses off `main`, on a dirty tree, when `main` is behind its upstream, or
 with no fragments. It never pushes: it prints the push command for you.
 
+Settings in pyproject.toml `[tool.cli-generator]` (so the script itself stays
+verbatim): `gate_extras = ["x"]` runs ruff/ty/pytest with those extras
+installed; `release_commit = "chore(release): v{version}"` sets the release
+commit message (default "Release v{version}").
+
 Canonical copy: cli-generator `template/scripts/release.py`. Other repos
 copy it verbatim instead of editing it.
 """
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import shutil
@@ -46,7 +56,27 @@ from pathlib import Path
 from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
-FRAGMENTS = ROOT / "changelog.d"
+
+
+def _tool(name: str) -> dict:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text()).get("tool", {}).get(name, {})
+
+
+def _towncrier() -> dict:
+    return _tool("towncrier")
+
+
+def gate_extras() -> list[str]:
+    """`[tool.cli-generator] gate_extras`: optional-dependency extras the gate installs, so their tests run."""
+    return list(_tool("cli-generator").get("gate_extras", []))
+
+
+def release_commit_message(version: str) -> str:
+    """`[tool.cli-generator] release_commit` (e.g. "chore(release): v{version}" for Conventional Commits)."""
+    return _tool("cli-generator").get("release_commit", "Release v{version}").format(version=version)
+
+
+FRAGMENTS = ROOT / _towncrier().get("directory", "changelog.d")
 PARTS = ("patch", "minor", "major")
 COMMANDS = (
     ("uv lock --check", ("uv", "lock", "--check")),
@@ -55,7 +85,39 @@ COMMANDS = (
     ("ty check", ("uv", "run", "ty", "check")),
     ("pytest", ("uv", "run", "pytest")),
 )
+AUDIT_STEP = "vulnerability audit"
+EXIT_CODE_FAILED = 1  # any code/packaging step: lock, lint, types, tests, fragment, wheel
+EXIT_AUDIT_FAILED = 3  # only the osv-scanner audit: the code is fine, a dependency has a known vulnerability
 TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+
+# Changes that never need a changelog fragment (standard §3): they don't
+# change what users of the package get. Keep this list identical in
+# scripts/release.py and scripts/check_changelog_fragment.py (a test checks).
+NO_FRAGMENT_NEEDED = ("uv.lock", ".github/", "scripts/", "tests/", ".githooks/", ".claude/", "AGENTS.md", "CLAUDE.md")
+
+
+def needs_fragment(path: str) -> bool:
+    """Whether a change to `path` (repo-relative, POSIX) is user-visible enough to need a fragment."""
+    return not any(path == entry or (entry.endswith("/") and path.startswith(entry)) for entry in NO_FRAGMENT_NEEDED)
+
+
+def project_table_changed(old: str | None, new: str | None) -> bool:
+    """Whether pyproject.toml's [project] table differs — the package metadata users get.
+
+    Everything else in pyproject.toml ([tool.*], [dependency-groups], build
+    settings) is tooling and needs no changelog fragment (standard §3).
+    Unreadable or missing on either side counts as changed.
+    """
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # a pre-commit hook's python3 older than 3.11
+        return True
+    if old is None or new is None:
+        return True
+    try:
+        return tomllib.loads(old).get("project") != tomllib.loads(new).get("project")
+    except tomllib.TOMLDecodeError:
+        return True
 
 
 class StepFailed(Exception):
@@ -89,6 +151,11 @@ def tags() -> list[tuple[int, int, int]]:
     return sorted((int(m[1]), int(m[2]), int(m[3])) for t in listed if (m := TAG_RE.match(t)))
 
 
+def changelog_file() -> str:
+    """Where towncrier writes: `[tool.towncrier] filename` (default CHANGELOG.md)."""
+    return _towncrier().get("filename", "CHANGELOG.md")
+
+
 def fragments() -> list[Path]:
     return [p for p in FRAGMENTS.glob("*") if p.is_file() and not p.name.startswith(".")]
 
@@ -97,6 +164,8 @@ def fragments() -> list[Path]:
 
 
 def run_command(argv: tuple[str, ...]) -> str:
+    if argv[:2] == ("uv", "run"):  # run lint/types/tests with the configured extras installed
+        argv = ("uv", "run", *(arg for extra in gate_extras() for arg in ("--extra", extra)), *argv[2:])
     step_output(*argv)
     return ""
 
@@ -106,6 +175,76 @@ def _changed_since(tag: str) -> list[str]:
     tracked = run("git", "diff", "--name-only", tag, capture=True).splitlines()
     untracked = run("git", "ls-files", "--others", "--exclude-standard", capture=True).splitlines()
     return sorted(set(tracked + untracked))
+
+
+_PROCESS_CALLS = {"run", "Popen", "check_output", "check_call", "call"}
+
+
+def external_programs(source: str) -> set[str]:
+    """Programs a module runs or looks up by a literal name.
+
+    `require_cli("x", ...)`, `shutil.which("x")`, and `subprocess.run(["x", ...])`
+    (also Popen/check_output/check_call/call). A name built at runtime isn't
+    seen — call `require_cli` with the literal name first, then run its path.
+    """
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+        first = node.args[0]
+        if func in ("require_cli", "which") and isinstance(first, ast.Constant) and isinstance(first.value, str):
+            found.add(first.value)
+        elif func in _PROCESS_CALLS and isinstance(first, ast.List | ast.Tuple) and first.elts:
+            head = first.elts[0]
+            if isinstance(head, ast.Constant) and isinstance(head.value, str):
+                found.add(head.value)
+    return found
+
+
+def check_external_deps() -> str:
+    """Every external program used in src/ is declared in [[tool.rb.external]], and every declared one is used."""
+    entries = _tool("rb").get("external", [])
+    problems = [
+        f"entry #{i + 1} needs `name` and `why`" for i, e in enumerate(entries) if not (e.get("name") and e.get("why"))
+    ]
+    declared = {entry.get("name") for entry in entries}
+    used: dict[str, list[str]] = {}
+    for path in sorted((ROOT / "src").rglob("*.py")):
+        for name in external_programs(path.read_text()):
+            used.setdefault(name, []).append(str(path.relative_to(ROOT)))
+    problems += [
+        f"`{name}` is run in {', '.join(files)} but not declared"
+        for name, files in used.items()
+        if name not in declared
+    ]
+    # detect = false: run in a way this scan can't see (an injected runner, an
+    # absolute path) — declared on trust, but still with a `why`.
+    hidden = {entry.get("name") for entry in entries if entry.get("detect", True) is False}
+    unseen = sorted(declared - used.keys() - hidden)
+    problems += [
+        f"`{name}` is declared but nothing in src/ runs it (set detect = false if it's run in a way the gate "
+        "can't see, e.g. an injected runner or an absolute path)"
+        for name in unseen
+    ]
+    if problems:
+        raise StepFailed(
+            "pyproject.toml [[tool.rb.external]] doesn't match the code (standard §12):\n  - "
+            + "\n  - ".join(problems)
+            + '\nDeclare: [[tool.rb.external]] name = "x", required = true, min_version = "1.0", check = "x --version", why = "..."'
+        )
+    if not declared:
+        return "none used, none declared"
+    return f"{len(declared)} declared, all used" + (f" ({len(hidden)} with detect = false)" if hidden else "")
+
+
+def _tooling_only_pyproject(path: str, tag: str) -> bool:
+    if path != "pyproject.toml":
+        return False
+    old = subprocess.run(
+        ["git", "show", f"{tag}:pyproject.toml"], cwd=ROOT, text=True, capture_output=True, check=False
+    )
+    return not project_table_changed(old.stdout if old.returncode == 0 else None, (ROOT / path).read_text())
 
 
 def check_fragment() -> str:
@@ -119,9 +258,10 @@ def check_fragment() -> str:
         changed = _changed_since(last)
         if not changed:
             return f"nothing changed since {last}"
-        # Dependabot's lock/CI bumps aren't user-visible changes.
-        if all(path == "uv.lock" or path.startswith(".github/") for path in changed):
-            return f"only uv.lock / .github/ changed since {last}"
+        if not any(needs_fragment(path) for path in changed if not _tooling_only_pyproject(path, last)):
+            return (
+                f"only tooling changed since {last} ({', '.join(NO_FRAGMENT_NEEDED)}, pyproject.toml outside [project])"
+            )
         since = f"since {last}"
     else:
         since = "and there is no release tag yet"
@@ -234,9 +374,10 @@ def check_installed_wheel(version: str | None) -> str:
 def run_gate(version: str | None) -> None:
     steps: list[tuple[str, Callable[[], str]]] = [
         *((name, lambda argv=argv: run_command(argv)) for name, argv in COMMANDS),
+        ("external dependencies", check_external_deps),
         ("changelog fragment", check_fragment),
         ("build + install wheel", lambda: check_installed_wheel(version)),
-        ("vulnerability audit", check_vulnerabilities),
+        (AUDIT_STEP, check_vulnerabilities),
     ]
     for name, step in steps:
         print(f"release: {name} ...", end=" ", flush=True)
@@ -245,7 +386,11 @@ def run_gate(version: str | None) -> None:
         except StepFailed as exc:
             print("FAILED", flush=True)
             print(f"\nrelease: gate step '{name}' failed:\n{exc.output}", file=sys.stderr)
-            raise SystemExit(1) from None
+            # Last line + exit code tell tools-watch whether the code is broken or
+            # only a dependency needs a security bump.
+            audit = name == AUDIT_STEP
+            print(f"release: {'audit' if audit else 'code'} failed", file=sys.stderr)
+            raise SystemExit(EXIT_AUDIT_FAILED if audit else EXIT_CODE_FAILED) from None
         print(f"ok ({detail})" if detail else "ok", flush=True)
 
 
@@ -265,6 +410,30 @@ def check_branch() -> None:
     _, behind = counts.split()
     if int(behind):
         fail(f"main is {behind} commit(s) behind its upstream — pull first")
+
+
+def repository_url() -> str | None:
+    """`[project.urls] Repository` (copier's repository_url), else `origin` as an https URL."""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text()).get("project", {})
+    url = project.get("urls", {}).get("Repository")
+    if not url:
+        origin = subprocess.run(
+            ["git", "remote", "get-url", "origin"], cwd=ROOT, text=True, capture_output=True, check=False
+        )
+        url = origin.stdout.strip() if origin.returncode == 0 else None
+    return normalize_repo_url(url) if url else None
+
+
+def normalize_repo_url(url: str) -> str:
+    """git@github.com:o/r.git / https://github.com/o/r.git -> https://github.com/o/r."""
+    return re.sub(r"^git@([^:]+):", r"https://\1/", url).removesuffix(".git")
+
+
+def install_command(tag: str) -> str:
+    """The pinned install line to hand out after a release: "<dist> @ git+<url>.git@<tag>"."""
+    dist = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["name"]
+    url = repository_url() or "https://github.com/<owner>/<repo>"
+    return f'uv tool install "{dist} @ git+{url}.git@{tag}"'
 
 
 def next_version(part: str) -> str:
@@ -297,12 +466,14 @@ def main() -> None:
         fail(f"tag {tag} already exists")
     run_gate(version)
 
-    run("uv", "run", "towncrier", "build", "--version", version, "--yes")  # writes CHANGELOG.md, `git rm`s fragments
-    run("git", "add", "--all", "CHANGELOG.md", *(["changelog.d"] if FRAGMENTS.exists() else []))
-    run("git", "commit", "-m", f"Release {tag}")
+    run(
+        "uv", "run", "towncrier", "build", "--version", version, "--yes"
+    )  # writes changelog_file(), `git rm`s fragments
+    run("git", "add", "--all", changelog_file(), *([str(FRAGMENTS)] if FRAGMENTS.exists() else []))
+    run("git", "commit", "-m", release_commit_message(version))
     run("git", "tag", "-a", tag, "-m", tag)
     print(f"Released {tag} locally. Push it (needs your confirmation): git push --follow-tags")
-    print(f'Then pin it anywhere with: uv tool install "git+<repo-url>@{tag}"')
+    print(f"Then install it anywhere with: {install_command(tag)}")
 
 
 if __name__ == "__main__":

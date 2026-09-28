@@ -68,12 +68,17 @@ def _entry(provider_cls: type[Provider], check: bool, target: str | None = None)
     name = f"{provider_cls.name}:{target}" if target else provider_cls.name
     fields = list(provider_cls.credential_fields)
     legacy = provider_cls.legacy_env
-    located = manager.locate_fields(name, fields, legacy_env=legacy)
+    shared = provider_cls.shared_namespaces
+    located = manager.locate_fields(
+        name, fields, legacy_env=legacy, legacy_env_first=provider_cls.legacy_env_first, shared_namespaces=shared
+    )
     secrets = [value for value, _, _ in located.values()]
     env_refs = [
         manager.env_var_name(name, field) + (f" (or {legacy[field]})" if field in legacy else "") for field in fields
     ]
-    keychain_ref = f"keychain service {manager.keychain_service(name)}"
+    keychain_ref = f"keychain service {manager.keychain_service(name)}" + "".join(
+        f" or {manager.keychain_service(name, ns)}" for ns in shared
+    )
     missing = [field for field in fields if field not in located]
     sources = {source for _, source, _ in located.values()}
 
@@ -94,11 +99,13 @@ def _entry(provider_cls: type[Provider], check: bool, target: str | None = None)
 
     # Env vars override the keychain field by field; a mix is reported as env
     # (what wins) with every place named in source_ref (standard §8: no "mixed").
-    used_env = [located[f][2] for f in fields if located[f][1] == "env"]
+    used_env = list(dict.fromkeys(located[f][2] for f in fields if located[f][1] == "env"))
+    services = list(dict.fromkeys(located[f][2] for f in fields if located[f][1] == "keychain"))
+    used_keychain = "keychain service " + ", ".join(services) if services else ""
     if sources == {"keychain"}:
-        entry.update(source="keychain", source_ref=keychain_ref)
+        entry.update(source="keychain", source_ref=used_keychain)
     else:
-        refs = ", ".join(used_env) + (f"; rest from {keychain_ref}" if "keychain" in sources else "")
+        refs = ", ".join(used_env) + (f"; rest from {used_keychain}" if services else "")
         entry.update(source="env", source_ref=refs)
 
     if not check:
@@ -179,4 +186,4 @@ def render(payload: dict) -> None:
         detail = f" — {entry['message']}" if entry["message"] else ""
         expires = f", expires {entry['expires_at']}" if entry["expires_at"] else ""
         line = f"{entry['provider']}{optional}: {entry['status']} ({entry['source']}: {entry['source_ref']}){expires}{detail}"
-        output.human.echo(f"{mark} {escape(line)}")
+        output.human.echo_markup(f"{mark} {escape(line)}")

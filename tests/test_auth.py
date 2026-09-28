@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
@@ -15,8 +16,8 @@ from rb_spider.providers import Health, Provider, Quota
 
 from .test_cli import invoke, invoke_json
 
-PKG = "spider"  # keychain service and env prefix use the command name (`spider:<provider>`, SPIDER_*)
-PREFIX = PKG.upper()
+NS = "spider"  # keychain service and env prefix use the command name, not the package
+PREFIX = re.sub(r"[^A-Z0-9]", "_", NS.upper())
 GOOD, BAD = "good-secret-123", "bad-secret-456"
 
 
@@ -51,9 +52,7 @@ class Demo(Provider):
     expires_at: datetime | None = None
 
     def health_check(self) -> Health:
-        credential = credentials.get_credential(
-            self.credential_name, env_fields=list(self.credential_fields), legacy_env=self.legacy_env
-        )
+        credential = self.credential()
         if self.path == "/down":
             raise ProviderError(self.name, "ConnectError while calling GET /me")
         if (credential or {}).get("api_key") != GOOD:
@@ -202,12 +201,12 @@ def test_keychain_and_mixed_sources(demo_providers) -> None:
     _, payload, _ = status("--check", extra=None)
     entries = by_provider(payload)
     assert (entries["demo"]["source"], entries["demo"]["status"]) == ("keychain", "ok")
-    assert entries["demo"]["source_ref"] == f"keychain service {PKG}:demo"
+    assert entries["demo"]["source_ref"] == f"keychain service {NS}:demo"
 
     result = invoke("auth", "status", "--json", env={f"{PREFIX}_EXTRA_API_KEY": GOOD})
     extra = by_provider(json.loads(result.stdout))["extra"]
     assert extra["source"] == "env"
-    assert extra["source_ref"] == f"{PREFIX}_EXTRA_API_KEY; rest from keychain service {PKG}:extra"
+    assert extra["source_ref"] == f"{PREFIX}_EXTRA_API_KEY; rest from keychain service {NS}:extra"
 
 
 def test_provider_filter_and_unknown_provider(demo_providers) -> None:
@@ -256,6 +255,41 @@ def test_legacy_env_name_is_a_source(monkeypatch: pytest.MonkeyPatch, fake_keyri
     assert "OLD_LEGACY_TOKEN" in missing["source_ref"]
 
 
+def test_keychain_beats_legacy_env_unless_legacy_first(monkeypatch: pytest.MonkeyPatch, fake_keyring) -> None:
+    monkeypatch.setattr(providers, "all_providers", lambda: [Legacy])
+    credentials.store_credential("legacy", {"api_key": GOOD})
+    env = {"OLD_LEGACY_TOKEN": BAD}
+    entry = by_provider(json.loads(invoke("auth", "status", "--check", "--json", env=env).stdout))["legacy"]
+    assert (entry["source"], entry["status"]) == ("keychain", "ok")  # default: legacy env is the last resort
+
+    monkeypatch.setattr(Legacy, "legacy_env_first", True)
+    entry = by_provider(json.loads(invoke("auth", "status", "--check", "--json", env=env).stdout))["legacy"]
+    assert (entry["source"], entry["source_ref"], entry["status"]) == ("env", "OLD_LEGACY_TOKEN", "invalid")
+
+
+class Borrowed(Demo):
+    name = "xmlriver"
+    shared_namespaces = ("serp",)
+
+
+def test_shared_namespace_is_read(monkeypatch: pytest.MonkeyPatch, fake_keyring) -> None:
+    """A provider can read the credential another CLI stored (e.g. wordstat reading serp's key)."""
+    monkeypatch.setattr(providers, "all_providers", lambda: [Borrowed])
+    fake_keyring[("serp:xmlriver", "xmlriver")] = json.dumps({"api_key": GOOD})
+    entry = by_provider(json.loads(invoke("auth", "status", "--check", "--json").stdout))["xmlriver"]
+    assert (entry["source"], entry["status"]) == ("keychain", "ok")
+    assert entry["source_ref"] == "keychain service serp:xmlriver"
+    assert Borrowed().credential() == {"api_key": GOOD}
+
+    env = {"SERP_XMLRIVER_API_KEY": GOOD}
+    entry = by_provider(json.loads(invoke("auth", "status", "--json", env=env).stdout))["xmlriver"]
+    assert (entry["source"], entry["source_ref"]) == ("env", "SERP_XMLRIVER_API_KEY")
+
+    credentials.store_credential("xmlriver", {"api_key": BAD})  # our own namespace comes first
+    entry = by_provider(json.loads(invoke("auth", "status", "--check", "--json").stdout))["xmlriver"]
+    assert (entry["source_ref"], entry["status"]) == (f"keychain service {NS}:xmlriver", "invalid")
+
+
 # --- per-target providers: one entry per stored target --------------------------
 
 
@@ -279,7 +313,7 @@ def test_per_target_reports_each_stored_target(deploy_provider) -> None:
     entries = by_provider(payload)
     assert list(entries) == ["deploy:a.example.com", "deploy:b.example.com"]
     assert (entries["deploy:a.example.com"]["status"], entries["deploy:b.example.com"]["status"]) == ("ok", "invalid")
-    assert entries["deploy:a.example.com"]["source_ref"] == f"keychain service {PKG}:deploy:a.example.com"
+    assert entries["deploy:a.example.com"]["source_ref"] == f"keychain service {NS}:deploy:a.example.com"
     assert code == 3
 
     code, payload, _ = status("--check", "--provider", "deploy:a.example.com")
@@ -331,6 +365,31 @@ def test_env_var_works_when_keyring_is_unavailable(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(providers, "all_providers", lambda: [Demo])
     code, payload, _ = status(demo=GOOD)
     assert (code, by_provider(payload)["demo"]["source"]) == (0, "env")
+
+
+def test_unavailable_keychain_warns_once_and_only_without_env(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Called directly: running the CLI would reset logging (configure_logging) and drop caplog's handler.
+    import keyring.errors
+
+    def broken_get_password(service: str, username: str) -> str | None:
+        raise keyring.errors.NoKeyringError("no backend")
+
+    monkeypatch.setattr(credentials.keyring, "get_password", broken_get_password)
+    monkeypatch.setattr(credentials, "_keychain_problem", None)
+    monkeypatch.setattr(credentials, "_warned_missing", False)
+    caplog.set_level("DEBUG", logger=credentials.log.name)
+
+    monkeypatch.setenv(f"{PREFIX}_DEMO_API_KEY", GOOD)  # every key in env: the keychain doesn't matter
+    assert credentials.get_credential("demo", env_fields=["api_key"]) == {"api_key": GOOD}
+    credentials.locate_fields("demo", ["api_key"])
+    assert [r.levelname for r in caplog.records] == ["DEBUG"]
+
+    monkeypatch.delenv(f"{PREFIX}_DEMO_API_KEY")  # nothing anywhere: now it's worth a warning — once
+    credentials.locate_fields("demo", ["api_key"])
+    credentials.locate_fields("demo", ["api_key"])
+    assert [r.levelname for r in caplog.records].count("WARNING") == 1
 
 
 def test_doctor_reports_credential_checks(tmp_path: Path, fake_keyring) -> None:
