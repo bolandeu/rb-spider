@@ -49,6 +49,7 @@ from crawlee.storage_clients import MemoryStorageClient
 
 from ..providers import secrets
 from . import issues, render, sitemaps, storage
+from .encoding import to_utf8
 from .errors import (
     AuthRequired,
     HttpClientUnavailable,
@@ -484,6 +485,9 @@ async def _run(
         if settings.max_page_size_kb is not None and len(body) > settings.max_page_size_kb * 1024:
             check = True  # too big to read: status, headers and size only
         headers = dict(response.headers)
+        size = len(body)
+        if _is_html(headers):  # stored and parsed as UTF-8, whatever the site's charset
+            body = to_utf8(body, next((v for k, v in headers.items() if k.lower() == "content-type"), None))
         if ctx.request.url.startswith("https://") and any(k.lower() == "strict-transport-security" for k in headers):
             hsts_hosts.add(urlsplit(ctx.request.url).hostname or "")
         source, raw, js_redirect, result = body, None, None, None
@@ -509,7 +513,7 @@ async def _run(
                 )
             if raw is not None:
                 auto.seen(js_changed(page))
-        page.bytes = len(body)  # the response's size, not the rendered DOM's
+        page.bytes = size  # the response's size, not the rendered DOM's
         page.onpage["response_ms"] = response_ms.pop(ctx.request.url, None)
         if page.redirect_url and page.redirect_url != page.url:
             hops = redirect_hops.pop(page.url, 0) + 1

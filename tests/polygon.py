@@ -259,6 +259,26 @@ def _png(width: int, height: int) -> bytes:
 
 # images with a real size (#40): served as PNG files, not zero bytes
 PNG_IMAGES = {"/img/real.png": _png(800, 600), "/img/hero.png": _png(40, 20), "/img/bg.png": _png(40, 20)}
+
+
+def _cyrillic(slug: str, charset: str | None = None, links: tuple[str, ...] = ()) -> str:
+    meta = f'<meta charset="{charset}">' if charset else ""
+    hrefs = "".join(f'<a href="{href}">дальше</a>' for href in links)
+    return (
+        f"<html><head>{meta}<title>Таможня {slug}</title></head><body><h1>Недружественные страны {slug}</h1>"
+        f"<p>Пошлины и ограничения на ввоз товаров из недружественных стран.</p>{hrefs}</body></html>"
+    )
+
+
+# Legacy charsets (selectolax reads bytes as UTF-8 only): path -> (Content-Type, body). Linked from nowhere else.
+CHARSET_PAGES: dict[str, tuple[str, bytes]] = {
+    "/enc/meta": ("text/html", _cyrillic("meta", "windows-1251", ("/enc/header", "/enc/guess", "/enc/koi8", "/enc/lie"))
+                  .encode("cp1251")),
+    "/enc/header": ("text/html; charset=windows-1251", _cyrillic("header").encode("cp1251")),
+    "/enc/guess": ("text/html", _cyrillic("guess").encode("cp1251")),  # declared nowhere
+    "/enc/koi8": ("text/html; charset=koi8-r", _cyrillic("koi8").encode("koi8-r")),
+    "/enc/lie": ("text/html; charset=windows-1251", _cyrillic("lie", "windows-1251").encode("utf-8")),  # it's UTF-8
+}  # fmt: skip
 IMAGE_TRAPS: dict[str, str] = {
     "/i-images": _html(
         "i-images",
@@ -1072,6 +1092,9 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     SEEN_HEADERS.append({k.lower(): v for k, v in request.headers.items()})
     if request.path == "/slow":
         await asyncio.sleep(SLOW_S)
+    if request.path in CHARSET_PAGES:
+        content_type, raw = CHARSET_PAGES[request.path]
+        return web.Response(body=raw, headers={"Content-Type": content_type})
     if request.path in PNG_IMAGES:
         return web.Response(body=PNG_IMAGES[request.path], content_type="image/png")
     if request.path in RESOURCES:

@@ -2140,6 +2140,7 @@ name = "rb-spider"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "charset-normalizer" },
     { name = "crawlee" },
     { name = "httpx" },
     { name = "imagesize" },
@@ -2197,6 +2198,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
+    { name = "charset-normalizer", specifier = ">=3.3" },
     { name = "crawlee", specifier = ">=1.10,<1.11" },
     { name = "crawlee", extras = ["curl-impersonate"], marker = "extra == 'curl'", specifier = ">=1.10,<1.11" },
     { name = "crawlee", extras = ["playwright"], marker = "extra == 'render'", specifier = ">=1.10,<1.11" },

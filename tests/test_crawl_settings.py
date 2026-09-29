@@ -384,3 +384,12 @@ def test_self_refresh_and_indexable_only_issues(base_url: str) -> None:
         issues.analyze(engine, full, ThresholdSettings(issues_indexable_only=True))
         _, rows = issues.urls_with(engine, full, "content_low_content")
     assert {r["url"].removeprefix(base_url) for r in rows} == {"/thin"}
+
+
+def test_legacy_charsets_are_crawled_as_text(base_url: str) -> None:
+    pages = _crawl(base_url, "/enc/meta")
+    assert set(pages) == {"/enc/meta", "/enc/header", "/enc/guess", "/enc/koi8", "/enc/lie"}
+    for path, row in pages.items():
+        slug = path.rsplit("/", 1)[1]
+        assert (row["title"], row["h1"]) == (f"Таможня {slug}", f"Недружественные страны {slug}"), path
+    assert pages["/enc/header"]["bytes"] == len(polygon.CHARSET_PAGES["/enc/header"][1])  # the response's size

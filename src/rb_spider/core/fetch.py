@@ -19,6 +19,7 @@ from collections.abc import AsyncIterator, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
 
+from .encoding import to_utf8
 from .errors import InvalidArguments
 from .extract import normalize_url, parse_page, visible_text
 from .markdown import html_to_markdown
@@ -140,11 +141,11 @@ class Fetcher:
     async def _read(self, result: FetchResult, url: str, status: int, headers: dict, body: bytes) -> None:
         result.final_url, result.status = url, status
         result.content_type, result.bytes = headers.get("content-type"), len(body)
-        source = body
         is_html = "html" in (result.content_type or "text/html")
+        source = to_utf8(body, result.content_type) if is_html else body
         if self.renderer is not None and status == 200 and is_html:
             rendered = await self.renderer.render(url)
-            source, result.rendered = rendered.html if rendered else body, rendered is not None
+            source, result.rendered = rendered.html if rendered else source, rendered is not None
         page = parse_page(url, status, headers, source, content_exclude=self.settings.content_exclude)
         result.seo = {key: page.title if key == "title" else page.onpage.get(key) for key in _SEO_FIELDS}
         result.refresh_url = page.refresh_url

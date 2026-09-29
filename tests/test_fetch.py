@@ -118,3 +118,14 @@ def test_html_to_markdown_keeps_structure_and_drops_chrome() -> None:
         "![Pic](https://s.ex/i.png)\n"
     )
     assert html_to_markdown(b"<p>no body tag</p>", "https://s.ex/") == "no body tag\n"
+
+
+@pytest.mark.parametrize("path", ["/enc/meta", "/enc/header", "/enc/guess", "/enc/koi8", "/enc/lie"])
+def test_legacy_charsets_are_read_as_text(base_url: str, path: str) -> None:
+    page = fetch(f"{base_url}{path}", include="text,markdown,html")
+    slug = path.rsplit("/", 1)[1]
+    assert page.error is None and page.seo is not None
+    assert page.seo["title"] == f"Таможня {slug}" and page.seo["h1"] == f"Недружественные страны {slug}"
+    assert page.text and "недружественных стран" in page.text
+    assert page.markdown and page.markdown.startswith(f"# Недружественные страны {slug}")
+    assert page.html and "Пошлины" in page.html and "�" not in page.html
