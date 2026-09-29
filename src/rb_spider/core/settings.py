@@ -299,12 +299,21 @@ class CrawlSettings(BaseModel):
     proxy_urls: list[str] = Field(
         [],
         description=(
-            "Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга. Страницы "
-            "чередуют адреса по запросам, sitemap и браузер идут через первый; браузеру нужен HTTP-прокси (SOCKS5 "
-            "с паролем Chromium не умеет). Пароль не пишите в файл: `{password}` в адресе заменится секретом из "
-            "`spider auth login --provider proxy`. Перед обходом и `spider fetch` прокси проверяется запросом."
+            "Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга; как их "
+            "использовать — crawl.proxy_mode. Браузеру нужен HTTP-адрес (SOCKS5 с паролем Chromium не умеет) — "
+            "ставьте его первым. Пароль не пишите в файл: `{password}` в адресе заменится секретом из "
+            "`spider auth login --provider proxy` (или переменной SPIDER_PROXY_API_KEY). Перед обходом и "
+            "`spider fetch` прокси проверяется запросом."
         ),
         examples=[["http://user:{password}@proxy.example:8000"]],
+    )
+    proxy_mode: Literal["rotate", "failover"] = Field(
+        "rotate",
+        description=(
+            "rotate — страницы чередуют адреса crawl.proxy_urls по запросам (sitemap и браузер — через первый); "
+            "failover — всё идёт через первый рабочий адрес, следующий — запасной, когда этот умер (у мобильного "
+            "прокси — HTTP- и SOCKS5-вход одного модема)."
+        ),
     )
     proxy_fallback: Literal["stop", "direct"] = Field(
         "stop",
@@ -315,7 +324,40 @@ class CrawlSettings(BaseModel):
         ),
     )
     proxy_max_failures: int = Field(
-        20, ge=1, description="Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер» (proxy_fallback)."
+        20,
+        ge=1,
+        description=(
+            "Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер»: failover — на следующий "
+            "адрес, дальше — crawl.proxy_fallback."
+        ),
+    )
+    proxy_change_ip_urls: list[str] = Field(
+        [],
+        description=(
+            "Ссылки смены IP прокси (мобильный прокси): когда сайт блокирует (crawl.proxy_change_ip_on), spider "
+            "открывает их по очереди, пока одна не ответит «ok», ждёт, пока прокси снова ответит, и повторяет "
+            "заблокированные запросы. Ключ не пишите в файл: `{key}` заменится секретом из "
+            "`spider auth login --provider proxy_key` (или переменной SPIDER_PROXY_KEY_API_KEY)."
+        ),
+        examples=[["https://changeip.mobileproxy.space/?proxy_key={key}&format=json"]],
+    )
+    proxy_change_ip_on: list[int] = Field(
+        [403, 429],
+        description="Коды ответа, которые значат «сайт заблокировал IP» и меняют его (crawl.proxy_change_ip_urls).",
+    )
+    proxy_change_ip_min_interval_s: float = Field(
+        10, ge=0, description="Не менять IP чаще, чем раз в столько секунд (лимит провайдера, переподключение модема)."
+    )
+    proxy_change_ip_wait_s: float = Field(
+        60, gt=0, description="Сколько секунд после смены IP ждать, пока прокси снова ответит."
+    )
+    proxy_change_ip_max: int = Field(
+        100,
+        ge=1,
+        description=(
+            "Не больше стольких смен IP за обход. Смена прекращается и раньше — после трёх смен подряд, на "
+            "которые сайт отвечал только блоком: тогда ответы с блоком записываются как есть."
+        ),
     )
     # --- what to keep
     store_html: bool = Field(

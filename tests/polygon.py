@@ -1168,7 +1168,13 @@ class Proxy:
     Every host it is asked for is the polygon: crawl `http://polygon.test:<port>/…` through it, and a request that
     goes around the proxy fails (the name resolves nowhere). `seen` — (User-Agent, path) of every proxied request;
     `dead` — answer 407 to everything, like a proxy nobody paid for; `die_after` — go dead after so many requests.
+
+    A mobile proxy's IP change: `blocks_after` — the site blocks its pages (403) once that many came from the
+    current IP (`burn` — this one already did); a request to the proxy itself, `/changeip?proxy_key=KEY` (`change_url`), is the provider's
+    change-IP link — a new IP (`changes` counts them), unless `change_helps` is off (the site blocks every IP).
     """
+
+    KEY = "change-key"
 
     HOST = "polygon.test"
     USER, PASSWORD = "proxy-user", "proxy-pass"
@@ -1178,7 +1184,15 @@ class Proxy:
         self.seen: list[tuple[str, str]] = []
         self.dead = False
         self.die_after: int | None = None
+        self.blocks_after: int | None = None
+        self.change_helps = True
+        self.changes = 0
+        self._since_change = 0
         self.url = ""
+        self.change_url = ""
+
+    def burn(self) -> None:
+        self._since_change = self.blocks_after or 0
 
     def base(self) -> str:
         """The polygon's base URL as seen through the proxy."""
@@ -1194,6 +1208,18 @@ class Proxy:
             method, target, _ = first.split(" ", 2)
             headers = [line for line in lines if line]
             fields = {line.split(":", 1)[0].strip().lower(): line.split(":", 1)[1].strip() for line in headers}
+            if target.startswith("/"):  # to the proxy itself: the change-IP link
+                ok = f"proxy_key={self.KEY}" in target
+                if ok:
+                    self.changes += 1
+                    if self.change_helps:
+                        self._since_change = 0
+                body = (f'{{"status": "ok", "new_ip": "10.0.0.{self.changes}"}}' if ok
+                        else '{"status": "err", "message": "bad key"}').encode()  # fmt: skip
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n"
+                             + f"Content-Length: {len(body)}\r\n\r\n".encode() + body)  # fmt: skip
+                await writer.drain()
+                return
             if self.die_after is not None and len(self.seen) >= self.die_after:
                 self.dead = True
             token = base64.b64encode(f"{self.USER}:{self.PASSWORD}".encode()).decode()
@@ -1205,6 +1231,13 @@ class Proxy:
             parts = urlsplit(target)
             path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
             self.seen.append((fields.get("user-agent", ""), parts.path))
+            if self.blocks_after is not None and parts.path != "/robots.txt":  # the site blocks its pages
+                if self._since_change >= self.blocks_after:
+                    writer.write(b"HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\nContent-Length: 7\r\n"
+                                 b"Connection: close\r\n\r\nblocked")  # fmt: skip
+                    await writer.drain()
+                    return
+                self._since_change += 1
             body = await reader.readexactly(int(fields.get("content-length", "0")))
             kept = [line for line in headers if not line.lower().startswith(("proxy-", "connection:", "keep-alive:"))]
             up_reader, up_writer = await asyncio.open_connection("127.0.0.1", self.upstream_port)
@@ -1229,7 +1262,9 @@ def proxy(upstream: str) -> Iterator[Proxy]:
     found = Proxy(upstream)
     loop = asyncio.new_event_loop()
     server = loop.run_until_complete(asyncio.start_server(found._handle, "127.0.0.1", 0))
-    found.url = f"http://{Proxy.USER}:{{password}}@127.0.0.1:{server.sockets[0].getsockname()[1]}"
+    port = server.sockets[0].getsockname()[1]
+    found.url = f"http://{Proxy.USER}:{{password}}@127.0.0.1:{port}"
+    found.change_url = f"http://127.0.0.1:{port}/changeip?proxy_key={{key}}&format=json"
     thread = threading.Thread(target=loop.run_forever, daemon=True)
     thread.start()
     try:

@@ -93,9 +93,15 @@ concurrency = 10
 | `crawl.robots_show_internal_blocked` | `bool` | `true` | Записывать в отчёт URL сайта, запрещённые robots.txt. |
 | `crawl.robots_show_external_blocked` | `bool` | `true` | Записывать в отчёт чужие URL, запрещённые их robots.txt. |
 | `crawl.robots_user_agent` | `str \| None` | — | От чьего имени читать robots.txt; не задано — от User-Agent запросов. |
-| `crawl.proxy_urls` | `list[str]` | `[]` | Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга. Страницы чередуют адреса по запросам, sitemap и браузер идут через первый; браузеру нужен HTTP-прокси (SOCKS5 с паролем Chromium не умеет). Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. Перед обходом и `spider fetch` прокси проверяется запросом. |
+| `crawl.proxy_urls` | `list[str]` | `[]` | Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга; как их использовать — crawl.proxy_mode. Браузеру нужен HTTP-адрес (SOCKS5 с паролем Chromium не умеет) — ставьте его первым. Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy` (или переменной SPIDER_PROXY_API_KEY). Перед обходом и `spider fetch` прокси проверяется запросом. |
+| `crawl.proxy_mode` | `Literal['rotate', 'failover']` | `"rotate"` | rotate — страницы чередуют адреса crawl.proxy_urls по запросам (sitemap и браузер — через первый); failover — всё идёт через первый рабочий адрес, следующий — запасной, когда этот умер (у мобильного прокси — HTTP- и SOCKS5-вход одного модема). |
 | `crawl.proxy_fallback` | `Literal['stop', 'direct']` | `"stop"` | Прокси не работает (перед стартом или crawl.proxy_max_failures ошибок прокси подряд): stop — остановиться (обход продолжается `spider crawls resume`), direct — идти дальше без прокси, сайт увидит ваш IP. В терминале при stop перед стартом spider спросит, продолжить ли без прокси. |
-| `crawl.proxy_max_failures` | `int` | `20` | Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер» (proxy_fallback). |
+| `crawl.proxy_max_failures` | `int` | `20` | Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер»: failover — на следующий адрес, дальше — crawl.proxy_fallback. |
+| `crawl.proxy_change_ip_urls` | `list[str]` | `[]` | Ссылки смены IP прокси (мобильный прокси): когда сайт блокирует (crawl.proxy_change_ip_on), spider открывает их по очереди, пока одна не ответит «ok», ждёт, пока прокси снова ответит, и повторяет заблокированные запросы. Ключ не пишите в файл: `{key}` заменится секретом из `spider auth login --provider proxy_key` (или переменной SPIDER_PROXY_KEY_API_KEY). |
+| `crawl.proxy_change_ip_on` | `list[int]` | `[403, 429]` | Коды ответа, которые значат «сайт заблокировал IP» и меняют его (crawl.proxy_change_ip_urls). |
+| `crawl.proxy_change_ip_min_interval_s` | `float` | `10` | Не менять IP чаще, чем раз в столько секунд (лимит провайдера, переподключение модема). |
+| `crawl.proxy_change_ip_wait_s` | `float` | `60` | Сколько секунд после смены IP ждать, пока прокси снова ответит. |
+| `crawl.proxy_change_ip_max` | `int` | `100` | Не больше стольких смен IP за обход. Смена прекращается и раньше — после трёх смен подряд, на которые сайт отвечал только блоком: тогда ответы с блоком записываются как есть. |
 | `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
 | `collect.internal_links.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.internal_links.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
@@ -214,6 +220,24 @@ proxy_urls = ["http://user:{password}@proxy1.example:8000", "http://user:{passwo
 concurrency = 10
 proxy_fallback = "stop"      # прокси умер (не оплачен, модем выключен): stop — остановиться, direct — без прокси
 ```
+
+Мобильный прокси — один модем с двумя входами (HTTP и SOCKS5) и ссылками смены IP. Входы — `failover`: всё через первый, второй — запасной; IP меняется, когда сайт блокирует (403, 429), и заблокированные запросы повторяются. Ключ ссылки — `{key}`, один раз `spider auth login --provider proxy_key`:
+
+```toml
+description = "Мобильный прокси: смена IP при блокировке"
+extends = "default"
+
+[crawl]
+proxy_urls = ["http://user:{password}@mproxy.example:25580", "socks5h://user:{password}@bproxy.example:25580"]
+proxy_mode = "failover"
+proxy_change_ip_urls = [
+  "https://changeip.example/?proxy_key={key}&format=json",
+  "https://changeip-backup.example/?proxy_key={key}&format=json",
+]
+concurrency = 5
+```
+
+На сервере без keychain (Linux) вместо `auth login` — переменные окружения `SPIDER_PROXY_API_KEY` (пароль) и `SPIDER_PROXY_KEY_API_KEY` (ключ смены IP); они важнее keychain. Новый прокси — поправить адреса в профиле и снова `auth login` (или новые значения переменных).
 
 Через прокси идёт весь трафик к сайту: страницы, robots.txt, XML sitemap и браузер (`render`); sitemap и браузер — через первый адрес, браузеру нужен HTTP-адрес (SOCKS5 с паролем Chromium не умеет). Перед стартом прокси проверяется запросом; не работает — `PROXY_UNAVAILABLE` (код 5) и `spider crawls resume`, когда оживёт; в терминале spider сначала спросит, идти ли без него. Посреди обхода то же после `crawl.proxy_max_failures` ошибок прокси подряд.
 

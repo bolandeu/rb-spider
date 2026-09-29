@@ -8,7 +8,8 @@
  `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с
  `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —
  настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
- если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
+ если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
+ IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта
  при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
  (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
  `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;

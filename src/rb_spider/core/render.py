@@ -255,11 +255,13 @@ class Renderer:
             return self
         raise RenderUnavailable(f"no browser could start ({'; '.join(errors)}).")
 
-    async def drop_proxy(self) -> None:
-        """Go on without the proxy (crawl.proxy_fallback = direct): a new browser; pages open in the old one fail."""
-        if "proxy" not in self.context_options or self._pool is None:
+    async def use_proxy(self, url: str | None) -> None:
+        """Another proxy, or none (the crawl dropped a dead one): a new browser; pages open in the old one fail."""
+        if self._pool is None or self.context_options.get("proxy") == (proxy_settings(url) if url else None):
             return
-        del self.context_options["proxy"]
+        self.context_options.pop("proxy", None)
+        if url:
+            self.context_options["proxy"] = proxy_settings(url)
         old = self._pool
         await self.__aenter__()
         await old.__aexit__(None, None, None)

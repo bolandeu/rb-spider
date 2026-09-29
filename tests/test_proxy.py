@@ -174,3 +174,85 @@ def test_cli_without_a_terminal_follows_the_key_and_exits_5(proxy: polygon.Proxy
     )
     assert result.exit_code == 5  # no one to ask: crawl.proxy_fallback = stop
     assert json.loads(result.stdout)["error"]["code"] == "PROXY_UNAVAILABLE"
+
+
+# --- failover: a mobile proxy's two doors -----------------------------------------------------------------
+
+
+@pytest.fixture
+def backup(upstream: str):
+    with polygon.proxy(upstream) as found:
+        yield found
+
+
+def test_failover_starts_on_the_backup_when_the_first_is_dead(proxy: polygon.Proxy, backup: polygon.Proxy) -> None:
+    proxy.dead = True
+    crawl = CrawlSettings(proxy_urls=[proxy.url, backup.url], proxy_mode="failover", max_urls=10)
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{proxy.base()}/", "polygon", Settings(crawl=crawl))
+        pages = _pages(engine, result.crawl_id)
+    assert result.status == "finished" and result.proxy_down is None
+    assert pages[f"{proxy.base()}/"][0] == 200 and backup.seen and not _proxy_errors(proxy, pages)
+
+
+def test_failover_switches_mid_crawl_and_loses_nothing(proxy: polygon.Proxy, backup: polygon.Proxy) -> None:
+    proxy.die_after = 8
+    crawl = CrawlSettings(proxy_urls=[proxy.url, backup.url], proxy_mode="failover", max_urls=30, concurrency=2,
+                          proxy_max_failures=3)  # fmt: skip
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{proxy.base()}/", "polygon", Settings(crawl=crawl))
+        pages = _pages(engine, result.crawl_id)
+    assert result.status == "finished" and result.proxy_down is None
+    assert len(backup.seen) > 1 and not _proxy_errors(proxy, pages)
+
+
+# --- a new IP when the site blocks --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def changing(proxy: polygon.Proxy, monkeypatch) -> polygon.Proxy:
+    monkeypatch.setenv("SPIDER_PROXY_KEY_API_KEY", polygon.Proxy.KEY)
+    return proxy
+
+
+def _changing(proxy: polygon.Proxy, **crawl) -> CrawlSettings:
+    dead_link = "http://127.0.0.1:1/changeip?proxy_key={key}"  # the first link is down: the next one is tried
+    return _crawl(proxy, proxy_change_ip_urls=[dead_link, proxy.change_url], proxy_change_ip_min_interval_s=0,
+                  proxy_change_ip_wait_s=5, **crawl)  # fmt: skip
+
+
+def test_a_blocked_site_gets_a_new_ip_and_every_page_is_fetched(changing: polygon.Proxy) -> None:
+    changing.blocks_after = 6
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{changing.base()}/", "polygon", Settings(crawl=_changing(changing, max_urls=40)))
+        pages = _pages(engine, result.crawl_id)
+    assert result.status == "finished" and changing.changes >= 3
+    assert not [url for url, (status, _) in pages.items() if status == 403]  # the polygon itself never answers 403
+
+
+def test_when_every_new_ip_is_blocked_it_gives_up_and_stores_the_blocks(changing: polygon.Proxy) -> None:
+    changing.blocks_after, changing.change_helps = 1, False
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{changing.base()}/", "polygon", Settings(crawl=_changing(changing, max_urls=10)))
+        pages = _pages(engine, result.crawl_id)
+    assert result.status == "finished"
+    assert changing.changes == 3  # UNPRODUCTIVE_CHANGES: three new IPs blocked at once, then no more
+    assert any(status == 403 for status, _ in pages.values())
+
+
+def test_fetch_changes_the_ip_too(changing: polygon.Proxy) -> None:
+    changing.blocks_after = 1
+    changing.burn()  # the site has seen enough of this IP
+    page = fetch(f"{changing.base()}/a", _changing(changing))
+    assert page.status == 200 and changing.changes == 1
+
+
+def test_the_change_ip_key_is_asked_for_before_the_crawl(proxy: polygon.Proxy, monkeypatch) -> None:
+    from rb_spider.core.errors import AuthRequired
+
+    monkeypatch.delenv("SPIDER_PROXY_KEY_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "rb_spider.providers.secrets.password", lambda name: polygon.Proxy.PASSWORD if name == "proxy" else None
+    )
+    with storage.database() as engine, pytest.raises(AuthRequired, match="proxy_key"):
+        register_crawl(engine, f"{proxy.base()}/", "polygon", Settings(crawl=_changing(proxy)))

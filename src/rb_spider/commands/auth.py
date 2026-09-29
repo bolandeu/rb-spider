@@ -29,19 +29,20 @@ def auth_status(
         False, "--check", help="Ещё и проверить каждый секрет (не дольше 10 с на провайдера), а не только его наличие."
     ),
     provider: str | None = typer.Option(
-        None, "--provider", help="Только этот провайдер: proxy, site или database (по умолчанию — все)."
+        None, "--provider", help="Только этот провайдер: proxy, proxy_key, site или database (по умолчанию — все)."
     ),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
     """Показать секреты всех провайдеров: откуда берутся и работают ли. Значения не печатаются.
 
-    Провайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `site`
-    (пароль сайта при `crawl.auth = basic`) и `database` (пароль `SPIDER_DB_URL`);
-    все необязательные: нужны только при этих настройках. Без `--check` — только
-    наличие (статус `unchecked` или `missing`). С `--check`: `database` — подключение
-    к `SPIDER_DB_URL`, если он задан; у `proxy` и `site` спросить некого (их проверяет
-    только обход), найденный секрет — `ok`.
+    Провайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `proxy_key`
+    (ключ `{key}` в `crawl.proxy_change_ip_urls`), `site` (пароль сайта при
+    `crawl.auth = basic`) и `database` (пароль `SPIDER_DB_URL`); все необязательные:
+    нужны только при этих настройках. Без `--check` — только наличие (статус
+    `unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DB_URL`,
+    если он задан; у `proxy`, `proxy_key` и `site` спросить некого (их проверяет только
+    обход), найденный секрет — `ok`.
 
     Коды выхода: 0 — все обязательные провайдеры в порядке (необязательный может
     отсутствовать); 3 — у обязательного проблема или какой-то секрет `invalid` /

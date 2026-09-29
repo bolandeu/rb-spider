@@ -8,6 +8,7 @@ import typer
 from .. import output
 from ..core import crawl as crawl_service
 from ..core import deps, services, settings, storage
+from ..core import proxy as proxy_service
 from ..core.errors import CliError, CliTooOld
 from ..core.models import ProjectConfig
 from ..core.version import DEV_VERSION, cli_name, installed_version, module_exists
@@ -17,7 +18,7 @@ _PACKAGE_NAME = __name__.split(".")[0]
 
 
 def _auth_checks(needed: list[str]) -> list[dict]:
-    """The keychain, plus every credential the resolved settings need (today: the proxy password)."""
+    """The keychain, plus every credential the resolved settings need (the proxy password and change-IP key, the site's password)."""
     # credentials/ is dropped at generation time when include_auth=false;
     # detecting it at runtime keeps this file free of template logic.
     if not module_exists(f"{_PACKAGE_NAME}.credentials.manager"):
@@ -51,7 +52,9 @@ def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[di
         crawl = settings.resolve(root, project_data=data).settings.crawl
     except CliError as exc:
         return {"name": "settings", "ok": False, "detail": exc.message}, []
-    needed = [crawl_service.PROXY_CREDENTIAL] if any("{password}" in u for u in crawl.proxy_urls) else []
+    needed = [proxy_service.PROXY_CREDENTIAL] if any("{password}" in u for u in crawl.proxy_urls) else []
+    if any("{key}" in u for u in crawl.proxy_change_ip_urls):
+        needed.append(proxy_service.KEY_CREDENTIAL)
     if crawl.auth == "basic":
         needed.append(crawl_service.SITE_CREDENTIAL)
     return {"name": "settings", "ok": True}, needed
@@ -71,7 +74,8 @@ def doctor(
     `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с
     `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
-    если `crawl.proxy_urls` его требует (`{password}`); `credential:site` — пароль сайта
+    если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
+    IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта
     при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
     (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
     `lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;

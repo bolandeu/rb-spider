@@ -16,7 +16,7 @@ from ..credentials import manager as credentials
 @output.guard
 def login(
     ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Провайдер: proxy, site или database."),
+    provider: str = typer.Option("default", "--provider", help="Провайдер: proxy, proxy_key, site или database."),
     non_interactive: bool = output.NonInteractiveOption,
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
@@ -25,10 +25,14 @@ def login(
 
     Значение берётся из переменной окружения `SPIDER_<PROVIDER>_API_KEY`,
     иначе спрашивается интерактивно (с `--non-interactive` — ошибка, код 2).
-    Провайдеры: `proxy` — пароль для `{password}` в `crawl.proxy_urls`, `site` —
-    пароль сайта при `crawl.auth = basic`, `database` — пароль `SPIDER_DB_URL`.
+    Провайдеры: `proxy` — пароль для `{password}` в `crawl.proxy_urls`, `proxy_key` —
+    ключ для `{key}` в `crawl.proxy_change_ip_urls` (смена IP), `site` — пароль сайта
+    при `crawl.auth = basic`, `database` — пароль `SPIDER_DB_URL`. Заменить секрет —
+    ещё раз `auth login`; на сервере без keychain вместо него задают переменную
+    окружения (`SPIDER_PROXY_API_KEY`, `SPIDER_PROXY_KEY_API_KEY`) — она важнее keychain.
 
     Example: {cli} auth login --provider proxy
+    Example: {cli} auth login --provider proxy_key
     Example: SPIDER_DATABASE_API_KEY=... {cli} auth login --provider database --non-interactive
 
     JSON: `{provider}`.
@@ -51,13 +55,18 @@ def login(
 @output.guard
 def logout(
     ctx: typer.Context,
-    provider: str = typer.Option("default", "--provider", help="Провайдер: proxy, site или database."),
+    provider: str = typer.Option("default", "--provider", help="Провайдер: proxy, proxy_key, site или database."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
     """Удалить секрет из системного хранилища ключей.
 
+    Например, прокси больше не нужен: пароль (`proxy`) и ключ смены IP (`proxy_key`).
+    Переменные окружения (`SPIDER_<PROVIDER>_API_KEY`) команда не трогает — их убирают
+    там, где задали. Заменить секрет — `auth login` без `logout`.
+
     Example: {cli} auth logout --provider proxy
+    Example: {cli} auth logout --provider proxy_key
 
     JSON: `{provider}`.
     """

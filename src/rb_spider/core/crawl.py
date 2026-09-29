@@ -44,7 +44,6 @@ from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
 from crawlee.errors import ProxyError
 from crawlee.events import LocalEventManager
 from crawlee.http_clients import HttpClient, ImpitHttpClient
-from crawlee.proxy_configuration import ProxyConfiguration
 from crawlee.sessions import Session
 from crawlee.storage_clients import MemoryStorageClient
 
@@ -61,6 +60,17 @@ from .errors import (
     XPathUnavailable,
 )
 from .extract import Page, normalize_url
+from .proxy import (
+    PROXY_AUTH_REQUIRED,
+    Proxies,
+    change_ip_urls,
+    check_render_proxy,
+    ip_changer,
+    open_proxies,
+    proxy_failure,
+    proxy_urls,
+    why,
+)
 from .queue import MemoryQueue
 from .render import Renderer
 from .scope import PageReader, Reading, Scope, init_worker, js_changed, link_row, read_in_worker
@@ -70,7 +80,6 @@ PROGRESS_EVERY_S = 5.0
 # Parsing is half the CPU of a crawl; past this many pages it moves to worker processes. Small crawls
 # (and tests) stay in one process: spawning workers costs more than it saves there.
 PARSE_POOL_AFTER = 200
-PROXY_CREDENTIAL = "proxy"
 log = logging.getLogger(__name__)
 
 # Crawlee warns that passing our own Configuration sets it globally as a side effect — intended
@@ -224,92 +233,6 @@ class Parser:
             self._main.__spec__ = self._main_spec
 
 
-def proxy_urls(settings: CrawlSettings) -> list[str]:
-    """`crawl.proxy_urls` with `{password}` filled from the keychain (`spider auth login --provider proxy`)."""
-    if not any("{password}" in url for url in settings.proxy_urls):
-        return list(settings.proxy_urls)
-    password = secrets.password(PROXY_CREDENTIAL)
-    if password is None:
-        raise AuthRequired(PROXY_CREDENTIAL)
-    return [url.replace("{password}", password) for url in settings.proxy_urls]
-
-
-PROXY_AUTH_REQUIRED = 407
-
-
-class Proxies(ProxyConfiguration):
-    """`crawl.proxy_urls` for all traffic to the sites; `off` — straight to them (crawl.proxy_fallback = direct)."""
-
-    def __init__(self, urls: list[str]) -> None:
-        super().__init__(proxy_urls=list(urls))
-        self.urls, self.off = list(urls), False
-
-    async def new_proxy_info(self, session_id: str | None, request: Request | None, proxy_tier: int | None):
-        return None if self.off else await super().new_proxy_info(session_id, request, proxy_tier)
-
-    @property
-    def first(self) -> str | None:
-        """The one proxy of the clients that can't rotate: the browser, rb-sitemap-xml."""
-        return None if self.off else self.urls[0]
-
-
-def proxy_failure(error: BaseException) -> bool:
-    """The proxy failed, not the site: through a proxy every connection goes to the proxy, so a refused or
-    unresolved one is its, as is its own refusal (Crawlee's ProxyError: 407, a failed tunnel)."""
-    return isinstance(error, ProxyError) or type(error).__name__ == "ConnectError" or "proxy" in str(error).lower()
-
-
-def _why(error: BaseException) -> str:
-    """The first line of what went wrong: Crawlee's ProxyError from a client says nothing itself, its cause does."""
-    cause = error.__cause__ if error.__cause__ and not str(error) else error
-    return (str(cause).strip().splitlines() or [type(cause).__name__])[0][:200]
-
-
-async def open_proxies(
-    settings: CrawlSettings, client: HttpClient, url: str, ask: Callable[[str], bool] | None = None
-) -> tuple[Proxies | None, str | None]:
-    """The proxies after a check request through each (robots.txt of `url`'s site); (proxies, why they're off).
-
-    A dead proxy: crawl.proxy_fallback = direct, or `ask` (a person in a terminal) says yes — go without it;
-    otherwise ProxyUnavailable. Other failures (a timeout, the site's TLS) are the site's: the crawl records them.
-    """
-    urls = proxy_urls(settings)
-    if not urls:
-        return None, None
-    proxies = Proxies(urls)
-    parts = urlsplit(url)
-    target = f"{parts.scheme}://{parts.netloc}/robots.txt"
-    user_agent = settings.resolved_user_agent
-    headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
-    for proxy in urls:
-        info = await ProxyConfiguration(proxy_urls=[proxy]).new_proxy_info(None, None, None)
-        try:
-            response = await client.send_request(target, headers=headers or None, proxy_info=info,
-                                                 timeout=timedelta(seconds=settings.timeout_s))  # fmt: skip
-            if response.status_code == PROXY_AUTH_REQUIRED:
-                raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
-        except Exception as exc:
-            if not proxy_failure(exc):
-                continue
-            problem = f"{info.hostname}:{info.port} — {_why(exc)}" if info else _why(exc)
-            if settings.proxy_fallback == "direct" or (ask is not None and ask(problem)):
-                log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", problem)
-                proxies.off = True
-                return proxies, problem
-            raise ProxyUnavailable(problem) from exc
-    return proxies, None
-
-
-def check_render_proxy(settings: CrawlSettings) -> None:
-    """Chromium takes no SOCKS5 proxy with a password: the browser needs the HTTP address."""
-    parts = urlsplit(settings.proxy_urls[0]) if settings.proxy_urls else None
-    if parts and parts.scheme.startswith("socks") and parts.username:
-        raise InvalidArguments(
-            "The browser (crawl.render) can't use a SOCKS5 proxy with a password: put the proxy's HTTP address "
-            "first in crawl.proxy_urls."
-        )
-
-
 def http_client(settings: CrawlSettings) -> HttpClient:
     """`crawl.http_client`, never following redirects itself: every step is a page of its own.
 
@@ -421,7 +344,7 @@ async def _run(
                  viewport=settings.render_viewport, console=settings.render_console,
                  flatten_shadow_dom=settings.render_flatten_shadow_dom,
                  flatten_iframes=settings.render_flatten_iframes, images=settings.render_images,
-                 screenshots=settings.render_screenshots, proxy=proxies.first if proxies else None,
+                 screenshots=settings.render_screenshots, proxy=proxies.active if proxies else None,
                  allowed=robots.allowed if settings.robots == "respect" else None)
         if settings.render != "never" else None
     )  # fmt: skip
@@ -478,17 +401,34 @@ async def _run(
             writer.add(page, depth=depth)
         proxy_failed.clear()
 
+    # crawl.proxy_change_ip_urls: a blocked answer (403, 429…) gets the proxy a new IP and is asked again
+    changer = ip_changer(settings, client, proxies, start_url)
+    cookies_generation = 0
+
     async def timed_crawl(request, *args, **kwargs):
-        kwargs["session"] = cookie_jar
-        sent = time.monotonic()
-        result = await client_crawl(request, *args, **kwargs)
-        response_ms[request.url] = round((time.monotonic() - sent) * 1000)
-        if kwargs.get("proxy_info") and result.http_response.status_code == PROXY_AUTH_REQUIRED:
-            # an http:// URL goes through the proxy as a plain request: its refusal comes back as a response
-            raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
-        if proxy_failed:
-            proxy_answered()
-        return result
+        nonlocal cookie_jar, cookies_generation
+        while True:
+            if changer:
+                await changer.idle()
+                if cookie_jar is not None and cookies_generation != changer.generation:
+                    cookie_jar, cookies_generation = Session(), changer.generation  # the old IP's cookies may be marked
+            generation = changer.generation if changer else 0
+            kwargs["session"] = cookie_jar
+            sent = time.monotonic()
+            result = await client_crawl(request, *args, **kwargs)
+            response_ms[request.url] = round((time.monotonic() - sent) * 1000)
+            status = result.http_response.status_code
+            if kwargs.get("proxy_info") and status == PROXY_AUTH_REQUIRED:
+                # an http:// URL goes through the proxy as a plain request: its refusal comes back as a response
+                raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
+            if proxy_failed:
+                proxy_answered()
+            if not (changer and kwargs.get("proxy_info") and changer.blocked(status)):
+                if changer:
+                    changer.answered(generation)
+                return result
+            if not await changer.change(generation):
+                return result  # no new IP: the blocked answer is the page's
 
     client.crawl = timed_crawl  # ty: ignore[invalid-assignment]
     last_progress = time.monotonic()
@@ -654,7 +594,8 @@ async def _run(
         page.onpage = {"external": not scope.internal(url), "parsed": False}
         if proxies and ctx.proxy_info and proxy_failure(error):  # went through the proxy, and the proxy failed
             check = ctx.request.user_data.get("check", False)
-            if proxies.off and not proxy_stopped:  # sent before the proxy was dropped: again, straight
+            replaced = proxies.off or (proxies.mode == "failover" and ctx.proxy_info.url != proxies.active)
+            if replaced and not proxy_stopped:  # sent before that proxy was dropped: again, the new way
                 queue.push(url, check)
             else:
                 await proxy_failed_on(proxies, page, depth_of.get(url, 0), check, error)
@@ -669,19 +610,22 @@ async def _run(
         proxy_failed.append((page, depth, check))
         if len(proxy_failed) < settings.proxy_max_failures:
             return
-        why = f"{len(proxy_failed)} proxy errors in a row, the last: {_why(error)}"
-        if settings.proxy_fallback == "direct":
-            log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", why)
-            proxies.off, proxy_down = True, why
-            for failed_page, _, failed_check in proxy_failed:
-                queue.push(failed_page.url, failed_check)
-            proxy_failed.clear()
-            if renderer:
-                await renderer.drop_proxy()
+        reason = f"{proxies.address}: {len(proxy_failed)} proxy errors in a row, the last: {why(error)}"
+        if proxies.advance():  # failover: the next address
+            log.warning("the proxy doesn't work (%s): going through %s", reason, proxies.address)
+        elif settings.proxy_fallback == "direct":
+            log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", reason)
+            proxies.off, proxy_down = True, reason
         else:
-            proxy_stopped = why
+            proxy_stopped = reason
             proxy_failed.clear()
-            crawler.stop(f"the proxy doesn't work: {why}")
+            crawler.stop(f"the proxy doesn't work: {reason}")
+            return
+        for failed_page, _, failed_check in proxy_failed:
+            queue.push(failed_page.url, failed_check)
+        proxy_failed.clear()
+        if renderer:
+            await renderer.use_proxy(proxies.active)
 
     try:
         if resume and resume.seen:  # continue (or a list crawl's first run): the queue is whatever isn't done
@@ -694,7 +638,7 @@ async def _run(
             await admit([start_url], 0, start=True)
             if all_settings.sitemaps.crawl and not listed:  # a fresh crawl: sitemaps first, their URLs one click away
                 async for found in sitemaps.read(
-                    start_url, all_settings.sitemaps, settings, writer, scope, proxies.first if proxies else None
+                    start_url, all_settings.sitemaps, settings, writer, scope, proxies.active if proxies else None
                 ):
                     if all_settings.sitemaps.follow:
                         await admit(found, 1)
@@ -781,8 +725,9 @@ def register_crawl(engine: sa.Engine, start_url: str, project: str, settings: Se
 
 
 def _ready(settings: Settings) -> None:
-    """What a crawl needs, checked before it is registered: the proxy password, the browser for rendering."""
+    """What a crawl needs, checked before it is registered: the proxy password and key, the browser for rendering."""
     proxy_urls(settings.crawl)
+    change_ip_urls(settings.crawl)
     site_auth_header(settings.crawl)  # the site's password, asked for before a crawl is registered
     http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
     if settings.crawl.ca_bundle and not Path(settings.crawl.ca_bundle).is_file():

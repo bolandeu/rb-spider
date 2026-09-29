@@ -28,7 +28,7 @@ from .markdown import html_to_markdown
 from .settings import CrawlSettings
 
 if TYPE_CHECKING:
-    from .crawl import Proxies
+    from .proxy import IpChanger, Proxies
     from .render import Renderer
 
 MAX_REDIRECTS = 10
@@ -105,12 +105,14 @@ class Fetcher:
         self.render = render
         self.timeout = timedelta(seconds=settings.timeout_s)
         self.renderer: Renderer | None = None
+        self.changer: IpChanger | None = None
 
     async def open(self, first_url: str, ask: Callable[[str], bool] | None) -> None:
         """Check the proxies (crawl.proxy_fallback, `ask`) and, with `render`, set the browser up to use them."""
-        from .crawl import open_proxies
+        from .proxy import ip_changer, open_proxies
 
         self.proxies, _ = await open_proxies(self.settings, self.client, first_url, ask)
+        self.changer = ip_changer(self.settings, self.client, self.proxies, first_url)
         if self.render:
             from .render import Renderer
 
@@ -121,7 +123,7 @@ class Fetcher:
                                      viewport=settings.render_viewport, console=False,
                                      flatten_shadow_dom=settings.render_flatten_shadow_dom,
                                      flatten_iframes=settings.render_flatten_iframes,
-                                     proxy=self.proxies.first if self.proxies else None)  # fmt: skip
+                                     proxy=self.proxies.active if self.proxies else None)  # fmt: skip
 
     async def fetch(self, url: str) -> FetchResult:
         result = FetchResult(normalize_url(url))
@@ -129,10 +131,7 @@ class Fetcher:
         current = result.url
         try:
             for _ in range(MAX_REDIRECTS + 1):
-                proxy = await self.proxies.new_proxy_info(None, None, None) if self.proxies else None
-                response = await self.client.send_request(
-                    current, headers=self.headers or None, proxy_info=proxy, timeout=self.timeout
-                )
+                response = await self._send(current)
                 headers = {k.lower(): v for k, v in dict(response.headers).items()}
                 body = await response.read()
                 page = parse_page(current, response.status_code, headers, b"")  # redirect target only
@@ -151,6 +150,22 @@ class Fetcher:
         await self._read(result, current, response.status_code, headers, body)
         result.elapsed_ms = round((time.monotonic() - started) * 1000)
         return result
+
+    async def _send(self, url: str):
+        """One request, through the proxy; a blocked answer (crawl.proxy_change_ip_on) gets a new IP and asks again."""
+        while True:
+            if self.changer:
+                await self.changer.idle()
+            generation = self.changer.generation if self.changer else 0
+            proxy = await self.proxies.new_proxy_info(None, None, None) if self.proxies else None
+            response = await self.client.send_request(url, headers=self.headers or None, proxy_info=proxy,
+                                                      timeout=self.timeout)  # fmt: skip
+            if not (self.changer and proxy and self.changer.blocked(response.status_code)):
+                if self.changer:
+                    self.changer.answered(generation)
+                return response
+            if not await self.changer.change(generation):
+                return response
 
     async def _read(self, result: FetchResult, url: str, status: int, headers: dict, body: bytes) -> None:
         result.final_url, result.status = url, status
@@ -194,7 +209,7 @@ async def fetch_stream(
     settings = settings or CrawlSettings()
     wanted = parse_include(include)
     if render:
-        from .crawl import check_render_proxy
+        from .proxy import check_render_proxy
         from .render import ensure_available
 
         ensure_available()

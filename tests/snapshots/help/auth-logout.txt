@@ -3,12 +3,17 @@
 
  Удалить секрет из системного хранилища ключей.
 
+ Например, прокси больше не нужен: пароль (`proxy`) и ключ смены IP (`proxy_key`).
+ Переменные окружения (`SPIDER_<PROVIDER>_API_KEY`) команда не трогает — их убирают
+ там, где задали. Заменить секрет — `auth login` без `logout`.
+
  Example: spider auth logout --provider proxy
+ Example: spider auth logout --provider proxy_key
 
  JSON: `{provider}`.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --provider        <str>  Провайдер: proxy, site или database. [default: default]                 │
+│ --provider        <str>  Провайдер: proxy, proxy_key, site или database. [default: default]      │
 │ --json                   Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).  │
 │ --quiet                  Печатать только основной результат, без пояснений.                      │
 │ --help                   Show this message and exit.                                             │

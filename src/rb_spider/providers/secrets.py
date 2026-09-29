@@ -1,6 +1,6 @@
 """spider's own secrets, as `auth status` reports them (tools/docs/standard-release.md §8).
 
-All three are optional: each is needed only with a setting that uses it. A proxy or
+All four are optional: each is needed only with a setting that uses it. A proxy or
 site password has no endpoint to ask whether it is right — a crawl is what proves it —
 so their check only confirms the secret is there. The database password is checked
 by connecting to `SPIDER_DB_URL` (when it is set).
@@ -32,6 +32,15 @@ class ProxyPassword(_Secret):
 
     def health_check(self) -> Health:
         return Health(message="present; only a crawl through the proxy proves it")
+
+
+class ProxyKey(_Secret):
+    """`{key}` in `crawl.proxy_change_ip_urls` (core/proxy.py, KEY_CREDENTIAL)."""
+
+    name = "proxy_key"
+
+    def health_check(self) -> Health:
+        return Health(message="present; only an IP change proves it")
 
 
 class SitePassword(_Secret):
@@ -75,7 +84,8 @@ class DatabasePassword(_Secret):
 
 
 def password(name: str) -> str | None:
-    """The secret of provider `name` (proxy, site, database): env, keychain `spider:`, then legacy `rb_spider:`."""
-    provider = {cls.name: cls for cls in (ProxyPassword, SitePassword, DatabasePassword)}[name]
+    """The secret of provider `name` (proxy, proxy_key, site, database): env, keychain `spider:`, then legacy
+    `rb_spider:`."""
+    provider = {cls.name: cls for cls in (ProxyPassword, ProxyKey, SitePassword, DatabasePassword)}[name]
     credential = provider().credential()
     return credential.get("api_key") if credential else None

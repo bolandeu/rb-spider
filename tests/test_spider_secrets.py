@@ -1,4 +1,4 @@
-"""spider's own secrets in `auth status` (proxy, site, database) and the keychain namespace move.
+"""spider's own secrets in `auth status` (proxy, proxy_key, site, database) and the keychain namespace move.
 
 Before 0.2.0 the keychain held `rb_spider:<provider>` while env vars were `SPIDER_*`; now both
 are `spider`. Old entries are still read (`shared_namespaces`, read-only), so passwords saved by an older spider keep working.
@@ -35,7 +35,7 @@ def _status(*args: str, env: dict[str, str] | None = None) -> tuple[int, dict]:
     return result.exit_code, json.loads(result.stdout)
 
 
-def test_all_three_are_optional_and_missing_is_healthy(keychain, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_all_four_are_optional_and_missing_is_healthy(keychain, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SPIDER_DB_URL", raising=False)
     code, payload = _status("--check")
     entries = by_provider(payload)
@@ -43,6 +43,7 @@ def test_all_three_are_optional_and_missing_is_healthy(keychain, monkeypatch: py
     assert {name: (e["required"], e["status"]) for name, e in entries.items()} == {
         "database": (False, "missing"),
         "proxy": (False, "missing"),
+        "proxy_key": (False, "missing"),
         "site": (False, "missing"),
     }
     assert entries["proxy"]["source_ref"] == (
