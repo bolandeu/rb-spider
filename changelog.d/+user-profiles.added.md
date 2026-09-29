@@ -1,1 +1,0 @@
-Профили для всех проектов: `spider profiles init NAME --user` кладёт профиль в папку настроек пользователя (`~/.config/spider/profiles/` на Linux, `~/Library/Application Support/spider/profiles/` на macOS); `--profile NAME` находит его в любом проекте, проектный профиль с тем же именем важнее.

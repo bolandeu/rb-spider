@@ -11,6 +11,16 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.2.4] - 2026-09-29
+
+### Added
+
+- `crawl.fingerprint_timezone = ip` (по умолчанию): часовой пояс браузера с отпечатком — как у выходного IP, при старте и после каждой смены IP; `file` — как в файле отпечатка. SOCKS5-адреса в `crawl.proxy_urls` (запасной вход мобильного прокси) работают для страниц; после смены IP соединения старого IP закрываются, а не дают ошибки.
+- Мобильный прокси: `crawl.proxy_mode = failover` — всё через первый рабочий адрес, следующий — запасной (HTTP- и SOCKS5-вход модема); `crawl.proxy_change_ip_urls` — ссылки смены IP, которые spider открывает по очереди, когда сайт блокирует (`crawl.proxy_change_ip_on`, по умолчанию 403 и 429), и повторяет заблокированные запросы с новым IP (обход и `spider fetch`). Ключ ссылки — `{key}`, секрет `spider auth login --provider proxy_key` или `SPIDER_PROXY_KEY_API_KEY`.
+- Отпечаток браузера `crawl.fingerprint`: файл сервиса отпечатков (`spider fingerprints add`) или сгенерированный browserforge (`spider fingerprints new --os windows|macos|linux|android --chrome N`), один на весь обход — User-Agent, Accept-Language и sec-ch-ua всех запросов, а в браузере рендеринга navigator, экран, WebGL, часовой пояс и локаль; WebRTC только через прокси. Сверка согласованности — одна ОС в отпечатке и у TCP прокси, ОС машины при рендеринге, страна и часовой пояс выходного IP: `spider fingerprints check` и перед обходом (`crawl.fingerprint_check` = warn | stop | off). При смене IP прокси — новые cookies и браузерная сессия с тем же отпечатком.
+- Профили для всех проектов: `spider profiles init NAME --user` кладёт профиль в папку настроек пользователя (`~/.config/spider/profiles/` на Linux, `~/Library/Application Support/spider/profiles/` на macOS); `--profile NAME` находит его в любом проекте, проектный профиль с тем же именем важнее.
+
+
 ## [0.2.3] - 2026-09-29
 
 ### Added
