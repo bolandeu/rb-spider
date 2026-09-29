@@ -37,7 +37,7 @@ structured = ["extruct>=0.18"]
 # Custom Extraction by XPath (`custom.extract` with kind = "xpath")
 xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
-sitemaps = ["rb-sitemap-xml>=0.1,<0.2"]
+sitemaps = ["rb-sitemap-xml>=0.1.3,<0.2"]
 # crawls in PostgreSQL instead of the local SQLite file (`SPIDER_DB_URL`)
 postgres = ["psycopg[binary]>=3.2"]
 # PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
@@ -68,7 +68,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # Sibling packages by release tag (tools/docs/standard-release.md §5); against an unreleased one
 # locally: `uv pip install -e ../<package>`, uncommitted
 [tool.uv.sources]
-rb-sitemap-xml = { git = "https://github.com/bolandeu/sitemap-xml", tag = "v0.1.1" }
+rb-sitemap-xml = { git = "https://github.com/bolandeu/sitemap-xml", tag = "v0.1.3" }
 rb-google-search-console = { git = "https://github.com/bolandeu/google-search-console", tag = "v0.4.0" }
 
 [tool.hatch.build.targets.wheel]

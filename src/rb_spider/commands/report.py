@@ -318,15 +318,16 @@ def robots_test(
 ) -> None:
     """Robots.txt tester: разрешён ли URL для робота и какая строка robots.txt это решает.
 
-    Качает robots.txt сайтов из списка (или берёт `--robots`), не обходит сайт. User-Agent —
-    как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты
+    Качает robots.txt сайтов из списка (или берёт `--robots`), не обходит сайт; через
+    прокси обхода (`crawl.proxy_urls`, `crawl.proxy_fallback`). User-Agent — как у обхода: `--user-agent`, `crawl.robots_user_agent` или `crawl.user_agent` (пресеты
     googlebot, yandexbot…).
 
     Example: spider robots-test https://example.com/cart https://example.com/catalog/
     Example: spider robots-test https://example.com/x --user-agent Googlebot --robots new-robots.txt
 
     JSON: `{rows: [{url, allowed, rule, user_agent}]}`; rule — решившая строка («Disallow:
-    /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2.
+    /cart»), null — ни одна не подошла (разрешено). Нет файла `--robots` — выход 2;
+    прокси не работает — выход 5, `PROXY_UNAVAILABLE`.
     """
     crawl = options.resolve(ctx, profile, config_file, assignments).settings.crawl
     if user_agent:

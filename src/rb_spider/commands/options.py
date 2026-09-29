@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,20 @@ ConfigFileOption = typer.Option(None, "--config", help="TOML-файл настр
 SetOption = typer.Option(
     None, "--set", help="Переопределить любой ключ: `--set crawl.max_urls=500`; можно повторять.", metavar="KEY=VALUE"
 )
+
+
+def proxy_question(ctx: typer.Context, json_output: bool) -> Callable[[str], bool] | None:
+    """In a terminal: ask whether to go on without a dead proxy (crawl.proxy_fallback = stop). None — no one to ask:
+    --json, --non-interactive, no TTY (a detached crawl, a pipe) — the key decides."""
+    if json_output or ctx.obj.get("json") or ctx.obj.get("non_interactive") or not sys.stdin.isatty():
+        return None
+
+    def ask(problem: str) -> bool:
+        return typer.confirm(
+            f"Прокси не работает ({problem}). Продолжить без прокси — сайт увидит ваш IP?", default=False, err=True
+        )
+
+    return ask
 
 
 def resolve(

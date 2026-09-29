@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import RenderUnavailable
 
@@ -158,6 +158,21 @@ def _launch_choices(explicit: str | None) -> list[tuple[str, dict]]:
     ]
 
 
+def proxy_settings(url: str) -> dict[str, str]:
+    """A proxy URL as Playwright's context option: the server apart from its login and password."""
+    parts = urlsplit(url)
+    found = {
+        "server": f"{parts.scheme}://{parts.hostname}:{parts.port}"
+        if parts.port
+        else f"{parts.scheme}://{parts.hostname}"
+    }
+    if parts.username:
+        found["username"] = unquote(parts.username)
+    if parts.password:
+        found["password"] = unquote(parts.password)
+    return found
+
+
 def viewport_options(viewport: str) -> dict[str, Any]:
     """Browser context options for crawl.render_viewport: a preset (desktop, mobile) or WIDTHxHEIGHT."""
     if viewport in VIEWPORTS:
@@ -194,6 +209,7 @@ class Renderer:
         images: bool = False,
         screenshots: bool = False,
         allowed: Callable[[str], Awaitable[bool]] | None = None,
+        proxy: str | None = None,
     ) -> None:
         self.tabs, self.wait_ms, self.timeout_ms, self.browser = tabs, wait_ms, timeout_s * 1000, browser
         self.console, self.flatten_shadow_dom, self.flatten_iframes = console, flatten_shadow_dom, flatten_iframes
@@ -206,6 +222,8 @@ class Renderer:
             self.context_options["extra_http_headers"] = headers
         if user_agent:
             self.context_options["user_agent"] = user_agent
+        if proxy:
+            self.context_options["proxy"] = proxy_settings(proxy)
         self._slots = asyncio.Semaphore(tabs)
         self._pool: Any = None
 
@@ -236,6 +254,15 @@ class Renderer:
             log.info("rendering with %s", label)
             return self
         raise RenderUnavailable(f"no browser could start ({'; '.join(errors)}).")
+
+    async def drop_proxy(self) -> None:
+        """Go on without the proxy (crawl.proxy_fallback = direct): a new browser; pages open in the old one fail."""
+        if "proxy" not in self.context_options or self._pool is None:
+            return
+        del self.context_options["proxy"]
+        old = self._pool
+        await self.__aenter__()
+        await old.__aexit__(None, None, None)
 
     async def __aexit__(self, *exc: type[BaseException] | BaseException | TracebackType | None) -> None:
         if self._pool is not None:

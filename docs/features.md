@@ -643,6 +643,7 @@
 - [x] `MVP` **Robots User-Agent** — чью группу правил robots.txt соблюдать → `robots.user_agent`
 - [x] `MVP` **HTTP Header** — произвольные заголовки запроса → `headers`
 - [x] `MVP` **Proxy** → `proxy` / `--proxy` (в SF — один прокси; у нас ротация через Crawlee)
+- [x] `v3` **Прокси для всего трафика и отказ прокси** — страницы, robots.txt, XML sitemap, браузер идут через `crawl.proxy_urls`; прокси проверяется перед стартом и считается умершим после `crawl.proxy_max_failures` ошибок подряд; `crawl.proxy_fallback` — stop (код 5 `PROXY_UNAVAILABLE`, `crawls resume`) или direct, в терминале — вопрос
 - [x] `v2` **Authentication: Basic** → `crawl.auth = basic`, `crawl.auth_user` (пароль — `spider auth login --provider site`)
 - [ ] `backlog` **Authentication: Digest** — impit не умеет challenge-response Digest; своя реализация — по запросу
 - [x] `v2` **Trusted Certificates** (свои корневые сертификаты для MITM-прокси) → `crawl.ca_bundle` (с `http_client = curl`: impit свой CA не загружает)

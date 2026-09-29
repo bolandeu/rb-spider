@@ -299,10 +299,23 @@ class CrawlSettings(BaseModel):
     proxy_urls: list[str] = Field(
         [],
         description=(
-            "Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из "
-            "`spider auth login --provider proxy`."
+            "Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга. Страницы "
+            "чередуют адреса по запросам, sitemap и браузер идут через первый; браузеру нужен HTTP-прокси (SOCKS5 "
+            "с паролем Chromium не умеет). Пароль не пишите в файл: `{password}` в адресе заменится секретом из "
+            "`spider auth login --provider proxy`. Перед обходом и `spider fetch` прокси проверяется запросом."
         ),
         examples=[["http://user:{password}@proxy.example:8000"]],
+    )
+    proxy_fallback: Literal["stop", "direct"] = Field(
+        "stop",
+        description=(
+            "Прокси не работает (перед стартом или crawl.proxy_max_failures ошибок прокси подряд): stop — "
+            "остановиться (обход продолжается `spider crawls resume`), direct — идти дальше без прокси, "
+            "сайт увидит ваш IP. В терминале при stop перед стартом spider спросит, продолжить ли без прокси."
+        ),
+    )
+    proxy_max_failures: int = Field(
+        20, ge=1, description="Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер» (proxy_fallback)."
     )
     # --- what to keep
     store_html: bool = Field(
@@ -451,7 +464,7 @@ class SitemapSettings(BaseModel):
         False,
         description=(
             "Читать XML sitemap сайта (extra `rb-spider[sitemaps]`): проверки Sitemaps, `spider sitemaps`. "
-            "Файлы качаются без прокси, с User-Agent и timeout обхода."
+            "Файлы качаются с User-Agent, timeout и прокси обхода."
         ),
     )
     discover: bool = Field(

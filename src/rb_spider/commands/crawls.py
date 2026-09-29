@@ -82,16 +82,16 @@ def resume(
 ) -> None:
     """Продолжить прерванный обход с того места, где он остановился.
 
-    После Ctrl-C, падения, перезагрузки или `kill -9`: очередь восстанавливается из
-    базы, уже сохранённые URL заново не скачиваются, потерянных нет. Настройки — те,
+    После Ctrl-C, падения, перезагрузки, `kill -9` или остановки из-за неработающего
+    прокси (`crawl.proxy_fallback = stop`): очередь восстанавливается из базы, уже сохранённые URL заново не скачиваются, потерянных нет. Настройки — те,
     с которыми обход начинался (`spider crawls show`). Так же запускается обход
     в фоне (`spider crawl --detach`).
 
     Example: spider crawls resume
     Example: spider --json crawls resume 12
 
-    JSON — как у `spider crawl`: `{crawl_id, project, start_url, status, pages, elapsed_s}`.
-    Обход уже завершён или ещё идёт — выход 2.
+    JSON — как у `spider crawl`: `{crawl_id, project, start_url, status, pages, elapsed_s, proxy_down}`.
+    Обход уже завершён или ещё идёт — выход 2; прокси снова не работает — выход 5, `PROXY_UNAVAILABLE`.
     """
 
     def progress(pages: int) -> None:
@@ -101,7 +101,8 @@ def resume(
     with storage.database() as engine:
         crawl_id = storage.resolve_crawl_id(engine, crawl_id)
         crawl_service.ensure_resumable(engine, crawl_id)
-        result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
+        ask = options.proxy_question(ctx, json_output)
+        result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress, ask=ask)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
 
 

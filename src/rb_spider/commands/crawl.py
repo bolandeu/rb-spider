@@ -115,11 +115,23 @@ def crawl(
     Прерванный обход (Ctrl-C, падение, kill -9) продолжается без потерь:
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
 
+    Прокси (`crawl.proxy_urls`, удобно — в профиле) несёт весь трафик к сайту:
+    страницы, robots.txt, sitemap, браузер. Перед стартом он проверяется запросом
+    к robots.txt. Не работает (не оплачен, неверный пароль, модем выключен) — по
+    ключу `crawl.proxy_fallback`: `stop` (по умолчанию) — обход остановлен, код 5
+    `PROXY_UNAVAILABLE`, продолжить — `spider crawls resume`; в терминале spider
+    сначала спросит, идти ли без прокси. `direct` — идти без прокси. То же посреди
+    обхода после `crawl.proxy_max_failures` ошибок прокси подряд: упавшие из-за
+    него URL не записываются, а запрашиваются снова.
+    Example: spider crawl https://example.com/ --profile mobile-proxy   # свой профиль с crawl.proxy_urls
+
     Человеку — прогресс в stderr каждые 5 с и итог. JSON:
-    `{crawl_id, project, start_url, status, pages, elapsed_s}`; `status` —
-    finished | failed | interrupted. С `--detach` — сразу `{crawl_id, project,
+    `{crawl_id, project, start_url, status, pages, elapsed_s, proxy_down}`; `status` —
+    finished | failed | interrupted; `proxy_down` — почему обход шёл без прокси
+    (`direct`), иначе null. С `--detach` — сразу `{crawl_id, project,
     detached, pid, log}`. Неверный URL, пустой или битый список, настройка — код
-    выхода 2; `--render always|auto` без Playwright — код 1, `RENDER_UNAVAILABLE`.
+    выхода 2; `--render always|auto` без Playwright — код 1, `RENDER_UNAVAILABLE`;
+    прокси не работает — код 5, `PROXY_UNAVAILABLE`.
     """
     resolved = options.resolve(
         ctx,
@@ -157,7 +169,8 @@ def crawl(
             data = {"crawl_id": crawl_id, "project": project, "detached": True, "pid": pid, "log": str(log)}
             output.emit_success(ctx, data, render_human=output.human.detached)
             return
-        result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress)
+        ask = options.proxy_question(ctx, json_output)
+        result = crawl_service.run_crawl(engine, crawl_id, on_progress=progress, ask=ask)
     output.emit_success(ctx, vars(result), render_human=output.human.crawl_result)
 
 

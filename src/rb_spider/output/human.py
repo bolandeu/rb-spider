@@ -414,6 +414,7 @@ def crawl_result(data: dict) -> None:
             "старт": data["start_url"],
             "страниц": data["pages"],
             "время, с": data["elapsed_s"],
+            **({"прокси": f"отключён, шли напрямую — {data['proxy_down']}"} if data.get("proxy_down") else {}),
         },
     )
 

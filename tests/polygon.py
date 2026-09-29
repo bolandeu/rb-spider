@@ -1160,3 +1160,82 @@ def serve(*, https: bool = False) -> Iterator[str]:
         thread.join()
         loop.run_until_complete(runner.cleanup())
         loop.close()
+
+
+class Proxy:
+    """A forward HTTP proxy with a password in front of the polygon, for crawl.proxy_urls tests.
+
+    Every host it is asked for is the polygon: crawl `http://polygon.test:<port>/…` through it, and a request that
+    goes around the proxy fails (the name resolves nowhere). `seen` — (User-Agent, path) of every proxied request;
+    `dead` — answer 407 to everything, like a proxy nobody paid for; `die_after` — go dead after so many requests.
+    """
+
+    HOST = "polygon.test"
+    USER, PASSWORD = "proxy-user", "proxy-pass"
+
+    def __init__(self, upstream: str) -> None:
+        self.upstream_port = int(upstream.rsplit(":", 1)[1])
+        self.seen: list[tuple[str, str]] = []
+        self.dead = False
+        self.die_after: int | None = None
+        self.url = ""
+
+    def base(self) -> str:
+        """The polygon's base URL as seen through the proxy."""
+        return f"http://{self.HOST}:{self.upstream_port}"
+
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        import base64
+        from urllib.parse import urlsplit
+
+        try:
+            head = (await reader.readuntil(b"\r\n\r\n")).decode("latin-1")
+            first, *lines = head.split("\r\n")
+            method, target, _ = first.split(" ", 2)
+            headers = [line for line in lines if line]
+            fields = {line.split(":", 1)[0].strip().lower(): line.split(":", 1)[1].strip() for line in headers}
+            if self.die_after is not None and len(self.seen) >= self.die_after:
+                self.dead = True
+            token = base64.b64encode(f"{self.USER}:{self.PASSWORD}".encode()).decode()
+            if self.dead or fields.get("proxy-authorization") != f"Basic {token}":
+                writer.write(b'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="p"\r\n'
+                             b"Content-Length: 0\r\nConnection: close\r\n\r\n")  # fmt: skip
+                await writer.drain()
+                return
+            parts = urlsplit(target)
+            path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+            self.seen.append((fields.get("user-agent", ""), parts.path))
+            body = await reader.readexactly(int(fields.get("content-length", "0")))
+            kept = [line for line in headers if not line.lower().startswith(("proxy-", "connection:", "keep-alive:"))]
+            up_reader, up_writer = await asyncio.open_connection("127.0.0.1", self.upstream_port)
+            request = (
+                f"{method} {path} HTTP/1.1\r\n" + "".join(f"{line}\r\n" for line in kept) + "Connection: close\r\n\r\n"
+            )
+            up_writer.write(request.encode("latin-1") + body)
+            await up_writer.drain()
+            while chunk := await up_reader.read(65536):
+                writer.write(chunk)
+            await writer.drain()
+            up_writer.close()
+        except (asyncio.IncompleteReadError, ConnectionError):
+            pass
+        finally:
+            writer.close()
+
+
+@contextmanager
+def proxy(upstream: str) -> Iterator[Proxy]:
+    """Run a `Proxy` in front of the polygon at `upstream`; `.url` — its address with the login (and `{password}`)."""
+    found = Proxy(upstream)
+    loop = asyncio.new_event_loop()
+    server = loop.run_until_complete(asyncio.start_server(found._handle, "127.0.0.1", 0))
+    found.url = f"http://{Proxy.USER}:{{password}}@127.0.0.1:{server.sockets[0].getsockname()[1]}"
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    try:
+        yield found
+    finally:
+        loop.call_soon_threadsafe(server.close)
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join()
+        loop.close()

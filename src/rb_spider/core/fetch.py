@@ -2,7 +2,7 @@
 
 For other tools (`spider fetch`, `rb_spider.fetch`), so none of them needs its own HTTP client,
 proxy handling or browser: this reuses the crawl's — impit with a browser fingerprint, proxies
-(password from the keychain), User-Agent presets, JS rendering that finds an installed browser,
+(password from the keychain, checked before the first URL, crawl.proxy_fallback), User-Agent presets, JS rendering that finds an installed browser,
 and `extract.parse_page` for the SEO data. Nothing is written to the crawl database; results are
 yielded one by one, in input order, with at most `concurrency` requests in flight, so a list of
 any length runs in flat memory. robots.txt is not consulted: the caller named these URLs, the way
@@ -13,17 +13,23 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Iterable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from .encoding import to_utf8
 from .errors import InvalidArguments
 from .extract import normalize_url, parse_page, visible_text
 from .markdown import html_to_markdown
 from .settings import CrawlSettings
+
+if TYPE_CHECKING:
+    from .crawl import Proxies
+    from .render import Renderer
 
 MAX_REDIRECTS = 10
 INCLUDE = ("headers", "links", "resources", "text", "markdown", "html")  # on top of the SEO data, always there
@@ -88,26 +94,34 @@ def parse_include(value: str | Iterable[str] | None) -> set[str]:
 class Fetcher:
     """One HTTP client (and, with `render`, one browser) shared by every URL of a run."""
 
-    def __init__(self, settings: CrawlSettings, *, render: bool, include: set[str], proxies: list[str]) -> None:
-        from crawlee.proxy_configuration import ProxyConfiguration  # Crawlee is slow to import
-
-        from .crawl import http_client
+    def __init__(self, settings: CrawlSettings, *, render: bool, include: set[str]) -> None:
+        from .crawl import http_client  # Crawlee is slow to import
 
         self.settings, self.include = settings, include
         user_agent = settings.resolved_user_agent
         self.headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
         self.client = http_client(settings)
-        self.proxies = ProxyConfiguration(proxy_urls=list(proxies)) if proxies else None
+        self.proxies: Proxies | None = None  # set by `open`, once the proxies are checked
+        self.render = render
         self.timeout = timedelta(seconds=settings.timeout_s)
-        self.renderer = None
-        if render:
+        self.renderer: Renderer | None = None
+
+    async def open(self, first_url: str, ask: Callable[[str], bool] | None) -> None:
+        """Check the proxies (crawl.proxy_fallback, `ask`) and, with `render`, set the browser up to use them."""
+        from .crawl import open_proxies
+
+        self.proxies, _ = await open_proxies(self.settings, self.client, first_url, ask)
+        if self.render:
             from .render import Renderer
 
+            settings = self.settings
             self.renderer = Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms,
-                                     timeout_s=settings.timeout_s, user_agent=user_agent, headers=settings.headers,
-                                     browser=settings.render_browser, viewport=settings.render_viewport,
-                                     console=False, flatten_shadow_dom=settings.render_flatten_shadow_dom,
-                                     flatten_iframes=settings.render_flatten_iframes)  # fmt: skip
+                                     timeout_s=settings.timeout_s, user_agent=settings.resolved_user_agent,
+                                     headers=settings.headers, browser=settings.render_browser,
+                                     viewport=settings.render_viewport, console=False,
+                                     flatten_shadow_dom=settings.render_flatten_shadow_dom,
+                                     flatten_iframes=settings.render_flatten_iframes,
+                                     proxy=self.proxies.first if self.proxies else None)  # fmt: skip
 
     async def fetch(self, url: str) -> FetchResult:
         result = FetchResult(normalize_url(url))
@@ -170,17 +184,27 @@ async def fetch_stream(
     render: bool = False,
     include: str | Iterable[str] | None = None,
     concurrency: int | None = None,
+    ask: Callable[[str], bool] | None = None,
 ) -> AsyncIterator[FetchResult]:
-    """Fetch URLs concurrently, yielding results in input order."""
-    from .crawl import proxy_urls
+    """Fetch URLs concurrently, yielding results in input order.
 
+    A dead proxy (checked with the first URL's site): crawl.proxy_fallback = direct or `ask` says yes — go on
+    without it, else ProxyUnavailable.
+    """
     settings = settings or CrawlSettings()
     wanted = parse_include(include)
     if render:
+        from .crawl import check_render_proxy
         from .render import ensure_available
 
         ensure_available()
-    fetcher = Fetcher(settings, render=render, include=wanted, proxies=proxy_urls(settings))
+        check_render_proxy(settings)
+    urls = iter(urls)
+    first = next(urls, None)
+    if first is None:
+        return
+    fetcher = Fetcher(settings, render=render, include=wanted)
+    await fetcher.open(normalize_url(first), ask)
     limit = asyncio.Semaphore(concurrency or settings.concurrency)
 
     async def one(url: str) -> FetchResult:
@@ -189,7 +213,7 @@ async def fetch_stream(
 
     window: deque[asyncio.Task[FetchResult]] = deque()
     async with fetcher.renderer or contextlib.nullcontext():
-        for url in urls:
+        for url in itertools.chain([first], urls):
             window.append(asyncio.create_task(one(url)))
             if len(window) >= 2 * (concurrency or settings.concurrency):  # bounded: flat memory for any list
                 yield await window.popleft()

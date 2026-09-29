@@ -162,6 +162,7 @@ include = ["/catalog/"]       # регулярные выражения
 exclude = ["\\?sort="]
 headers = { "Accept-Language" = "ru" }
 proxy_urls = ["http://user:{password}@proxy:8000"]   # пароль — spider auth login --provider proxy
+proxy_fallback = "stop"       # stop | direct — если прокси не работает
 
 [collect.internal_links]
 follow = true
@@ -173,6 +174,7 @@ store = true
 ```
 
 **Инструкции по составлению профилей:**
+- **Прокси несёт весь трафик к сайту** (страницы, robots.txt, sitemap, браузер) и никогда не обходится молча: мёртвый прокси (проверка перед стартом, `proxy_max_failures` ошибок подряд) — остановка с `PROXY_UNAVAILABLE` и `crawls resume`, либо `proxy_fallback = direct` / ответ «да» в терминале. URL, упавшие из-за прокси, не записываются ошибками — запрашиваются снова.
 - `docs/profiles.md` — справочник всех ключей (генерируется из схемы) + рецепты: быстрый аудит, миграция по списку URL, JS-сайт, обход через прокси, только битые ссылки, большой интернет-магазин.
 - Скилл для ИИ-агентов (по образцу `serp`): как выбрать/составить профиль и какие команды звать для анализа.
 - `spider profiles init` создаёт закомментированный шаблон с описанием каждого ключа.
@@ -181,7 +183,7 @@ store = true
 
 ## 5. Интеграции
 
-- **rb-sitemap-xml** (репозиторий `bolandeu/sitemap-xml`) — подключается как библиотека, extra `rb-spider[sitemaps]`: `rb-sitemap-xml>=0.1,<0.2`, в `[tool.uv.sources]` — git по тегу (`v0.1.1`), как у всех наших пакетов (tools/docs/standard-release.md §5; локальный `path =` не коммитится — с невыпущенной версией работают через `uv pip install -e ../sitemap-xml`). Без extra `sitemaps.crawl` отказывает с `SITEMAPS_UNAVAILABLE`. Установка с пакетом — `uv tool install "rb-spider[sitemaps] @ git+…"`. spider берёт `SitemapClient.iter_files()` (файлы по одному со статистикой `SitemapFile`, записи с файлом-источником, картинками, hreflang) и `write_sitemaps()` (генерация — `spider sitemaps build`; команда `sitemap-xml build` — то же для списка URL). Файлы sitemap качаются httpx пакета: с User-Agent, timeout и `verify_tls` обхода, но без прокси.
+- **rb-sitemap-xml** (репозиторий `bolandeu/sitemap-xml`) — подключается как библиотека, extra `rb-spider[sitemaps]`: `rb-sitemap-xml>=0.1,<0.2`, в `[tool.uv.sources]` — git по тегу (`v0.1.3`), как у всех наших пакетов (tools/docs/standard-release.md §5; локальный `path =` не коммитится — с невыпущенной версией работают через `uv pip install -e ../sitemap-xml`). Без extra `sitemaps.crawl` отказывает с `SITEMAPS_UNAVAILABLE`. Установка с пакетом — `uv tool install "rb-spider[sitemaps] @ git+…"`. spider берёт `SitemapClient.iter_files()` (файлы по одному со статистикой `SitemapFile`, записи с файлом-источником, картинками, hreflang) и `write_sitemaps()` (генерация — `spider sitemaps build`; команда `sitemap-xml build` — то же для списка URL). Файлы sitemap качаются httpx пакета: с User-Agent, timeout, `verify_tls` и прокси обхода (первый адрес `crawl.proxy_urls`, `SitemapClient(proxy=…)` с v0.1.3).
 - **Обогатители (enrichers)** — плагины через entry points группы `rb_spider.enrichers` (класс или объект с `description` и `enrich(crawl: CrawlInfo) -> Iterable[Metric]`, `core/enrich.py`), пишут в `url_metrics` (`crawl_id`, `url`, `source` = имя entry point, `name`, `value`, `text`) пачками, повторный запуск заменяет метрики плагина, сбой плагина оставляет прежние. URL метрики может быть не из обхода (основа для Orphan Pages). В MVP — только интерфейс.
 - **Интеграции с внешними API (v3) — необязательны и делаются по запросу**, когда нужен съём данных конкретным инструментом; spider полностью работает без них (как SF без API Access), проверки без данных — «не проверялось».
 - **Адаптер — в spider, данные и ключи — у инструментов набора** (решение пользователя, вариант Б): обогатители для Search Console и PageSpeed Insights (пакет `gsc`, бывший `rb-gsc`), GA4 (отдельный инструмент набора — пакета пока нет) и Яндекс.Вебмастера (`ywm` + `yandex-oauth`) живут в spider как extras (`rb-spider[gsc]`, `rb-spider[ga4]`, `rb-spider[ywm]`) и вызывают соседний пакет как библиотеку. Соседний пакет ничего не знает о spider; ключи и авторизация (OAuth, ключ PSI) хранятся и обновляются у него (`gsc auth`, `ywm auth`), spider их не хранит и не спрашивает — при отсутствии авторизации сообщает, какой командой войти. Что spider нужно от `gsc` — задачи #42, #45, #46 (от инструмента GA4 — #52, то же по смыслу): стабильный импортируемый API, постраничные итераторы (Search Analytics; у GA4 — отчёт по pagePath + hostName), полный разбор URL Inspection и ответа PSI (все аудиты Lighthouse, CrUX), `auth_status()`, `property_for(url)`, типизированные ошибки и квоты, фейковый клиент для тестов.

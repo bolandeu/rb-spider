@@ -34,13 +34,14 @@ async def read(
     crawl: CrawlSettings,
     writer: storage.PageWriter,
     scope: Scope,
+    proxy: str | None = None,
 ) -> AsyncIterator[list[str]]:
     """Every sitemap of the site, one file at a time: stored with the writer, its URLs yielded for the queue."""
     from loguru import logger  # rb-sitemap-xml logs with loguru: its progress lines are noise in a crawl
     from rb_sitemap_xml import SitemapClient, SitemapError
 
     logger.disable("rb_sitemap_xml")
-    options: dict = {"timeout": crawl.timeout_s, "verify": crawl.verify_tls}
+    options: dict = {"timeout": crawl.timeout_s, "verify": crawl.verify_tls, "proxy": proxy}
     if crawl.resolved_user_agent:
         options["user_agent"] = crawl.resolved_user_agent
     client = SitemapClient(**options)

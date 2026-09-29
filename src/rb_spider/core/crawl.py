@@ -41,6 +41,7 @@ from crawlee import ConcurrencySettings, Request
 from crawlee._utils.robots import RobotsTxtFile
 from crawlee.configuration import Configuration
 from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
+from crawlee.errors import ProxyError
 from crawlee.events import LocalEventManager
 from crawlee.http_clients import HttpClient, ImpitHttpClient
 from crawlee.proxy_configuration import ProxyConfiguration
@@ -55,6 +56,7 @@ from .errors import (
     HttpClientUnavailable,
     InvalidArguments,
     NearDuplicatesUnavailable,
+    ProxyUnavailable,
     StructuredDataUnavailable,
     XPathUnavailable,
 )
@@ -92,6 +94,7 @@ class CrawlResult:
     status: str
     pages: int
     elapsed_s: float
+    proxy_down: str | None = None  # the proxy failed and the crawl went on without it (crawl.proxy_fallback = direct)
 
 
 def _validate_start_url(url: str) -> str:
@@ -112,9 +115,16 @@ class RobotsGate:
     `custom` — the text to use for the site's own host instead of its real robots.txt (crawl.robots_custom).
     """
 
-    def __init__(self, http_client: HttpClient, user_agent: str, custom: str | None = None, site: str = "") -> None:
+    def __init__(
+        self,
+        http_client: HttpClient,
+        user_agent: str,
+        custom: str | None = None,
+        site: str = "",
+        proxies: Proxies | None = None,
+    ) -> None:
         self.http_client, self.user_agent = http_client, user_agent
-        self.custom, self.site = custom, site
+        self.custom, self.site, self.proxies = custom, site, proxies
         self._files: dict[str, RobotsTxtFile | None] = {}
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -126,7 +136,8 @@ class RobotsGate:
                     if self.custom is not None and host == self.site:
                         self._files[host] = await RobotsTxtFile.from_content(url, self.custom)
                     else:
-                        self._files[host] = await RobotsTxtFile.find(url, self.http_client)
+                        proxy = await self.proxies.new_proxy_info(None, None, None) if self.proxies else None
+                        self._files[host] = await RobotsTxtFile.find(url, self.http_client, proxy)
                 except Exception:  # unreachable robots.txt: crawl as if there were none, like search bots do
                     self._files[host] = None
             return self._files[host]
@@ -223,6 +234,82 @@ def proxy_urls(settings: CrawlSettings) -> list[str]:
     return [url.replace("{password}", password) for url in settings.proxy_urls]
 
 
+PROXY_AUTH_REQUIRED = 407
+
+
+class Proxies(ProxyConfiguration):
+    """`crawl.proxy_urls` for all traffic to the sites; `off` — straight to them (crawl.proxy_fallback = direct)."""
+
+    def __init__(self, urls: list[str]) -> None:
+        super().__init__(proxy_urls=list(urls))
+        self.urls, self.off = list(urls), False
+
+    async def new_proxy_info(self, session_id: str | None, request: Request | None, proxy_tier: int | None):
+        return None if self.off else await super().new_proxy_info(session_id, request, proxy_tier)
+
+    @property
+    def first(self) -> str | None:
+        """The one proxy of the clients that can't rotate: the browser, rb-sitemap-xml."""
+        return None if self.off else self.urls[0]
+
+
+def proxy_failure(error: BaseException) -> bool:
+    """The proxy failed, not the site: through a proxy every connection goes to the proxy, so a refused or
+    unresolved one is its, as is its own refusal (Crawlee's ProxyError: 407, a failed tunnel)."""
+    return isinstance(error, ProxyError) or type(error).__name__ == "ConnectError" or "proxy" in str(error).lower()
+
+
+def _why(error: BaseException) -> str:
+    """The first line of what went wrong: Crawlee's ProxyError from a client says nothing itself, its cause does."""
+    cause = error.__cause__ if error.__cause__ and not str(error) else error
+    return (str(cause).strip().splitlines() or [type(cause).__name__])[0][:200]
+
+
+async def open_proxies(
+    settings: CrawlSettings, client: HttpClient, url: str, ask: Callable[[str], bool] | None = None
+) -> tuple[Proxies | None, str | None]:
+    """The proxies after a check request through each (robots.txt of `url`'s site); (proxies, why they're off).
+
+    A dead proxy: crawl.proxy_fallback = direct, or `ask` (a person in a terminal) says yes — go without it;
+    otherwise ProxyUnavailable. Other failures (a timeout, the site's TLS) are the site's: the crawl records them.
+    """
+    urls = proxy_urls(settings)
+    if not urls:
+        return None, None
+    proxies = Proxies(urls)
+    parts = urlsplit(url)
+    target = f"{parts.scheme}://{parts.netloc}/robots.txt"
+    user_agent = settings.resolved_user_agent
+    headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
+    for proxy in urls:
+        info = await ProxyConfiguration(proxy_urls=[proxy]).new_proxy_info(None, None, None)
+        try:
+            response = await client.send_request(target, headers=headers or None, proxy_info=info,
+                                                 timeout=timedelta(seconds=settings.timeout_s))  # fmt: skip
+            if response.status_code == PROXY_AUTH_REQUIRED:
+                raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
+        except Exception as exc:
+            if not proxy_failure(exc):
+                continue
+            problem = f"{info.hostname}:{info.port} — {_why(exc)}" if info else _why(exc)
+            if settings.proxy_fallback == "direct" or (ask is not None and ask(problem)):
+                log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", problem)
+                proxies.off = True
+                return proxies, problem
+            raise ProxyUnavailable(problem) from exc
+    return proxies, None
+
+
+def check_render_proxy(settings: CrawlSettings) -> None:
+    """Chromium takes no SOCKS5 proxy with a password: the browser needs the HTTP address."""
+    parts = urlsplit(settings.proxy_urls[0]) if settings.proxy_urls else None
+    if parts and parts.scheme.startswith("socks") and parts.username:
+        raise InvalidArguments(
+            "The browser (crawl.render) can't use a SOCKS5 proxy with a password: put the proxy's HTTP address "
+            "first in crawl.proxy_urls."
+        )
+
+
 def http_client(settings: CrawlSettings) -> HttpClient:
     """`crawl.http_client`, never following redirects itself: every step is a page of its own.
 
@@ -269,11 +356,12 @@ def test_robots(settings: CrawlSettings, urls: list[str], robots_text: str | Non
 
     async def run() -> list[dict]:
         client = http_client(settings)
+        proxies = (await open_proxies(settings, client, urls[0]))[0] if urls and robots_text is None else None
         gates: dict[str, RobotsGate] = {}
         found = []
         for url in urls:
             host = urlsplit(url).netloc
-            gate = gates.setdefault(host, RobotsGate(client, agent, robots_text, host))
+            gate = gates.setdefault(host, RobotsGate(client, agent, robots_text, host, proxies))
             allowed = await gate.allowed(url)
             found.append({"url": url, "allowed": allowed, "rule": gate.rule(url), "user_agent": agent})
         return found
@@ -298,8 +386,12 @@ async def _run(
     on_progress: Callable[[int], None] | None,
     resume: storage.Frontier | None = None,
     respider: bool = False,
-) -> None:
-    """`respider` — fetch only what the queue holds (the chosen URLs), admit nothing they link to."""
+    ask: Callable[[str], bool] | None = None,
+) -> str | None:
+    """`respider` — fetch only what the queue holds (the chosen URLs), admit nothing they link to.
+
+    Returns why the proxy was dropped, if it was (crawl.proxy_fallback = direct, or `ask` said yes).
+    """
     settings, collect = all_settings.crawl, all_settings.collect
     user_agent = settings.resolved_user_agent
     headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
@@ -307,10 +399,10 @@ async def _run(
     listed = settings.mode == "list"
     hosts = {urlsplit(url).netloc for url, depth in resume.seen.items() if depth == 0} if listed and resume else None
     scope = Scope(start_url, settings, hosts)
-    proxies = proxy_urls(settings)
     client = http_client(settings)
+    proxies, proxy_down = await open_proxies(settings, client, start_url, ask)
     robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*", settings.robots_custom,
-                        urlsplit(start_url).netloc)  # fmt: skip
+                        urlsplit(start_url).netloc, proxies)  # fmt: skip
     auth = site_auth_header(settings)
     crawl_delay = await robots.crawl_delay(start_url) if settings.robots == "respect" else None
 
@@ -329,7 +421,7 @@ async def _run(
                  viewport=settings.render_viewport, console=settings.render_console,
                  flatten_shadow_dom=settings.render_flatten_shadow_dom,
                  flatten_iframes=settings.render_flatten_iframes, images=settings.render_images,
-                 screenshots=settings.render_screenshots,
+                 screenshots=settings.render_screenshots, proxy=proxies.first if proxies else None,
                  allowed=robots.allowed if settings.robots == "respect" else None)
         if settings.render != "never" else None
     )  # fmt: skip
@@ -350,12 +442,15 @@ async def _run(
         ),
         max_requests_per_crawl=settings.max_urls,
         max_request_retries=1,
+        # a proxy error is retried through another proxy of the list, and only that: the same one won't come back
+        # to life in a second, a dead one is for proxy_failed_on to spot (Crawlee's default is 10 rotations)
+        max_session_rotations=len(proxies.urls) if proxies else 10,
         navigation_timeout=timedelta(seconds=settings.timeout_s),
         request_handler_timeout=timedelta(seconds=settings.timeout_s + 60 + (render_wait_s if renderer else 0)),
         ignore_http_error_status_codes=list(range(300, 600)),
         respect_robots_txt_file=False,  # RobotsGate, see the module docstring
         configure_logging=False,
-        **({"proxy_configuration": ProxyConfiguration(proxy_urls=list(proxies))} if proxies else {}),
+        **({"proxy_configuration": proxies} if proxies else {}),
     )
     # every URL handed to the queue (mirrored in the `frontier` table); its depth is known before it's fetched
     depth_of: dict[str, int] = dict(resume.seen) if resume else {}
@@ -372,11 +467,27 @@ async def _run(
     # picked from Crawlee's session, rotation stays as it was); "none" — no session, no cookies.
     cookie_jar = Session() if settings.cookies == "session" else None
 
+    # Proxy failures (proxy_failure) of pages, held back until it's clear whose they were: any response means the
+    # proxy works — they were the sites' and are stored; `proxy_max_failures` of them in a row — the proxy's: they
+    # stay in the queue, fetched again without the proxy or after `crawls resume`.
+    proxy_failed: list[tuple[Page, int, bool]] = []
+    proxy_stopped: str | None = None
+
+    def proxy_answered() -> None:
+        for page, depth, _ in proxy_failed:
+            writer.add(page, depth=depth)
+        proxy_failed.clear()
+
     async def timed_crawl(request, *args, **kwargs):
         kwargs["session"] = cookie_jar
         sent = time.monotonic()
         result = await client_crawl(request, *args, **kwargs)
         response_ms[request.url] = round((time.monotonic() - sent) * 1000)
+        if kwargs.get("proxy_info") and result.http_response.status_code == PROXY_AUTH_REQUIRED:
+            # an http:// URL goes through the proxy as a plain request: its refusal comes back as a response
+            raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
+        if proxy_failed:
+            proxy_answered()
         return result
 
     client.crawl = timed_crawl  # ty: ignore[invalid-assignment]
@@ -538,10 +649,39 @@ async def _run(
         url = ctx.request.url
         response_ms.pop(url, None)
         redirect_hops.pop(url, None)
-        page = Page.no_response(url, f"{type(error).__name__}: {error}"[:500])
+        detail = error if str(error) or error.__cause__ is None else error.__cause__  # Crawlee's ProxyError is empty
+        page = Page.no_response(url, f"{type(error).__name__}: {detail}"[:500])
         page.onpage = {"external": not scope.internal(url), "parsed": False}
+        if proxies and ctx.proxy_info and proxy_failure(error):  # went through the proxy, and the proxy failed
+            check = ctx.request.user_data.get("check", False)
+            if proxies.off and not proxy_stopped:  # sent before the proxy was dropped: again, straight
+                queue.push(url, check)
+            else:
+                await proxy_failed_on(proxies, page, depth_of.get(url, 0), check, error)
+            return
         writer.add(page, depth=depth_of.get(url, 0))
         progress()
+
+    async def proxy_failed_on(proxies: Proxies, page: Page, depth: int, check: bool, error: Exception) -> None:
+        nonlocal proxy_stopped, proxy_down
+        if proxy_stopped:
+            return  # stopping: it stays in the queue
+        proxy_failed.append((page, depth, check))
+        if len(proxy_failed) < settings.proxy_max_failures:
+            return
+        why = f"{len(proxy_failed)} proxy errors in a row, the last: {_why(error)}"
+        if settings.proxy_fallback == "direct":
+            log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", why)
+            proxies.off, proxy_down = True, why
+            for failed_page, _, failed_check in proxy_failed:
+                queue.push(failed_page.url, failed_check)
+            proxy_failed.clear()
+            if renderer:
+                await renderer.drop_proxy()
+        else:
+            proxy_stopped = why
+            proxy_failed.clear()
+            crawler.stop(f"the proxy doesn't work: {why}")
 
     try:
         if resume and resume.seen:  # continue (or a list crawl's first run): the queue is whatever isn't done
@@ -553,13 +693,19 @@ async def _run(
         else:
             await admit([start_url], 0, start=True)
             if all_settings.sitemaps.crawl and not listed:  # a fresh crawl: sitemaps first, their URLs one click away
-                async for found in sitemaps.read(start_url, all_settings.sitemaps, settings, writer, scope):
+                async for found in sitemaps.read(
+                    start_url, all_settings.sitemaps, settings, writer, scope, proxies.first if proxies else None
+                ):
                     if all_settings.sitemaps.follow:
                         await admit(found, 1)
         writer.flush()  # the start URL (and a robots verdict on it) is on disk before any fetching
         if not await queue.is_empty():
             async with renderer or contextlib.nullcontext():
                 await crawler.run()
+        if proxy_stopped:
+            raise ProxyUnavailable(proxy_stopped)
+        proxy_answered()  # the last ones before the queue ran out: not enough in a row to blame the proxy
+        return proxy_down
     finally:
         parser.close()
         await queue.drop()
@@ -643,6 +789,7 @@ def _ready(settings: Settings) -> None:
         raise InvalidArguments(f"crawl.ca_bundle: no file '{settings.crawl.ca_bundle}'.")
     if settings.crawl.render != "never":
         render.ensure_available()
+        check_render_proxy(settings.crawl)
     if settings.collect.near_duplicates and importlib.util.find_spec("datasketch") is None:
         raise NearDuplicatesUnavailable
     if {"microdata", "rdfa"} & set(settings.collect.structured_data) and importlib.util.find_spec("extruct") is None:
@@ -728,10 +875,12 @@ def run_crawl(
     *,
     on_progress: Callable[[int], None] | None = None,
     respider: bool = False,
+    ask: Callable[[str], bool] | None = None,
 ) -> CrawlResult:
     """Crawl (or continue crawling) a registered crawl with its own settings, then run the checks.
 
-    Continuing picks up the `frontier` a previous run left — after Ctrl-C, a crash or kill -9.
+    Continuing picks up the `frontier` a previous run left — after Ctrl-C, a crash or kill -9 — or a dead proxy.
+    `ask` — a person to ask whether to go on without a dead proxy (see `open_proxies`).
     """
     row, snapshot = storage.get_crawl(engine, crawl_id)
     settings = Settings.model_validate(snapshot or {})
@@ -740,17 +889,20 @@ def run_crawl(
     storage.set_pid(engine, crawl_id, os.getpid())
     started = time.monotonic()
     status = "failed"
+    proxy_down = None
     try:
-        asyncio.run(_run(row.start_url, writer, settings, on_progress, resume, respider))
+        proxy_down = asyncio.run(_run(row.start_url, writer, settings, on_progress, resume, respider, ask))
         status = "finished"
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ProxyUnavailable):
         status = "interrupted"
         raise
     finally:
         writer.close()
         pages = storage.finish_crawl(engine, crawl_id, status)
         issues.analyze(engine, crawl_id, settings.thresholds)  # an interrupted crawl is still worth a report
-    return CrawlResult(crawl_id, row.project, row.start_url, status, pages, round(time.monotonic() - started, 1))
+    return CrawlResult(
+        crawl_id, row.project, row.start_url, status, pages, round(time.monotonic() - started, 1), proxy_down
+    )
 
 
 def crawl_site(

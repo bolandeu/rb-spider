@@ -93,7 +93,9 @@ concurrency = 10
 | `crawl.robots_show_internal_blocked` | `bool` | `true` | Записывать в отчёт URL сайта, запрещённые robots.txt. |
 | `crawl.robots_show_external_blocked` | `bool` | `true` | Записывать в отчёт чужие URL, запрещённые их robots.txt. |
 | `crawl.robots_user_agent` | `str \| None` | — | От чьего имени читать robots.txt; не задано — от User-Agent запросов. |
-| `crawl.proxy_urls` | `list[str]` | `[]` | Прокси, чередуются по запросам. Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. |
+| `crawl.proxy_urls` | `list[str]` | `[]` | Прокси для всего трафика к сайтам: страницы, robots.txt, XML sitemap, браузер рендеринга. Страницы чередуют адреса по запросам, sitemap и браузер идут через первый; браузеру нужен HTTP-прокси (SOCKS5 с паролем Chromium не умеет). Пароль не пишите в файл: `{password}` в адресе заменится секретом из `spider auth login --provider proxy`. Перед обходом и `spider fetch` прокси проверяется запросом. |
+| `crawl.proxy_fallback` | `Literal['stop', 'direct']` | `"stop"` | Прокси не работает (перед стартом или crawl.proxy_max_failures ошибок прокси подряд): stop — остановиться (обход продолжается `spider crawls resume`), direct — идти дальше без прокси, сайт увидит ваш IP. В терминале при stop перед стартом spider спросит, продолжить ли без прокси. |
+| `crawl.proxy_max_failures` | `int` | `20` | Сколько ошибок прокси подряд, без единого ответа, значат «прокси умер» (proxy_fallback). |
 | `crawl.store_html` | `bool` | `false` | Сохранять HTML страниц (сжатым, в отдельный файл рядом с базой); иначе только md5. |
 | `collect.internal_links.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.internal_links.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
@@ -125,7 +127,7 @@ concurrency = 10
 | `collect.media.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
 | `collect.iframes.follow` | `bool` | `true` | Переходить по таким ссылкам (обходить или проверять цель). |
 | `collect.iframes.store` | `bool` | `true` | Хранить сами ссылки в базе (для `spider links` и проверок ссылок). |
-| `sitemaps.crawl` | `bool` | `false` | Читать XML sitemap сайта (extra `rb-spider[sitemaps]`): проверки Sitemaps, `spider sitemaps`. Файлы качаются без прокси, с User-Agent и timeout обхода. |
+| `sitemaps.crawl` | `bool` | `false` | Читать XML sitemap сайта (extra `rb-spider[sitemaps]`): проверки Sitemaps, `spider sitemaps`. Файлы качаются с User-Agent, timeout и прокси обхода. |
 | `sitemaps.discover` | `bool` | `true` | Искать sitemap сам: строки Sitemap: в robots.txt, затем /sitemap.xml и т.п. |
 | `sitemaps.urls` | `list[str]` | `[]` | Адреса sitemap (или индексов) вдобавок к найденным. |
 | `sitemaps.follow` | `bool` | `true` | Обходить URL из sitemap, даже если на них нет ссылок (иначе — только сравнивать). |
@@ -201,7 +203,7 @@ concurrency = 10
 
 ### Обход через прокси
 
-Адрес прокси у каждого свой, поэтому это не встроенный профиль, а пример своего `.spider/profiles/proxy.toml`. Пароль в файл не пишется: `{password}` подставляется из системного хранилища ключей — один раз `spider auth login --provider proxy`.
+Адрес прокси у каждого свой, поэтому это не встроенный профиль, а пример своего `.spider/profiles/proxy.toml`. Пароль в файл не пишется: `{password}` подставляется из системного хранилища ключей — один раз `spider auth login --provider proxy`. Без `--profile proxy` обход идёт напрямую.
 
 ```toml
 description = "Обход через прокси: запросы чередуются между адресами"
@@ -210,7 +212,10 @@ extends = "default"
 [crawl]
 proxy_urls = ["http://user:{password}@proxy1.example:8000", "http://user:{password}@proxy2.example:8000"]
 concurrency = 10
+proxy_fallback = "stop"      # прокси умер (не оплачен, модем выключен): stop — остановиться, direct — без прокси
 ```
+
+Через прокси идёт весь трафик к сайту: страницы, robots.txt, XML sitemap и браузер (`render`); sitemap и браузер — через первый адрес, браузеру нужен HTTP-адрес (SOCKS5 с паролем Chromium не умеет). Перед стартом прокси проверяется запросом; не работает — `PROXY_UNAVAILABLE` (код 5) и `spider crawls resume`, когда оживёт; в терминале spider сначала спросит, идти ли без него. Посреди обхода то же после `crawl.proxy_max_failures` ошибок прокси подряд.
 
 ## Встроенные профили
 

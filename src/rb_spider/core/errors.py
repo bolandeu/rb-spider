@@ -142,6 +142,23 @@ class ProviderError(CliError):
         return payload
 
 
+class ProxyUnavailable(CliError):
+    """A proxy of `crawl.proxy_urls` doesn't work and `crawl.proxy_fallback = stop`: nothing goes straight to the site."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            "PROXY_UNAVAILABLE",
+            f"The proxy doesn't work: {reason}",
+            action=(
+                "Check that it is paid and online (the provider's panel), the login in crawl.proxy_urls and the "
+                f"password ('{_CLI} auth login --provider proxy'). Or go without it: a run without the proxy profile, "
+                "or --set crawl.proxy_fallback=direct (the site sees your IP). "
+                f"A stopped crawl continues with '{_CLI} crawls resume'."
+            ),
+            exit_code=5,
+        )
+
+
 class CliTooOld(CliError):
     def __init__(self, installed: str, required: str) -> None:
         super().__init__(

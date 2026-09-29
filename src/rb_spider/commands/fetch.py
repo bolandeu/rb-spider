@@ -48,7 +48,8 @@ def fetch(
     ссылки, ресурсы, текст, Markdown и HTML. Тот же движок, что у обхода:
     браузерный отпечаток, User-Agent, прокси с паролем из хранилища ключей
     (`--set crawl.proxy_urls=…`, `--profile`), `--render` — через браузер (нужен
-    `rb-spider[render]`). robots.txt не читается: URL названы вами, как у curl.
+    `rb-spider[render]`, тоже через прокси). Прокси проверяется перед первым URL; не
+    работает — по `crawl.proxy_fallback`, как у `spider crawl` (в терминале — вопрос). robots.txt не читается: URL названы вами, как у curl.
     `--list` — URL построчно, CSV с колонкой url / address / loc или XML sitemap.
     Обойти сайт целиком — `spider crawl`. Из Python — `rb_spider.fetch`.
 
@@ -56,6 +57,7 @@ def fetch(
     Example: spider --json fetch https://a.ru/ https://b.ru/ --include links,text
     Example: spider fetch https://spa.example/ --render --markdown          # страница для LLM
     Example: cat urls.txt | spider --json fetch --list - --concurrency 20 --profile googlebot
+    Example: spider fetch https://example.com/ --profile mobile-proxy   # свой профиль с crawl.proxy_urls
 
     Выход: человеку — строка на URL (код, финальный URL, title, время). `--json` —
     JSON Lines, объект на URL в порядке ввода: `{url, final_url, status, redirects:
@@ -63,7 +65,8 @@ def fetch(
     refresh_url, headers?, links?, resources?, text?, markdown?, html?, error}`;
     `status` null и `error` — URL не ответил (это данные, код выхода 0).
     `--markdown` — Markdown-документы, разделённые строкой `===`. Нет URL,
-    неверный `--include` — выход 2; `--render` без Playwright — выход 1.
+    неверный `--include` — выход 2; `--render` без Playwright — выход 1; прокси не
+    работает — выход 5, `PROXY_UNAVAILABLE`.
     """
     if bool(urls) == (url_list is not None):
         raise InvalidArguments("Give URLs or --list <file>, not both (and not neither).")
@@ -74,7 +77,10 @@ def fetch(
     quiet = bool(ctx.obj.get("quiet") or quiet)
 
     async def run() -> None:
-        stream = fetch_service.fetch_stream(targets, settings, render=render, include=wanted, concurrency=concurrency)
+        ask = options.proxy_question(ctx, as_json)
+        stream = fetch_service.fetch_stream(
+            targets, settings, render=render, include=wanted, concurrency=concurrency, ask=ask
+        )
         first = True
         async for result in stream:
             if markdown:
