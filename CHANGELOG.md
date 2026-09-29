@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.2.2] - 2026-09-29
+
+### Fixed
+
+- Страницы в устаревших кодировках (windows-1251, koi8-r и др.) читаются как текст: кодировка берётся из заголовка, `<meta charset>` или угадывается по байтам. Раньше title, текст и HTML таких страниц превращались в «�», а `spider fetch --include markdown` падал с UnicodeDecodeError.
+
+
 ## [0.2.1] - 2026-09-28
 
 ### Changed
