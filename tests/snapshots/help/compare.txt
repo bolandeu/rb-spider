@@ -49,8 +49,9 @@
 │ --map            РЕГУЛЯРКА=>ЗАМЕНА            URL Mapping: URL прежнего обхода переписываются в  │
 │                                               адреса нового, можно повторять; добавляется к      │
 │                                               compare.url_mapping.                               │
-│ --profile        <str>                        Профиль настроек: встроенный (`spider profiles     │
-│                                               list`) или из `.spider/profiles/`.                 │
+│ --profile        <str>                        Профиль настроек: встроенный, свой для всех        │
+│                                               проектов или из `.spider/profiles/` (`spider       │
+│                                               profiles list`).                                   │
 │ --config         <path>                       TOML-файл настроек поверх профиля (формат как у    │
 │                                               профиля).                                          │
 │ --set            KEY=VALUE                    Переопределить любой ключ: `--set                  │

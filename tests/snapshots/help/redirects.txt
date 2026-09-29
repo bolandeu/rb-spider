@@ -31,8 +31,8 @@
 │                                          [default: 100]                                          │
 │ --canonicals                             Считать шагом и canonical на другой URL (Redirect &     │
 │                                          Canonical Chains).                                      │
-│ --profile           <str>                Профиль настроек: встроенный (`spider profiles list`)   │
-│                                          или из `.spider/profiles/`.                             │
+│ --profile           <str>                Профиль настроек: встроенный, свой для всех проектов    │
+│                                          или из `.spider/profiles/` (`spider profiles list`).    │
 │ --config            <path>               TOML-файл настроек поверх профиля (формат как у         │
 │                                          профиля).                                               │
 │ --set               KEY=VALUE            Переопределить любой ключ: `--set crawl.max_urls=500`;  │

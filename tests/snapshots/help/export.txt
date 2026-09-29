@@ -56,8 +56,8 @@
 │ --type              <str>            Только URL этого типа (pages): html, js, css, image, pdf,   │
 │                                      other, unknown.                                             │
 │ --scheme            <str>            Только URL по этому протоколу (pages): https или http.      │
-│ --profile           <str>            Профиль настроек: встроенный (`spider profiles list`) или   │
-│                                      из `.spider/profiles/`.                                     │
+│ --profile           <str>            Профиль настроек: встроенный, свой для всех проектов или из │
+│                                      `.spider/profiles/` (`spider profiles list`).               │
 │ --config            <path>           TOML-файл настроек поверх профиля (формат как у профиля).   │
 │ --set               KEY=VALUE        Переопределить любой ключ: `--set crawl.max_urls=500`;      │
 │                                      можно повторять.                                            │

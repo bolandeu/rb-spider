@@ -9,7 +9,9 @@ from .. import output
 from ..core import services, settings
 from ..core.errors import InvalidArguments
 
-app = output.group("Профили настроек обхода: встроенные пресеты и свои в `.spider/profiles/`.")
+app = output.group(
+    "Профили настроек обхода: встроенные пресеты, свои для всех проектов и свои в `.spider/profiles/` проекта."
+)
 
 
 def _root(ctx: typer.Context) -> Path | None:
@@ -23,14 +25,17 @@ def list_profiles(
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Показать доступные профили: встроенные и профили текущего проекта.
+    """Показать доступные профили: встроенные, свои для всех проектов и профили текущего проекта.
 
-    Профиль проекта с тем же именем заменяет встроенный.
+    Свои для всех проектов (`spider profiles init --user`) лежат в папке настроек
+    пользователя: `~/.config/spider/profiles/` на Linux, `~/Library/Application
+    Support/spider/profiles/` на macOS. Профиль с тем же именем заменяет менее
+    близкий: проектный — пользовательский, пользовательский — встроенный.
 
     Example: spider profiles list
 
     JSON: `{profiles: [{name, where, extends, description, path}]}`; `where` —
-    builtin | project.
+    builtin | user | project.
     """
     rows = []
     for name, (where, path) in sorted(settings.available_profiles(_root(ctx)).items()):
@@ -75,24 +80,35 @@ def init_profile(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Имя нового профиля (станет файлом `.spider/profiles/<имя>.toml`)."),
     from_profile: str = typer.Option("default", "--from", help="От какого профиля наследовать (`extends`)."),
+    user: bool = typer.Option(
+        False, "--user", help="Профиль для всех проектов — в папке настроек пользователя, проект не нужен."
+    ),
     force: bool = typer.Option(False, "--force", help="Перезаписать существующий файл профиля."),
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
-    """Создать профиль в проекте: шаблон, где все ключи закомментированы и описаны.
+    """Создать профиль: шаблон, где все ключи закомментированы и описаны.
 
     Раскомментируйте и поменяйте нужные ключи — остальные наследуются из
-    `--from`. Нужен проект (`spider init`).
+    `--from`. Профиль проекта (`.spider/profiles/`) требует проект (`spider init`);
+    `--user` — профиль для всех проектов, например прокси: `~/.config/spider/profiles/`
+    на Linux, `~/Library/Application Support/spider/profiles/` на macOS.
 
     Example: spider profiles init shop
     Example: spider profiles init shop-mobile --from googlebot
+    Example: spider profiles init mobile-proxy --user
 
     JSON: `{name, path, extends}`. Файл уже есть (без `--force`) или нет
-    профиля `--from` — выход 2; нет проекта — выход 4.
+    профиля `--from` — выход 2; нет проекта (без `--user`) — выход 4.
     """
-    root = services.require_project_root(Path(ctx.obj.get("project") or Path.cwd()))
+    if user:
+        root = _root(ctx)
+        folder = settings.user_profiles_dir()
+    else:
+        root = services.require_project_root(Path(ctx.obj.get("project") or Path.cwd()))
+        folder = root / services.PROJECT_DIR_NAME / "profiles"
     settings.profile_layers(from_profile, root)  # the parent must exist
-    path = root / services.PROJECT_DIR_NAME / "profiles" / f"{name}.toml"
+    path = folder / f"{name}.toml"
     if path.exists() and not force:
         raise InvalidArguments(f"Profile file already exists: {path} (use --force to overwrite).")
     path.parent.mkdir(parents=True, exist_ok=True)

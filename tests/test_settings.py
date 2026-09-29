@@ -233,6 +233,22 @@ def test_profiles_list_show_init(project: Path) -> None:
     assert code == 2  # exists
 
 
+def test_user_profiles_work_in_every_project_and_a_project_one_shadows_them(project: Path, tmp_path: Path) -> None:
+    elsewhere = tmp_path / "no-project"
+    elsewhere.mkdir()
+    code, created = _invoke_json("profiles", "init", "proxy", "--user", project=elsewhere)
+    assert code == 0 and Path(created["path"]).parent == settings.user_profiles_dir()
+    _write(Path(created["path"]), 'extends = "default"\n[crawl]\nconcurrency = 3\n')
+    for where in (elsewhere, project):  # outside any project and inside one
+        code, listing = _invoke_json("profiles", "list", project=where)
+        assert {p["name"]: p["where"] for p in listing["profiles"]}["proxy"] == "user"
+    code, shown = _invoke_json("config", "show", "--profile", "proxy", project=elsewhere)
+    assert code == 0 and "concurrency" in json.dumps(shown) and "3" in json.dumps(shown)
+    _invoke_json("profiles", "init", "proxy", project=project)
+    code, listing = _invoke_json("profiles", "list", project=project)
+    assert {p["name"]: p["where"] for p in listing["profiles"]}["proxy"] == "project"
+
+
 @pytest.fixture(scope="module")
 def base_url():
     with polygon.serve() as url:

@@ -13,7 +13,9 @@ from ..core import services, settings
 from ..core.errors import InvalidArguments
 
 ProfileOption = typer.Option(
-    None, "--profile", help="Профиль настроек: встроенный (`spider profiles list`) или из `.spider/profiles/`."
+    None,
+    "--profile",
+    help="Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
 )
 ConfigFileOption = typer.Option(None, "--config", help="TOML-файл настроек поверх профиля (формат как у профиля).")
 SetOption = typer.Option(

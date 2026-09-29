@@ -50,8 +50,8 @@
 │ --source          <local|psi>       local — Lighthouse на этой машине, psi — PageSpeed Insights  │
 │                                     API (ключ lighthouse.source, по умолчанию local).            │
 │ --dry-run                           Показать, что будет сделано, ничего не меняя.                │
-│ --profile         <str>             Профиль настроек: встроенный (`spider profiles list`) или из │
-│                                     `.spider/profiles/`.                                         │
+│ --profile         <str>             Профиль настроек: встроенный, свой для всех проектов или из  │
+│                                     `.spider/profiles/` (`spider profiles list`).                │
 │ --config          <path>            TOML-файл настроек поверх профиля (формат как у профиля).    │
 │ --set             KEY=VALUE         Переопределить любой ключ: `--set crawl.max_urls=500`; можно │
 │                                     повторять.                                                   │

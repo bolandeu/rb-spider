@@ -7,7 +7,7 @@
 | 1 | Встроенные значения | модель настроек в коде | `default` |
 | 2 | Глобальный конфиг | `~/Library/Application Support/spider/config.toml` на macOS (`platformdirs.user_config_dir("spider")`) | `global` |
 | 3 | Конфиг проекта | `.spider/config.toml` (разделы `[crawl]`…) | `project` |
-| 4 | Профиль | `--profile NAME`: встроенный или `.spider/profiles/NAME.toml`, с наследованием `extends` | `profile:NAME` |
+| 4 | Профиль | `--profile NAME`: встроенный, свой для всех проектов (`profiles/NAME.toml` рядом с глобальным конфигом) или `.spider/profiles/NAME.toml`, с наследованием `extends` | `profile:NAME` |
 | 5 | Явный файл | `--config path.toml` | `file:path` |
 | 6 | Переменные окружения | `SPIDER_<РАЗДЕЛ>__<КЛЮЧ>`, например `SPIDER_CRAWL__MAX_URLS=500` | `env` |
 | 7 | Флаги команды | `--max-urls`, `--concurrency` — только частые | `flag` |
@@ -27,7 +27,7 @@ concurrency = 10
 ```
 
 - Встроенные профили: `default`, `googlebot`, `yandexbot`, `fast` — `spider profiles list`.
-- Свой профиль: `spider profiles init NAME --from googlebot` создаёт файл, где все ключи закомментированы и описаны.
+- Свой профиль: `spider profiles init NAME --from googlebot` создаёт файл, где все ключи закомментированы и описаны; с `--user` — для всех проектов (`~/.config/spider/profiles/` на Linux, `~/Library/Application Support/spider/profiles/` на macOS). Проектный профиль заменяет пользовательский с тем же именем, пользовательский — встроенный.
 - Проверить файл: `spider config validate FILE`; все ключи и типы машиночитаемо: `spider config schema`.
 - Значения в `--set` и `SPIDER_…__…` разбираются как TOML: `500` — число, `false` — логическое, иначе строка.
 
@@ -203,7 +203,7 @@ concurrency = 10
 
 ### Обход через прокси
 
-Адрес прокси у каждого свой, поэтому это не встроенный профиль, а пример своего `.spider/profiles/proxy.toml`. Пароль в файл не пишется: `{password}` подставляется из системного хранилища ключей — один раз `spider auth login --provider proxy`. Без `--profile proxy` обход идёт напрямую.
+Адрес прокси у каждого свой, поэтому это не встроенный профиль, а пример своего профиля для всех проектов: `spider profiles init proxy --user`, затем поправить файл. Пароль в файл не пишется: `{password}` подставляется из системного хранилища ключей — один раз `spider auth login --provider proxy`. Без `--profile proxy` обход идёт напрямую.
 
 ```toml
 description = "Обход через прокси: запросы чередуются между адресами"

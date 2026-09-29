@@ -1,14 +1,17 @@
 
  Usage: spider profiles list [OPTIONS]
 
- Показать доступные профили: встроенные и профили текущего проекта.
+ Показать доступные профили: встроенные, свои для всех проектов и профили текущего проекта.
 
- Профиль проекта с тем же именем заменяет встроенный.
+ Свои для всех проектов (`spider profiles init --user`) лежат в папке настроек
+ пользователя: `~/.config/spider/profiles/` на Linux, `~/Library/Application
+ Support/spider/profiles/` на macOS. Профиль с тем же именем заменяет менее
+ близкий: проектный — пользовательский, пользовательский — встроенный.
 
  Example: spider profiles list
 
  JSON: `{profiles: [{name, where, extends, description, path}]}`; `where` —
- builtin | project.
+ builtin | user | project.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json           Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).          │

@@ -932,6 +932,16 @@ def builtin_profiles() -> dict[str, Path]:
     return {Path(p.name).stem: Path(str(p)) for p in folder.iterdir() if p.name.endswith(".toml")}
 
 
+def user_profiles_dir() -> Path:
+    """Profiles of this user for every project (a proxy, a fingerprint): next to the global config."""
+    return global_config_path().parent / "profiles"
+
+
+def user_profiles() -> dict[str, Path]:
+    folder = user_profiles_dir()
+    return {p.stem: p for p in sorted(folder.glob("*.toml"))} if folder.is_dir() else {}
+
+
 def project_profiles(project_root: Path | None) -> dict[str, Path]:
     if project_root is None:
         return {}
@@ -940,8 +950,9 @@ def project_profiles(project_root: Path | None) -> dict[str, Path]:
 
 
 def available_profiles(project_root: Path | None) -> dict[str, tuple[str, Path]]:
-    """name -> (where, path); a project profile shadows a built-in one of the same name."""
+    """name -> (where, path); a project profile shadows a user one, a user one — a built-in one of the same name."""
     found = {name: ("builtin", path) for name, path in builtin_profiles().items()}
+    found.update({name: ("user", path) for name, path in user_profiles().items()})
     found.update({name: ("project", path) for name, path in project_profiles(project_root).items()})
     return found
 
