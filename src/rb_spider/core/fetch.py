@@ -115,10 +115,11 @@ class Fetcher:
 
         self.proxies, _ = await open_proxies(self.settings, self.client, first_url, ask)
         self.changer = ip_changer(self.settings, self.client, self.proxies, first_url)
-        from .fingerprint import check
+        from .fingerprint import prepare
 
-        await check(self.settings, self.fingerprint, self.client,
-                    await self.proxies.exit_proxy() if self.proxies else None, self.render)  # fmt: skip
+        self.fingerprint = await prepare(self.settings, self.fingerprint, self.client,
+                                         await self.proxies.exit_proxy() if self.proxies else None,
+                                         self.render)  # fmt: skip
         if self.render:
             from .render import Renderer
 

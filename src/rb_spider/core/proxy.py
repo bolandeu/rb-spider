@@ -20,7 +20,7 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import timedelta
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from crawlee import Request
 from crawlee.errors import ProxyError
@@ -59,18 +59,34 @@ def change_ip_urls(settings: CrawlSettings) -> list[str]:
     return _filled(settings.proxy_change_ip_urls, "{key}", KEY_CREDENTIAL)
 
 
+def proxy_info(url: str) -> ProxyInfo:
+    """A proxy address as Crawlee's ProxyInfo, whatever its scheme (http, https, socks5, socks5h)."""
+    parts = urlsplit(url)
+    default = {"http": 80, "https": 443}.get(parts.scheme, 1080)
+    return ProxyInfo(url=url, scheme=parts.scheme, hostname=parts.hostname or "", port=parts.port or default,
+                     username=unquote(parts.username or ""), password=unquote(parts.password or ""))  # fmt: skip
+
+
 def _address(url: str) -> str:
     parts = urlsplit(url)
     return f"{parts.hostname}:{parts.port}" if parts.port else str(parts.hostname)
 
 
+def _unused(session_id: str | None = None, request: Request | None = None) -> str | None:
+    return None
+
+
 class Proxies(ProxyConfiguration):
-    """`crawl.proxy_urls` for all traffic to the sites, rotated or one after another (crawl.proxy_mode)."""
+    """`crawl.proxy_urls` for all traffic to the sites, rotated or one after another (crawl.proxy_mode).
+
+    The addresses are handed out here, not by Crawlee's configuration: it accepts only http(s) proxies, and a
+    mobile proxy's second door is often SOCKS5 (impit and httpx go through it).
+    """
 
     def __init__(self, urls: list[str], mode: str = "rotate") -> None:
-        super().__init__(proxy_urls=list(urls))
+        super().__init__(new_url_function=_unused)  # never called: new_proxy_info is ours
         self.urls, self.mode, self.current, self.off = list(urls), mode, 0, False
-        self._single = {url: ProxyConfiguration(proxy_urls=[url]) for url in self.urls}
+        self._next = 0
 
     async def new_proxy_info(
         self, session_id: str | None, request: Request | None, proxy_tier: int | None
@@ -78,8 +94,9 @@ class Proxies(ProxyConfiguration):
         if self.off:
             return None
         if self.mode == "failover":
-            return await self._single[self.urls[self.current]].new_proxy_info(None, None, None)
-        return await super().new_proxy_info(session_id, request, proxy_tier)
+            return proxy_info(self.urls[self.current])
+        self._next = (self._next + 1) % len(self.urls)
+        return proxy_info(self.urls[self._next])
 
     async def exit_proxy(self) -> ProxyInfo | None:
         """The proxy the site sees now: the active address's, None when off."""
@@ -87,7 +104,7 @@ class Proxies(ProxyConfiguration):
 
     async def info(self, url: str | None = None) -> ProxyInfo | None:
         """One request's proxy: `url`'s, or the next one as a page would get it."""
-        return await (self._single[url] if url else self).new_proxy_info(None, None, None)
+        return proxy_info(url) if url else await self.new_proxy_info(None, None, None)
 
     @property
     def active(self) -> str | None:
@@ -242,6 +259,8 @@ class IpChanger:
                 self._last = time.monotonic()
                 if new_ip is None:
                     return False  # no link agreed: this answer stays, the next block tries again
+                # the kept-alive connections went through the old IP's tunnel and are dead: new ones from here
+                await self.client.cleanup()
                 await self._wait_online()
             finally:
                 self._idle.set()

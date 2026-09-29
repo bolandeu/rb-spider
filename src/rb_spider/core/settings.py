@@ -283,6 +283,13 @@ class CrawlSettings(BaseModel):
         ),
         examples=["mp-123"],
     )
+    fingerprint_timezone: Literal["ip", "file"] = Field(
+        "ip",
+        description=(
+            "Часовой пояс браузера с отпечатком: ip — как у выходного IP (ipinfo.io через прокси; при старте и "
+            "после каждой смены IP — модем мог оказаться в другом регионе), file — как в файле отпечатка."
+        ),
+    )
     fingerprint_check: Literal["warn", "stop", "off"] = Field(
         "warn",
         description=(

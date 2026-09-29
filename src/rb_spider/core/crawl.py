@@ -325,8 +325,8 @@ async def _run(
     scope = Scope(start_url, settings, hosts)
     client = http_client(settings)
     proxies, proxy_down = await open_proxies(settings, client, start_url, ask)
-    await fingerprint.check(settings, found, client, await proxies.exit_proxy() if proxies else None,
-                            settings.render != "never")  # fmt: skip
+    found = await fingerprint.prepare(settings, found, client, await proxies.exit_proxy() if proxies else None,
+                                      settings.render != "never")  # fmt: skip
     robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*", settings.robots_custom,
                         urlsplit(start_url).netloc, proxies)  # fmt: skip
     auth = site_auth_header(settings)
@@ -408,6 +408,15 @@ async def _run(
     changer = ip_changer(settings, client, proxies, start_url)
     cookies_generation = 0
 
+    async def new_browser_session() -> None:
+        """A new IP: a fresh browser context, in the new IP's time zone (crawl.fingerprint_timezone = ip)."""
+        assert renderer is not None  # noqa: S101 — called only with one
+        if found and settings.fingerprint_timezone == "ip" and proxies:
+            zone = await fingerprint.ip_timezone(client, await proxies.exit_proxy(), settings.timeout_s)
+            if zone:
+                renderer.context_options["timezone_id"] = zone
+        await renderer.new_session()
+
     async def timed_crawl(request, *args, **kwargs):
         nonlocal cookie_jar, cookies_generation
         while True:
@@ -418,7 +427,7 @@ async def _run(
                     if cookie_jar is not None:
                         cookie_jar = Session()  # the old IP's cookies may be marked
                     if renderer:
-                        await renderer.new_session()
+                        await new_browser_session()
             generation = changer.generation if changer else 0
             kwargs["session"] = cookie_jar
             sent = time.monotonic()

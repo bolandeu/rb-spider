@@ -401,25 +401,45 @@ async def exit_geo(client: Any, proxy_info: Any, timeout_s: float) -> dict[str, 
     return data if isinstance(data, dict) and response.status_code == 200 else None
 
 
-async def check(settings: CrawlSettings, found: FingerprintFile | None, client: Any, proxy_info: Any,
-                render: bool) -> list[str]:  # fmt: skip
-    """crawl.fingerprint_check before a crawl: the fingerprint against its OS, this machine and the exit IP.
+async def prepare(settings: CrawlSettings, found: FingerprintFile | None, client: Any, proxy_info: Any,
+                  render: bool) -> FingerprintFile | None:  # fmt: skip
+    """The fingerprint for this crawl, checked (crawl.fingerprint_check) against its OS, this machine and the
+    exit IP; with crawl.fingerprint_timezone = ip its time zone is the exit IP's.
 
-    warn — log the issues; stop — raise FingerprintMismatch; off — nothing (and no request to GEO_URL).
+    warn — log the issues; stop — raise FingerprintMismatch; off — no check. The exit IP's place is asked from
+    GEO_URL through the proxy only when the check or the time zone needs it.
     """
-    if found is None or settings.fingerprint_check == "off":
-        return []
-    issues = os_issues(found, render=render)
-    geo = await exit_geo(client, proxy_info, settings.timeout_s)
-    if geo is None:
-        log.warning("fingerprint: couldn't learn where the exit IP is (%s)", GEO_URL)
-    else:
-        issues += geo_issues(found, geo)
+    if found is None:
+        return None
+    wants_ip_zone = settings.fingerprint_timezone == "ip"
+    geo = None
+    if settings.fingerprint_check != "off" or wants_ip_zone:
+        geo = await exit_geo(client, proxy_info, settings.timeout_s)
+        if geo is None:
+            log.warning("fingerprint: couldn't learn where the exit IP is (%s)", GEO_URL)
+    if wants_ip_zone and geo and geo.get("timezone"):
+        found = with_timezone(found, str(geo["timezone"]))
+    if settings.fingerprint_check == "off":
+        return found
+    issues = os_issues(found, render=render) + (geo_issues(found, geo) if geo else [])
     if issues and settings.fingerprint_check == "stop":
         raise FingerprintMismatch(issues)
     for issue in issues:
         log.warning("fingerprint %s: %s", settings.fingerprint, issue)
-    return issues
+    return found
+
+
+def with_timezone(found: FingerprintFile, zone: str) -> FingerprintFile:
+    """The same fingerprint in another time zone (the exit IP's)."""
+    return found.model_copy(
+        update={"timezone": TimeZone(name=zone), "geo": found.geo.model_copy(update={"timezone": zone})}
+    )
+
+
+async def ip_timezone(client: Any, proxy_info: Any, timeout_s: float) -> str | None:
+    """The exit IP's time zone — after an IP change the modem may be in another region."""
+    geo = await exit_geo(client, proxy_info, timeout_s)
+    return str(geo["timezone"]) if geo and geo.get("timezone") else None
 
 
 def summary(found: FingerprintFile, path: Path) -> dict[str, Any]:

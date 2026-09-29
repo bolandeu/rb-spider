@@ -256,3 +256,14 @@ def test_the_change_ip_key_is_asked_for_before_the_crawl(proxy: polygon.Proxy, m
     )
     with storage.database() as engine, pytest.raises(AuthRequired, match="proxy_key"):
         register_crawl(engine, f"{proxy.base()}/", "polygon", Settings(crawl=_changing(proxy)))
+
+
+def test_a_socks5_door_is_handed_out_as_is() -> None:
+    import asyncio
+
+    from rb_spider.core.proxy import Proxies
+
+    proxies = Proxies(["http://u:p@a.example:8000", "socks5h://u:p%40x@b.example:1080"], "failover")
+    proxies.current = 1  # Crawlee's own configuration would refuse this address: http(s) only
+    info = asyncio.run(proxies.new_proxy_info(None, None, None))
+    assert info and (info.scheme, info.hostname, info.port, info.password) == ("socks5h", "b.example", 1080, "p@x")

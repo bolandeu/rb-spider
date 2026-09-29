@@ -8,7 +8,9 @@
  (`_meta.tcp_match`, выставляется у провайдера) должны говорить об одной ОС; с
  `--render` — ещё и совпадать с ОС этой машины (шрифты и canvas браузера — её).
  Выходной IP — через прокси из `--profile` (или напрямую, без прокси): страна и
- часовой пояс по ipinfo.io против часового пояса и языка отпечатка.
+ часовой пояс по ipinfo.io против часового пояса и языка отпечатка. С
+ `crawl.fingerprint_timezone = ip` (по умолчанию) часовой пояс браузера и так
+ берётся у IP — расходиться могут только страна и язык.
 
  Example: spider fingerprints check mp-123 --profile mobile-proxy
  Example: spider fingerprints check mac-1 --profile mobile-proxy --render

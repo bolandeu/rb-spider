@@ -187,6 +187,9 @@ def test_check_compares_with_the_exit_ip(tmp_path: Path, windows: str, monkeypat
     assert result.exit_code == 0 and data["ok"] and data["exit_ip"]["country"] == "RU"
     monkeypatch.setitem(polygon.GEO, "timezone", "Asia/Novosibirsk")
     data = json.loads(CliRunner().invoke(app, ["--json", "fingerprints", "check", windows]).stdout)
+    assert data["ok"]  # crawl.fingerprint_timezone = ip: the browser takes the IP's time zone anyway
+    keep = ["--set", "crawl.fingerprint_timezone=file"]
+    data = json.loads(CliRunner().invoke(app, ["--json", "fingerprints", "check", windows, *keep]).stdout)
     assert not data["ok"] and "Asia/Novosibirsk" in data["issues"][0]
 
 
@@ -195,7 +198,7 @@ def test_a_crawl_stops_on_a_mismatch_when_asked(base_url: str, windows: str, mon
     from rb_spider.core.errors import FingerprintMismatch
 
     monkeypatch.setitem(polygon.GEO, "timezone", "Asia/Novosibirsk")
-    crawl = CrawlSettings(fingerprint=windows, fingerprint_check="stop", max_urls=2)
+    crawl = CrawlSettings(fingerprint=windows, fingerprint_check="stop", fingerprint_timezone="file", max_urls=2)
     with storage.database() as engine:
         crawl_id = register_crawl(engine, f"{base_url}/a", "polygon", Settings(crawl=crawl))
         with pytest.raises(FingerprintMismatch, match="Novosibirsk"):
@@ -212,3 +215,14 @@ def test_an_android_fingerprint_is_a_phone_in_the_browser(base_url: str, tmp_pat
     page = fetch(f"{base_url}/js/fingerprint", settings, render=True, include="text")
     seen = json.loads((page.text or "").split("FP")[1])
     assert seen["platform"] == "Linux armv81" and seen["screen"] == "360x780" and "Adreno" in (seen["webgl"] or "")
+
+
+@needs_browser
+def test_the_browsers_time_zone_is_the_exit_ips(base_url: str, windows: str, monkeypatch) -> None:
+    monkeypatch.setitem(polygon.GEO, "timezone", "Asia/Novosibirsk")  # a mobile IP far from the file's Moscow
+    settings = CrawlSettings(fingerprint=windows, render_wait_ms=500)
+    page = fetch(f"{base_url}/js/fingerprint", settings, render=True, include="text")
+    assert json.loads((page.text or "").split("FP")[1])["tz"] == "Asia/Novosibirsk"
+    kept = fetch(f"{base_url}/js/fingerprint", settings.model_copy(update={"fingerprint_timezone": "file",
+                 "fingerprint_check": "off"}), render=True, include="text")  # fmt: skip
+    assert json.loads((kept.text or "").split("FP")[1])["tz"] == "Europe/Moscow"

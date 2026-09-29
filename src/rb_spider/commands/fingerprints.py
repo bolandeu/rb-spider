@@ -147,7 +147,9 @@ def check_fingerprint(
     (`_meta.tcp_match`, выставляется у провайдера) должны говорить об одной ОС; с
     `--render` — ещё и совпадать с ОС этой машины (шрифты и canvas браузера — её).
     Выходной IP — через прокси из `--profile` (или напрямую, без прокси): страна и
-    часовой пояс по ipinfo.io против часового пояса и языка отпечатка.
+    часовой пояс по ipinfo.io против часового пояса и языка отпечатка. С
+    `crawl.fingerprint_timezone = ip` (по умолчанию) часовой пояс браузера и так
+    берётся у IP — расходиться могут только страна и язык.
 
     Example: spider fingerprints check mp-123 --profile mobile-proxy
     Example: spider fingerprints check mac-1 --profile mobile-proxy --render
@@ -170,7 +172,10 @@ def check_fingerprint(
             crawl.model_copy(update={"proxy_fallback": "stop"}), client, fingerprint.GEO_URL
         )
         geo = await fingerprint.exit_geo(client, await proxies.exit_proxy() if proxies else None, crawl.timeout_s)
-        issues = fingerprint.os_issues(found, render=render) + (fingerprint.geo_issues(found, geo) if geo else [])
+        checked = found
+        if geo and geo.get("timezone") and crawl.fingerprint_timezone == "ip":
+            checked = fingerprint.with_timezone(found, str(geo["timezone"]))  # what a crawl would use
+        issues = fingerprint.os_issues(checked, render=render) + (fingerprint.geo_issues(checked, geo) if geo else [])
         exit_ip = {k: geo.get(k) for k in ("ip", "country", "timezone")} if geo else None
         return {"ok": not issues, "issues": issues, "exit_ip": exit_ip}
 
