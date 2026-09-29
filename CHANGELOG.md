@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.2.3] - 2026-09-29
+
+### Added
+
+- Прокси (`crawl.proxy_urls`) несёт весь трафик к сайту: robots.txt, XML sitemap и браузер рендеринга тоже. Прокси проверяется перед обходом и `spider fetch`; мёртвый (не оплачен, неверный пароль) — остановка с кодом 5 `PROXY_UNAVAILABLE` и `spider crawls resume`, либо обход без него: `crawl.proxy_fallback = direct` или ответ «да» в терминале. Посреди обхода прокси считается умершим после `crawl.proxy_max_failures` ошибок подряд; URL, упавшие из-за него, запрашиваются снова. В JSON `crawl` — ключ `proxy_down`.
+
+
 ## [0.2.2] - 2026-09-29
 
 ### Fixed
