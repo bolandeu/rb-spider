@@ -159,6 +159,21 @@ class ProxyUnavailable(CliError):
         )
 
 
+class FingerprintMismatch(CliError):
+    """crawl.fingerprint contradicts its OS, this machine or the exit IP, and crawl.fingerprint_check = stop."""
+
+    def __init__(self, issues: list[str]) -> None:
+        super().__init__(
+            "FINGERPRINT_MISMATCH",
+            f"The fingerprint doesn't match: {'; '.join(issues)}",
+            action=(
+                f"Take a fingerprint for this proxy's country and OS ('{_CLI} fingerprints check NAME --profile …' "
+                "shows what's off), set the proxy's OS at the provider, or --set crawl.fingerprint_check=warn."
+            ),
+            exit_code=2,
+        )
+
+
 class CliTooOld(CliError):
     def __init__(self, installed: str, required: str) -> None:
         super().__init__(

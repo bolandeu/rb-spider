@@ -1,0 +1,38 @@
+
+ Usage: spider fingerprints new [OPTIONS] {name}
+
+ Сгенерировать отпечаток и сохранить его в папку пользователя — вместо файла сервиса.
+
+ Генератор browserforge (тот же, что у Crawlee) собирает сочетание железа,
+ экрана, видеокарты и шрифтов из статистики реальных браузеров. Его данные
+ отстают от релизов Chrome — задайте актуальную версию `--chrome`: User-Agent,
+ sec-ch-ua (с «GREASE»-брендом, как у настоящего Chrome) и client hints пойдут
+ под неё. Отпечаток сохраняется файлом, поэтому одинаков во всех обходах, пока
+ его не заменить. Нужен `rb-spider[render]`. Часовой пояс и язык — как у IP прокси;
+ у мобильного прокси естественнее всего `--os android` (IP оператора — телефон).
+
+ Example: spider fingerprints new mp-123 --os windows --chrome 155
+ Example: spider fingerprints new mac-1 --os macos --chrome 155 --locale ru-RU
+ Example: spider fingerprints new phone-1 --os android --chrome 155
+
+ JSON: `{name, path, user_agent}`. Имя занято (без `--force`) или неизвестная
+ `--os` — выход 2; без `rb-spider[render]` — выход 1, `RENDER_UNAVAILABLE`.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    name      <str>  Имя нового отпечатка для crawl.fingerprint. [required]                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --os              <str>                 Система: windows, macos, linux или android (телефон).    │
+│                                         [default: windows]                                       │
+│ --chrome          <int range> [x>=100]  Версия Chrome (major), например 155; по умолчанию — из   │
+│                                         данных генератора.                                       │
+│ --locale          <str>                 Язык браузера (navigator.language, Accept-Language).     │
+│                                         [default: ru-RU]                                         │
+│ --timezone        <str>                 Часовой пояс браузера (IANA). [default: Europe/Moscow]   │
+│ --force                                 Заменить отпечаток с тем же именем.                      │
+│ --json                                  Вывод в JSON для агентов и скриптов (одна строка-конверт │
+│                                         `{ok, ...}`).                                            │
+│ --quiet                                 Печатать только основной результат, без пояснений.       │
+│ --help                                  Show this message and exit.                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

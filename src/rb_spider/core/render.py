@@ -25,10 +25,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import RenderUnavailable
+
+if TYPE_CHECKING:
+    from .fingerprint import FingerprintFile
 
 log = logging.getLogger(__name__)
 
@@ -158,6 +161,18 @@ def _launch_choices(explicit: str | None) -> list[tuple[str, dict]]:
     ]
 
 
+class _FileFingerprint:
+    """Crawlee's fingerprint generator that always gives the one fingerprint of crawl.fingerprint."""
+
+    def __init__(self, found: FingerprintFile) -> None:
+        from .fingerprint import browserforge
+
+        self.fingerprint = browserforge(found)
+
+    def generate(self) -> Any:
+        return self.fingerprint
+
+
 def proxy_settings(url: str) -> dict[str, str]:
     """A proxy URL as Playwright's context option: the server apart from its login and password."""
     parts = urlsplit(url)
@@ -210,6 +225,7 @@ class Renderer:
         screenshots: bool = False,
         allowed: Callable[[str], Awaitable[bool]] | None = None,
         proxy: str | None = None,
+        fingerprint: FingerprintFile | None = None,
     ) -> None:
         self.tabs, self.wait_ms, self.timeout_ms, self.browser = tabs, wait_ms, timeout_s * 1000, browser
         self.console, self.flatten_shadow_dom, self.flatten_iframes = console, flatten_shadow_dom, flatten_iframes
@@ -217,7 +233,13 @@ class Renderer:
         # images load only when their real vs display size is wanted: skipping them makes rendering much faster
         self.skipped = _SKIPPED_RESOURCES - {"image"} if images else _SKIPPED_RESOURCES
         self.used_browser: str | None = None
-        self.context_options: dict[str, Any] = viewport_options(viewport)
+        # a fingerprint brings its own screen: browserforge sizes the window from it
+        self.context_options: dict[str, Any] = {} if fingerprint else viewport_options(viewport)
+        self.fingerprint = fingerprint
+        if fingerprint:
+            from .fingerprint import context_options
+
+            self.context_options |= context_options(fingerprint)
         if headers:
             self.context_options["extra_http_headers"] = headers
         if user_agent:
@@ -235,9 +257,15 @@ class Renderer:
         for label, options in _launch_choices(self.browser):
             launch = {
                 "headless": True,
+                # WebRTC only through the proxy (no UDP around it): it would show the real IP to the site's script
+                "args": [
+                    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+                ],
                 **({"executable_path": options["executable_path"]} if "executable_path" in options else {}),
             }
             plugin = PlaywrightBrowserPlugin(
+                **({"fingerprint_generator": _FileFingerprint(self.fingerprint)} if self.fingerprint else {}),
                 browser_type=options.get("browser_type", "chromium"),
                 browser_launch_options=launch,
                 browser_new_context_options=self.context_options,
@@ -255,6 +283,14 @@ class Renderer:
             return self
         raise RenderUnavailable(f"no browser could start ({'; '.join(errors)}).")
 
+    async def new_session(self) -> None:
+        """A fresh browser context — no cookies or storage of the last IP; the same fingerprint (a new proxy IP)."""
+        if self._pool is None:
+            return
+        old = self._pool
+        await self.__aenter__()
+        await old.__aexit__(None, None, None)
+
     async def use_proxy(self, url: str | None) -> None:
         """Another proxy, or none (the crawl dropped a dead one): a new browser; pages open in the old one fail."""
         if self._pool is None or self.context_options.get("proxy") == (proxy_settings(url) if url else None):
@@ -262,9 +298,7 @@ class Renderer:
         self.context_options.pop("proxy", None)
         if url:
             self.context_options["proxy"] = proxy_settings(url)
-        old = self._pool
-        await self.__aenter__()
-        await old.__aexit__(None, None, None)
+        await self.new_session()
 
     async def __aexit__(self, *exc: type[BaseException] | BaseException | TracebackType | None) -> None:
         if self._pool is not None:

@@ -273,6 +273,24 @@ class CrawlSettings(BaseModel):
     headers: dict[str, str] = Field(
         {}, description="Дополнительные заголовки каждого запроса.", examples=[{"Accept-Language": "ru"}]
     )
+    fingerprint: str | None = Field(
+        None,
+        description=(
+            "Отпечаток браузера из файла (JSON сервиса отпечатков): имя в папке отпечатков пользователя "
+            "(`spider fingerprints list`) или путь. Один на весь обход: User-Agent, Accept-Language и "
+            "sec-ch-ua* всех запросов, а в браузере рендеринга — navigator, экран, WebGL, часовой пояс, "
+            "локаль, WebRTC выключен. Явные crawl.user_agent и crawl.headers важнее."
+        ),
+        examples=["mp-123"],
+    )
+    fingerprint_check: Literal["warn", "stop", "off"] = Field(
+        "warn",
+        description=(
+            "Перед обходом сверить отпечаток: одна ли в нём ОС (User-Agent, platform, видеокарта, шрифты, TCP "
+            "прокси), совпадает ли с ОС машины при рендеринге и со страной, часовым поясом и языком выходного IP "
+            "(запрос к ipinfo.io через прокси). warn — предупредить, stop — не начинать (код 2), off — не сверять."
+        ),
+    )
     robots: Literal["respect", "ignore", "report"] = Field(
         "respect",
         description=(

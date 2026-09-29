@@ -96,7 +96,9 @@ class Fetcher:
 
     def __init__(self, settings: CrawlSettings, *, render: bool, include: set[str]) -> None:
         from .crawl import http_client  # Crawlee is slow to import
+        from .fingerprint import apply
 
+        settings, self.fingerprint = apply(settings)  # crawl.fingerprint: its headers, for every request
         self.settings, self.include = settings, include
         user_agent = settings.resolved_user_agent
         self.headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
@@ -113,6 +115,10 @@ class Fetcher:
 
         self.proxies, _ = await open_proxies(self.settings, self.client, first_url, ask)
         self.changer = ip_changer(self.settings, self.client, self.proxies, first_url)
+        from .fingerprint import check
+
+        await check(self.settings, self.fingerprint, self.client,
+                    await self.proxies.exit_proxy() if self.proxies else None, self.render)  # fmt: skip
         if self.render:
             from .render import Renderer
 
@@ -123,7 +129,8 @@ class Fetcher:
                                      viewport=settings.render_viewport, console=False,
                                      flatten_shadow_dom=settings.render_flatten_shadow_dom,
                                      flatten_iframes=settings.render_flatten_iframes,
-                                     proxy=self.proxies.active if self.proxies else None)  # fmt: skip
+                                     proxy=self.proxies.active if self.proxies else None,
+                                     fingerprint=self.fingerprint)  # fmt: skip
 
     async def fetch(self, url: str) -> FetchResult:
         result = FetchResult(normalize_url(url))

@@ -81,6 +81,10 @@ class Proxies(ProxyConfiguration):
             return await self._single[self.urls[self.current]].new_proxy_info(None, None, None)
         return await super().new_proxy_info(session_id, request, proxy_tier)
 
+    async def exit_proxy(self) -> ProxyInfo | None:
+        """The proxy the site sees now: the active address's, None when off."""
+        return None if self.off else await self.info(self.urls[self.current])
+
     async def info(self, url: str | None = None) -> ProxyInfo | None:
         """One request's proxy: `url`'s, or the next one as a page would get it."""
         return await (self._single[url] if url else self).new_proxy_info(None, None, None)

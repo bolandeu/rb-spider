@@ -17,6 +17,7 @@ from .commands import (
     enrich,
     export,
     fetch,
+    fingerprints,
     hreflang,
     init,
     insecure,
@@ -54,6 +55,7 @@ app.add_typer(auth.app, name="auth")  # `auth status` in every CLI; login/logout
 app.add_typer(skill.app, name="skill")
 app.add_typer(crawls.app, name="crawls")
 app.add_typer(profiles.app, name="profiles")
+app.add_typer(fingerprints.app, name="fingerprints")
 app.add_typer(projects.app, name="projects")
 app.add_typer(db.app, name="db")
 app.add_typer(sitemaps.app, name="sitemaps")

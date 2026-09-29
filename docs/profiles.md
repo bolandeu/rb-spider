@@ -88,6 +88,8 @@ concurrency = 10
 | `crawl.parse_workers` | `int \| None` | — | Сколько отдельных процессов разбирают HTML на больших обходах; 0 — всё в основном процессе; не задано — по числу ядер, не больше 4. |
 | `crawl.user_agent` | `str \| None` | — | User-Agent запросов: своя строка или пресет — googlebot, googlebot-smartphone, bingbot, yandexbot, chrome; не задано — как у обычного браузера (Firefox). |
 | `crawl.headers` | `dict[str, str]` | `{}` | Дополнительные заголовки каждого запроса. |
+| `crawl.fingerprint` | `str \| None` | — | Отпечаток браузера из файла (JSON сервиса отпечатков): имя в папке отпечатков пользователя (`spider fingerprints list`) или путь. Один на весь обход: User-Agent, Accept-Language и sec-ch-ua* всех запросов, а в браузере рендеринга — navigator, экран, WebGL, часовой пояс, локаль, WebRTC выключен. Явные crawl.user_agent и crawl.headers важнее. |
+| `crawl.fingerprint_check` | `Literal['warn', 'stop', 'off']` | `"warn"` | Перед обходом сверить отпечаток: одна ли в нём ОС (User-Agent, platform, видеокарта, шрифты, TCP прокси), совпадает ли с ОС машины при рендеринге и со страной, часовым поясом и языком выходного IP (запрос к ipinfo.io через прокси). warn — предупредить, stop — не начинать (код 2), off — не сверять. |
 | `crawl.robots` | `Literal['respect', 'ignore', 'report']` | `"respect"` | robots.txt: respect — запрещённое не скачивать (но показать в отчёте), с учётом Crawl-delay; ignore — не читать; report — скачивать всё, но отмечать запрещённое. |
 | `crawl.robots_custom` | `str \| None` | — | Свой robots.txt для сайта вместо настоящего — проверить правки до выкладки (текст файла). |
 | `crawl.robots_show_internal_blocked` | `bool` | `true` | Записывать в отчёт URL сайта, запрещённые robots.txt. |
@@ -230,6 +232,7 @@ extends = "default"
 [crawl]
 proxy_urls = ["http://user:{password}@mproxy.example:25580", "socks5h://user:{password}@bproxy.example:25580"]
 proxy_mode = "failover"
+fingerprint = "phone-1"      # spider fingerprints add / new — один на весь обход
 proxy_change_ip_urls = [
   "https://changeip.example/?proxy_key={key}&format=json",
   "https://changeip-backup.example/?proxy_key={key}&format=json",
@@ -238,6 +241,8 @@ concurrency = 5
 ```
 
 На сервере без keychain (Linux) вместо `auth login` — переменные окружения `SPIDER_PROXY_API_KEY` (пароль) и `SPIDER_PROXY_KEY_API_KEY` (ключ смены IP); они важнее keychain. Новый прокси — поправить адреса в профиле и снова `auth login` (или новые значения переменных).
+
+Отпечаток (`crawl.fingerprint`) — вторая половина «личности»: файл сервиса отпечатков (`spider fingerprints add FILE --name NAME`) или сгенерированный (`spider fingerprints new NAME --os android --chrome 155`). Он одинаков весь обход: заголовки каждого запроса (User-Agent, Accept-Language, sec-ch-ua*) и то, что видит скрипт сайта в браузере; при смене IP начинается новый «посетитель» (cookies) с тем же отпечатком. Согласованность: одна ОС в отпечатке и у TCP прокси (выставляется у провайдера), страна, часовой пояс и язык — как у выходного IP; проверка — `spider fingerprints check NAME --profile …` и перед каждым обходом (`crawl.fingerprint_check`). У мобильного прокси естественнее всего отпечаток Android. Рендеринг берёт шрифты и canvas у машины: на Linux-сервере с отпечатком Windows/macOS/Android обходите без него.
 
 Через прокси идёт весь трафик к сайту: страницы, robots.txt, XML sitemap и браузер (`render`); sitemap и браузер — через первый адрес, браузеру нужен HTTP-адрес (SOCKS5 с паролем Chromium не умеет). Перед стартом прокси проверяется запросом; не работает — `PROXY_UNAVAILABLE` (код 5) и `spider crawls resume`, когда оживёт; в терминале spider сначала спросит, идти ли без него. Посреди обхода то же после `crawl.proxy_max_failures` ошибок прокси подряд.
 

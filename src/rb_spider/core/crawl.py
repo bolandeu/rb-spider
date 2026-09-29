@@ -48,7 +48,7 @@ from crawlee.sessions import Session
 from crawlee.storage_clients import MemoryStorageClient
 
 from ..providers import secrets
-from . import issues, render, sitemaps, storage
+from . import fingerprint, issues, render, sitemaps, storage
 from .encoding import to_utf8
 from .errors import (
     AuthRequired,
@@ -315,7 +315,8 @@ async def _run(
 
     Returns why the proxy was dropped, if it was (crawl.proxy_fallback = direct, or `ask` said yes).
     """
-    settings, collect = all_settings.crawl, all_settings.collect
+    settings, found = fingerprint.apply(all_settings.crawl)  # crawl.fingerprint: its headers, for every request
+    collect = all_settings.collect
     user_agent = settings.resolved_user_agent
     headers = {**settings.headers, **({"User-Agent": user_agent} if user_agent else {})}
     # list mode: the site is whatever the list is on; the listed URLs are the frontier's depth-0 entries
@@ -324,6 +325,8 @@ async def _run(
     scope = Scope(start_url, settings, hosts)
     client = http_client(settings)
     proxies, proxy_down = await open_proxies(settings, client, start_url, ask)
+    await fingerprint.check(settings, found, client, await proxies.exit_proxy() if proxies else None,
+                            settings.render != "never")  # fmt: skip
     robots = RobotsGate(client, settings.robots_user_agent or user_agent or "*", settings.robots_custom,
                         urlsplit(start_url).netloc, proxies)  # fmt: skip
     auth = site_auth_header(settings)
@@ -344,7 +347,7 @@ async def _run(
                  viewport=settings.render_viewport, console=settings.render_console,
                  flatten_shadow_dom=settings.render_flatten_shadow_dom,
                  flatten_iframes=settings.render_flatten_iframes, images=settings.render_images,
-                 screenshots=settings.render_screenshots, proxy=proxies.active if proxies else None,
+                 screenshots=settings.render_screenshots, proxy=proxies.active if proxies else None, fingerprint=found,
                  allowed=robots.allowed if settings.robots == "respect" else None)
         if settings.render != "never" else None
     )  # fmt: skip
@@ -410,8 +413,12 @@ async def _run(
         while True:
             if changer:
                 await changer.idle()
-                if cookie_jar is not None and cookies_generation != changer.generation:
-                    cookie_jar, cookies_generation = Session(), changer.generation  # the old IP's cookies may be marked
+                if cookies_generation != changer.generation:  # a new IP: a new visitor with the same fingerprint
+                    cookies_generation = changer.generation
+                    if cookie_jar is not None:
+                        cookie_jar = Session()  # the old IP's cookies may be marked
+                    if renderer:
+                        await renderer.new_session()
             generation = changer.generation if changer else 0
             kwargs["session"] = cookie_jar
             sent = time.monotonic()
@@ -728,6 +735,7 @@ def _ready(settings: Settings) -> None:
     """What a crawl needs, checked before it is registered: the proxy password and key, the browser for rendering."""
     proxy_urls(settings.crawl)
     change_ip_urls(settings.crawl)
+    fingerprint.apply(settings.crawl)  # the file is there and readable
     site_auth_header(settings.crawl)  # the site's password, asked for before a crawl is registered
     http_client(settings.crawl)  # the curl client without its extra fails here, before a crawl is registered
     if settings.crawl.ca_bundle and not Path(settings.crawl.ca_bundle).is_file():

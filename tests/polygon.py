@@ -371,6 +371,23 @@ JS_PAGES: dict[str, str] = {
                         '</h2><div class="hero">баннер</div><img src="/img/real.png" width="100" height="75" alt="Большая">'),
     # not linked: crawl.render_viewport — the title says how wide the window was
     "/js/viewport": _js("js-viewport", "document.title = 'width ' + window.innerWidth;"),
+    # what a site's script sees of the browser: crawl.fingerprint tests read it from the page's text
+    "/js/fingerprint": _js("js-fingerprint", "const gl = document.createElement('canvas').getContext('webgl'); "
+                           "const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info'); "
+                           "const seen = {ua: navigator.userAgent, platform: navigator.platform, "
+                           "cores: navigator.hardwareConcurrency, memory: navigator.deviceMemory, "
+                           "languages: navigator.languages, screen: screen.width + 'x' + screen.height, "
+                           "tz: Intl.DateTimeFormat().resolvedOptions().timeZone, "
+                           "brands: navigator.userAgentData ? navigator.userAgentData.brands.map(b => b.brand) : [], "
+                           "webgl: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : null, "
+                           "webdriver: navigator.webdriver, rtc: typeof RTCPeerConnection, ips: []}; "
+                           "const show = () => { const pre = document.createElement('pre'); "
+                           "pre.textContent = 'FP' + JSON.stringify(seen) + 'FP'; document.body.append(pre); }; "
+                           "try { const pc = new RTCPeerConnection({iceServers: []}); pc.createDataChannel('x'); "
+                           "pc.onicecandidate = e => { if (e.candidate) seen.ips.push(...(e.candidate.candidate"
+                           ".match(/\\d+\\.\\d+\\.\\d+\\.\\d+/g) || [])); }; "
+                           "pc.createOffer().then(o => pc.setLocalDescription(o)); setTimeout(show, 300); } "
+                           "catch (e) { show(); }"),
 }  # fmt: skip
 JS_LINKED = ("/js/noindex", "/js/nofollow", "/js/canonical-changed", "/js/canonical-added", "/js/title-added",
              "/js/title-updated", "/js/description-added", "/js/description-updated", "/js/h1-added", "/js/h1-updated",
@@ -1087,9 +1104,14 @@ SEEN_HEADERS: list[dict[str, str]] = []  # every request's headers, lower-case n
 SLOW_S = 3.0  # "/slow" (linked from nowhere) answers after this long: a timeout trap
 
 
+GEO = {"ip": "203.0.113.22", "country": "RU", "timezone": "Europe/Moscow"}  # what /geo answers
+
+
 async def _handle(request: web.Request) -> web.StreamResponse:
     SEEN_USER_AGENTS.add(request.headers.get("User-Agent", ""))
     SEEN_HEADERS.append({k.lower(): v for k, v in request.headers.items()})
+    if request.path == "/geo":  # an IP geolocation service (fingerprint.GEO_URL) for fingerprint checks
+        return web.json_response(GEO)
     if request.path == "/slow":
         await asyncio.sleep(SLOW_S)
     if request.path in CHARSET_PAGES:

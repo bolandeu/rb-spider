@@ -104,6 +104,33 @@ def profiles_table(data: dict) -> None:
     console.print(table)
 
 
+def fingerprints_table(data: dict) -> None:
+    console.print(f"Папка: {data['folder']}")
+    table = Table(box=None, pad_edge=False)
+    for column in ("отпечаток", "user-agent", "ip"):
+        table.add_column(column)
+    for f in data["fingerprints"]:
+        table.add_row(f["name"], escape(f.get("user_agent") or f.get("error") or ""), f.get("ip") or "")
+    console.print(table)
+
+
+def fingerprint_view(data: dict) -> None:
+    key_values(f"Отпечаток: {data['path']}", {**data["headers"], **data["browser"]})
+    console.print(f"не подделываются: {', '.join(data['not_faked'])}")
+
+
+def fingerprint_check(data: dict) -> None:
+    where = data["exit_ip"]
+    if where:
+        console.print(f"Выходной IP: {where['ip']} ({where['country']}, {where['timezone']})")
+    else:
+        console.print("Выходной IP: не удалось узнать")
+    if data["ok"]:
+        console.print("[green]Отпечаток согласован.[/green]")
+    for issue in data["issues"]:
+        console.print(f"[yellow]•[/yellow] {escape(issue)}")
+
+
 def profile_chain(data: dict) -> None:
     for level in data["chain"]:
         console.print(f"[bold]{level['profile']}[/bold]")

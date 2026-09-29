@@ -645,6 +645,7 @@
 - [x] `MVP` **Proxy** → `proxy` / `--proxy` (в SF — один прокси; у нас ротация через Crawlee)
 - [x] `v3` **Прокси для всего трафика и отказ прокси** — страницы, robots.txt, XML sitemap, браузер идут через `crawl.proxy_urls`; прокси проверяется перед стартом и считается умершим после `crawl.proxy_max_failures` ошибок подряд; `crawl.proxy_fallback` — stop (код 5 `PROXY_UNAVAILABLE`, `crawls resume`) или direct, в терминале — вопрос
 - [x] `v3` **Мобильный прокси** — `crawl.proxy_mode = failover` (запасной вход того же модема), смена IP при блокировке: `crawl.proxy_change_ip_urls` (ссылки по очереди, ключ `{key}` — `auth login --provider proxy_key`), `proxy_change_ip_on` (403, 429), заблокированные запросы повторяются; профили для всех проектов — `profiles init --user`
+- [x] `v3` **Отпечаток браузера** — `crawl.fingerprint` (файл сервиса или `fingerprints new` через browserforge), один на обход: заголовки всех запросов (sec-ch-ua с GREASE как у Chrome) и в браузере navigator/экран/WebGL/часовой пояс/локаль, WebRTC только через прокси; Windows, macOS, Linux, Android; сверка ОС и геоданных выходного IP — `fingerprints check`, `crawl.fingerprint_check`
 - [x] `v2` **Authentication: Basic** → `crawl.auth = basic`, `crawl.auth_user` (пароль — `spider auth login --provider site`)
 - [ ] `backlog` **Authentication: Digest** — impit не умеет challenge-response Digest; своя реализация — по запросу
 - [x] `v2` **Trusted Certificates** (свои корневые сертификаты для MITM-прокси) → `crawl.ca_bundle` (с `http_client = curl`: impit свой CA не загружает)
