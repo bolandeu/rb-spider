@@ -4,6 +4,6 @@
 refs=$(cat)
 cd "$(git rev-parse --show-toplevel)" && uv run scripts/release.py --check </dev/null || exit 1
 n="$(git rev-parse --show-toplevel)/../scripts/notify_release.sh"
-[ -x "$n" ] || n="$HOME/Projects/tools/scripts/notify_release.sh"
+[ -x "$n" ] || n="$HOME/Work/tools/scripts/notify_release.sh"
 [ -x "$n" ] && printf '%s\n' "$refs" | "$n" spider
 exit 0
