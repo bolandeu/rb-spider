@@ -1,8 +1,9 @@
 #!/bin/sh
 # Before a push: the release gate (scripts/release.py --check) — the local CI while GitHub Actions don't run;
-# then tell the root tools agent about pushed v* tags (~/Projects/tools/scripts/notify_release.sh).
+# then tell the root tools agent about pushed v* tags (../scripts/notify_release.sh of the tools root).
 refs=$(cat)
 cd "$(git rev-parse --show-toplevel)" && uv run scripts/release.py --check </dev/null || exit 1
-n="$HOME/Projects/tools/scripts/notify_release.sh"
+n="$(git rev-parse --show-toplevel)/../scripts/notify_release.sh"
+[ -x "$n" ] || n="$HOME/Projects/tools/scripts/notify_release.sh"
 [ -x "$n" ] && printf '%s\n' "$refs" | "$n" spider
 exit 0
