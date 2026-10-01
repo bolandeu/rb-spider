@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.3.1] - 2026-10-01
+
+### Fixed
+
+- `analyze` в базе, где уже есть другой обход, больше не тормозит: правила «Canonicals: Unlinked», «Non-Indexable Page Inlinks Only» и недоступные ресурсы ищут ссылки на страницу по id URL, а не по тексту через представление — SQLite перебирал все ссылки обхода для каждой страницы (2000 страниц: 44 с → доли секунды).
+
+
 ## [0.3.0] - 2026-10-01
 
 ### Added
