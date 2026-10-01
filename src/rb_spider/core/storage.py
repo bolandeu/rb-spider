@@ -339,6 +339,10 @@ class PageWriter:
         self._batch = _Batch()
         self._thread = ThreadPoolExecutor(1, thread_name_prefix="spider-writer")
         self._writing: Future | None = None
+        # The first failed write. It surfaces in whatever handler hands the writer the next page — and Crawlee takes an
+        # exception there for that request's error and goes on: the crawl must check this and stop (crawl._run), and
+        # nothing more is written — a lost batch (its queue entries, pages, `done` marks) would leave the rest orphaned.
+        self.failed: BaseException | None = None
         self._last_flush = time.monotonic()
         self.count = 0  # pages handed to the writer so far, written or not
         self.html_engine: sa.Engine | None = None
@@ -402,6 +406,8 @@ class PageWriter:
 
     def flush(self, *, wait: bool = True) -> None:
         """Hand the buffered rows to the writer thread; `wait` — return once everything is on disk."""
+        if self.failed is not None:
+            raise self.failed
         self._last_flush = time.monotonic()
         batch, self._batch = self._batch, _Batch()
         self._wait()
@@ -411,9 +417,10 @@ class PageWriter:
             self._wait()
 
     def close(self) -> None:
-        """Write what's left and stop the writer thread."""
+        """Write what's left and stop the writer thread (nothing more after a failed write: the crawl reports it)."""
         try:
-            self.flush()
+            if self.failed is None:
+                self.flush()
         finally:
             self._thread.shutdown()
             if self.html_engine is not None:
@@ -422,7 +429,11 @@ class PageWriter:
     def _wait(self) -> None:
         if self._writing is not None:
             writing, self._writing = self._writing, None
-            writing.result()  # a failed write surfaces here, in the crawl
+            try:
+                writing.result()  # a failed write surfaces here, in the crawl
+            except Exception as exc:
+                self.failed = exc
+                raise
 
     def _write(self, batch: _Batch) -> None:
         if batch.html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned

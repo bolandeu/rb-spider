@@ -444,7 +444,9 @@ def image_size(body: bytes) -> tuple[int, int] | None:
         width, height = imagesize.get(io.BytesIO(body))
     except Exception:  # a broken or unknown file is data, not a crash
         return None
-    return (width, height) if width > 0 and height > 0 else None
+    if not (width > 0 and height > 0):
+        return None
+    return max(1, round(width)), max(1, round(height))  # an SVG's size can be fractional ("563.5px"): pixels are whole
 
 
 # --- security (#29)

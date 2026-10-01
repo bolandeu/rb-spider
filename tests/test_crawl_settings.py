@@ -273,6 +273,35 @@ def test_no_response_retries(base_url: str, monkeypatch) -> None:
     assert time.monotonic() - started >= 0.2  # it waited before asking again
 
 
+def test_fractional_svg_size_is_stored_in_whole_pixels(base_url: str) -> None:
+    """PostgreSQL refuses 563.5 in an integer column — the whole batch with it was lost (ost-term.ru)."""
+    page = _pages_of(base_url, "/img/frac.svg")["/img/frac.svg"]
+    assert (page["image_width"], page["image_height"]) == (564, 20)
+
+
+def test_a_failed_write_stops_the_crawl(base_url: str, monkeypatch) -> None:
+    """A batch that can't be written (a crash, a full disk, a value the database refuses) ends the crawl as failed —
+    before, Crawlee took the error for one request's and the crawl went on, `finished`, its queue half lost."""
+    calls = {"n": 0}
+
+    class Failing(storage.PageWriter):  # small batches; the second one can't be written
+        def __init__(self, engine, crawl_id, **options) -> None:
+            super().__init__(engine, crawl_id, 5, **options)
+
+        def _write(self, batch) -> None:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise RuntimeError("disk full")
+            super()._write(batch)
+
+    monkeypatch.setattr(storage, "PageWriter", Failing)
+    with storage.database() as engine:
+        with pytest.raises(RuntimeError, match="disk full"):
+            crawl_site(engine, f"{base_url}/", "polygon")
+        [status] = [row.status for row in storage.list_crawls(engine, limit=1)]
+    assert status == "failed"
+
+
 def test_cookies(base_url: str) -> None:
     polygon.SEEN_HEADERS.clear()
     _pages_of(base_url, "/cookie-set")

@@ -458,6 +458,14 @@ async def _run(
             return None
         return urlunsplit(parts._replace(scheme="https"))
 
+    def write_failed() -> bool:
+        """A batch couldn't be written: raised in some handler, Crawlee took it for that request's error and went on.
+        Stop fetching — _run raises it after the crawler returns."""
+        if writer.failed is None:
+            return False
+        crawler.stop(f"writing to the database failed: {writer.failed}")
+        return True
+
     def progress() -> None:
         nonlocal last_progress
         if on_progress and time.monotonic() - last_progress >= PROGRESS_EVERY_S:
@@ -541,6 +549,8 @@ async def _run(
 
     @crawler.router.default_handler
     async def handle(ctx: HttpCrawlingContext) -> None:
+        if write_failed():
+            return
         response = ctx.http_response
         body = await response.read()
         check = bool(ctx.request.user_data.get("check"))
@@ -604,6 +614,8 @@ async def _run(
     @crawler.failed_request_handler
     async def failed(ctx, error: Exception) -> None:
         # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
+        if write_failed():
+            return
         url = ctx.request.url
         response_ms.pop(url, None)
         redirect_hops.pop(url, None)
@@ -673,6 +685,8 @@ async def _run(
         if not await queue.is_empty():
             async with renderer or contextlib.nullcontext():
                 await crawler.run()
+        if writer.failed is not None:
+            raise writer.failed
         if proxy_stopped:
             raise ProxyUnavailable(proxy_stopped)
         proxy_answered()  # the last ones before the queue ran out: not enough in a row to blame the proxy

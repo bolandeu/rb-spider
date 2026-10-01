@@ -259,6 +259,8 @@ def _png(width: int, height: int) -> bytes:
 
 # images with a real size (#40): served as PNG files, not zero bytes
 PNG_IMAGES = {"/img/real.png": _png(800, 600), "/img/hero.png": _png(40, 20), "/img/bg.png": _png(40, 20)}
+# an SVG whose size is fractional: its header gives floats, the integer columns take whole pixels (ost-term.ru's logo)
+SVG_IMAGES = {"/img/frac.svg": b'<svg xmlns="http://www.w3.org/2000/svg" width="563.5px" height="20.2"></svg>'}
 
 
 def _cyrillic(slug: str, charset: str | None = None, links: tuple[str, ...] = ()) -> str:
@@ -1127,6 +1129,8 @@ async def _handle(request: web.Request) -> web.StreamResponse:
     if request.path in CHARSET_PAGES:
         content_type, raw = CHARSET_PAGES[request.path]
         return web.Response(body=raw, headers={"Content-Type": content_type})
+    if request.path in SVG_IMAGES:
+        return web.Response(body=SVG_IMAGES[request.path], content_type="image/svg+xml")
     if request.path in PNG_IMAGES:
         return web.Response(body=PNG_IMAGES[request.path], content_type="image/png")
     if request.path in RESOURCES:
