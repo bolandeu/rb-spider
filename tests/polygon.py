@@ -707,6 +707,12 @@ VALIDATION_TRAPS: dict[str, str] = {
     "/v-invalid-head": _page("v-invalid-head", head_extra='<img src="/logo.png" alt="Логотип" width="10" height="10">'),
     "/v-before-html": "<div>баннер</div>" + _page("v-before-html"),
     "/v-head-not-first": _page("v-head-not-first", before_head='<meta charset="utf-8">'),
+    # not a trap: "<head>" / "<body>" as text in a comment, CSS and JS (ost-term.ru's theme) are no extra tags
+    "/v-tags-in-text": _page(
+        "v-tags-in-text",
+        head_extra='<style>/* .wrap — class на <body> внутри iframe */</style><script>var t = "<head><body>";</script>',
+        body_close="<!-- <body> --></body>",
+    ),
     # Mobile
     "/m-no-viewport": _html("m-no-viewport", head=_head("m-no-viewport").replace(VIEWPORT, "")),
     "/m-plugin": _html("m-plugin", body=f"<h1>{H1.format('m-plugin')}</h1><h2>{H2.format('m-plugin')}</h2>"

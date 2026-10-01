@@ -552,6 +552,9 @@ def validation(body: bytes) -> dict:
     """What an HTML parser hides: how many <head> / <body> tags the source has, an element before <html>, an element
     before <head>, the first element in <head> that doesn't belong there (Google ends the head at it)."""
     heads, bodies = len(_HEAD_TAG.findall(body)), len(_BODY_TAG.findall(body))
+    if heads > 1 or bodies > 1:  # rare: recount without comments, scripts and styles, where "<body>" is just text
+        text = _RAW_TEXT.sub(b"", body)
+        heads, bodies = len(_HEAD_TAG.findall(text)), len(_BODY_TAG.findall(text))
     html = _HTML_TAG.search(body)
     before_html = head_not_first = False
     invalid = None

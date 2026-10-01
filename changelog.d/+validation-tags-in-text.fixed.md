@@ -1,0 +1,1 @@
+«Validation: Multiple <head> / <body> Tags» больше не срабатывает на тексте `<head>` / `<body>` в HTML-комментарии, CSS или JavaScript (на ost-term.ru — ложно на 36% страниц): при найденном втором теге они пересчитываются без комментариев, `<script>` и `<style>`.
