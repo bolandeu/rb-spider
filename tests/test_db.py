@@ -257,3 +257,36 @@ def test_postgres_from_scratch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         with admin.connect() as conn:
             conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
         admin.dispose()
+
+
+@pytest.mark.skipif(not PG_ADMIN, reason="TEST_DATABASE_URL not set (scripts/pg_test.sh)")
+def test_postgres_db_upgrade_command_from_scratch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What the root agent runs on production: `spider db upgrade [--dry-run]` on an empty database. SQLite's history
+    (0001–0032) never runs there: the baseline of 0033 does, and the output says so."""
+    assert PG_ADMIN and sa.make_url(PG_ADMIN).host in ("127.0.0.1", "localhost")
+    from .conftest import _pg_admin, _pg_url
+
+    name = f"spider_test_cli_{os.getpid()}"
+    admin = _pg_admin()
+    with admin.connect() as conn:
+        conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+        conn.exec_driver_sql(f"CREATE DATABASE {name}")
+    monkeypatch.setenv(db.ENV_VAR, _pg_url(name))
+    try:
+        code, payload = invoke_json("db", "upgrade", "--dry-run")
+        assert code == 0 and payload["dry_run"] and payload["migrations"] == [db.BASELINE, "0034"]
+        code, payload = invoke_json("db", "upgrade")
+        assert code == 0 and payload["migrations"] == [db.BASELINE, "0034"]
+        engine = db.postgres_engine(_pg_url(name))
+        try:
+            names = set(sa.inspect(engine).get_table_names())
+            assert "spider_pages" in names and "pages" not in names and "projects" not in names  # 0001 never ran
+            assert db.schema_state(engine).up_to_date
+        finally:
+            engine.dispose()
+        code, payload = invoke_json("db", "upgrade", "--dry-run")
+        assert code == 0 and payload["migrations"] == []
+    finally:
+        with admin.connect() as conn:
+            conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+        admin.dispose()
