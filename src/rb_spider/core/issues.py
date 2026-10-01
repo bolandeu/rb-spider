@@ -526,6 +526,15 @@ _LOCALHOST = " OR ".join(
 )
 
 
+def _inlinks(page: str = "t") -> str:
+    """Link rows `l` pointing at the page row `page`, found by its URL id: matching the view's `target` text instead,
+    SQLite read every link of the crawl for each page once the database held a second crawl."""
+    return (
+        "spider_urls u JOIN spider_link_rows l ON l.crawl_id = u.crawl_id AND l.target_id = u.id"
+        f" WHERE u.crawl_id = {page}.crawl_id AND u.url = {page}.url"
+    )
+
+
 def _by_target(detail: str, where: str, having: str = "TRUE") -> str:
     """Link rows grouped by target: aggregated over URL ids (index order, no string sort), reported by URL."""
     return (
@@ -580,12 +589,12 @@ def _link_rules() -> list[Rule]:
         r("links_non_indexable_inlinks_only", "Non-Indexable Page Inlinks Only", "warning", "high",
           "На индексируемую страницу ссылаются только неиндексируемые: поисковик может её не найти.",
           _links_sql(
-              "SELECT t.url, NULL FROM spider_pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
+              "SELECT t.url, NULL FROM spider_pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"  # noqa: S608
               " AND t.indexable"
-              " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
-              "   AND l.kind = 'hyperlink')"
-              " AND NOT EXISTS (SELECT 1 FROM spider_links l JOIN spider_pages s ON s.crawl_id = l.crawl_id AND s.url = l.source"
-              "   WHERE l.crawl_id = t.crawl_id AND l.target = t.url AND l.kind = 'hyperlink' AND s.indexable)"
+              # by URL id (see canonical_unlinked): the page's id first, then its link rows through the target index
+              f" AND EXISTS (SELECT 1 FROM {_inlinks()} AND l.kind = 'hyperlink')"
+              f" AND NOT EXISTS (SELECT 1 FROM {_inlinks()} AND l.kind = 'hyperlink' AND EXISTS (SELECT 1 FROM spider_urls su"
+              "   JOIN spider_pages s ON s.crawl_id = su.crawl_id AND s.url = su.url WHERE su.id = l.source_id AND s.indexable))"
               " ORDER BY t.url"), (STORE_INTERNAL,)),
         r("links_internal_nofollow_outlinks", "Internal Nofollow Outlinks", "warning", "low",
           "Внутренние ссылки с rel=\"nofollow\": поисковик не передаёт по ним вес.",
@@ -626,12 +635,15 @@ def _link_rules() -> list[Rule]:
         # --- canonical discovery
         Rule("canonical_unlinked", "Canonicals", "Canonicals: Unlinked", "warning", "medium",
              "URL найден только через canonical: обычные ссылки на него не ведут.",
+             # by URL id, from the few canonical rows: through the `spider_links` view SQLite matched each page's URL
+             # against every link of the crawl once the database held a second crawl (2000 pages: 44 s)
              _links_sql(
-                 "SELECT t.url, NULL FROM spider_pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
-                 " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
-                 "   AND l.kind = 'canonical')"
-                 " AND NOT EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
-                 "   AND l.kind = 'hyperlink') ORDER BY t.url"),
+                 "SELECT u.url, NULL FROM (SELECT DISTINCT target_id FROM spider_link_rows"
+                 "   WHERE crawl_id = :crawl_id AND kind = 'canonical') AS c"
+                 " JOIN spider_urls u ON u.id = c.target_id"
+                 " JOIN spider_pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, FALSE)"
+                 " WHERE NOT EXISTS (SELECT 1 FROM spider_link_rows l WHERE l.crawl_id = :crawl_id"
+                 "   AND l.target_id = c.target_id AND l.kind = 'hyperlink') ORDER BY u.url"),
              (STORE_INTERNAL, STORE_CANONICALS)),
     ]  # fmt: skip
 
@@ -1263,8 +1275,8 @@ def _image_rules() -> list[Rule]:
                         "SELECT p.url, coalesce(p.blocked, CAST(p.status_code AS TEXT)) FROM spider_pages p"  # noqa: S608
                         f" WHERE p.crawl_id = :crawl_id AND {where}"
                         " AND (p.blocked IS NOT NULL OR p.status_code = 0 OR p.status_code >= 400)"
-                        " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = p.crawl_id AND l.target = p.url"
-                        f"   AND l.kind IN {RESOURCE_KINDS}) ORDER BY p.url"
+                        f" AND EXISTS (SELECT 1 FROM {_inlinks('p')} AND l.kind IN {RESOURCE_KINDS})"
+                        " ORDER BY p.url"
                     ),
                     ("collect.images.follow",))  # fmt: skip
 
