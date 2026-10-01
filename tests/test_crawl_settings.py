@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import time
 
 import pytest
 import sqlalchemy as sa
@@ -28,6 +29,7 @@ from rb_spider.core.settings import (
 )
 
 from . import polygon
+from .conftest import real_retry_pauses
 
 
 @pytest.fixture(scope="module")
@@ -255,6 +257,20 @@ def test_5xx_retries(base_url: str) -> None:
     assert _pages_of(base_url, "/flaky", retries_5xx=0)["/flaky"]["status_code"] == 503
     polygon.FLAKY_SEEN.clear()
     assert _pages_of(base_url, "/flaky", retries_5xx=2)["/flaky"]["status_code"] == 200
+
+
+def test_no_response_retries(base_url: str, monkeypatch) -> None:
+    """A start page that drops the connection a few times (a network hiccup) is asked again after a pause, not stored
+    as unanswered — the whole crawl would end there."""
+    real_retry_pauses(monkeypatch)
+    polygon.FLAKY_RESET_SEEN.clear()
+    page = _pages_of(base_url, "/flaky-reset", retries_no_response=0)["/flaky-reset"]
+    assert page["status_code"] == 0 and page["error"]
+    polygon.FLAKY_RESET_SEEN.clear()
+    started = time.monotonic()
+    page = _pages_of(base_url, "/flaky-reset", retries_no_response=2, retry_pause_s=0.2)["/flaky-reset"]
+    assert page["status_code"] == 200 and page["error"] is None
+    assert time.monotonic() - started >= 0.2  # it waited before asking again
 
 
 def test_cookies(base_url: str) -> None:

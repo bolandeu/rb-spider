@@ -67,6 +67,8 @@ concurrency = 10
 | `crawl.timeout_s` | `float` | `20` | Сколько секунд ждать ответа, прежде чем считать URL неответившим. |
 | `crawl.http_client` | `Literal['impit', 'curl']` | `"impit"` | HTTP-клиент: impit — по умолчанию, самый быстрый; curl — запасной (curl-impersonate, `rb-spider[curl]`), если сайт плохо отвечает impit. |
 | `crawl.retries_5xx` | `int` | `0` | Сколько раз повторять запрос, ответивший 5xx, прежде чем записать ошибку. |
+| `crawl.retries_no_response` | `int` | `2` | Сколько раз повторить URL, который не ответил вовсе (таймаут, обрыв соединения, ошибка TLS), прежде чем записать его неответившим; каждый повтор — после паузы crawl.retry_pause_s. Сверх этого HTTP-клиент сам повторяет запрос один раз сразу. |
+| `crawl.retry_pause_s` | `float` | `5.0` | Пауза перед повтором неответившего URL, секунды; растёт с каждой попыткой (5, 10, 15…). |
 | `crawl.cookies` | `Literal['session', 'none']` | `"session"` | Cookies: session — хранить в пределах обхода (как браузер); none — не хранить и не слать. |
 | `crawl.assume_html` | `bool` | `true` | Ответ без Content-Type разбирать как HTML. |
 | `crawl.ca_bundle` | `str \| None` | — | Свой корневой сертификат (PEM) — для MITM-прокси и корпоративных сетей; только с http_client = curl (impit свой CA не загружает — там только verify_tls = false). |

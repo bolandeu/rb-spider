@@ -386,6 +386,7 @@ async def _run(
     response_ms: dict[str, int] = {}  # answered requests -> response time, until their handler stores it
     redirect_hops: dict[str, int] = {}  # redirect targets -> steps of the chain that led to them (max_redirects)
     retried: dict[str, int] = {}  # URLs asked again after a 5xx (crawl.retries_5xx), until they are stored
+    unanswered: dict[str, int] = {}  # URLs asked again after no response (crawl.retries_no_response)
     # Response time around the client's own request: Crawlee's navigation hooks cost ~15% of a big crawl.
     client_crawl = client.crawl
     # crawl.cookies = session: one cookie jar for the whole crawl, like a browser. Crawlee keeps cookies per session
@@ -549,6 +550,7 @@ async def _run(
             queue.push(ctx.request.url, check)
             return
         retried.pop(ctx.request.url, None)
+        unanswered.pop(ctx.request.url, None)
         if settings.max_page_size_kb is not None and len(body) > settings.max_page_size_kb * 1024:
             check = True  # too big to read: status, headers and size only
         headers = dict(response.headers)
@@ -616,6 +618,15 @@ async def _run(
             else:
                 await proxy_failed_on(proxies, page, depth_of.get(url, 0), check, error)
             return
+        attempt = unanswered.get(url, 0) + 1
+        if attempt <= settings.retries_no_response and not proxy_stopped:
+            # A network hiccup (a lost packet, a server that came up a second late) would otherwise end a crawl at
+            # its start page; the queue holds the crawl open until the URL is due again.
+            unanswered[url] = attempt
+            log.info("no response from %s (%s): again in %g s", url, why(error), settings.retry_pause_s * attempt)
+            queue.push_later(url, ctx.request.user_data.get("check", False), settings.retry_pause_s * attempt)
+            return
+        unanswered.pop(url, None)
         writer.add(page, depth=depth_of.get(url, 0))
         progress()
 

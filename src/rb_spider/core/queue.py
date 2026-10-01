@@ -9,6 +9,7 @@ the queue's — see `crawl._run`.
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from collections.abc import Callable, Sequence
 from datetime import timedelta
@@ -24,10 +25,22 @@ class MemoryQueue(RequestManager):
         self._pending: deque[tuple[str, bool] | Request] = deque()
         self._in_flight = 0
         self._handled = 0
+        self._waiting = 0  # URLs put back after a pause (push_later), not due yet
 
     def push(self, url: str, check: bool) -> None:
         """Enqueue a URL the crawl has admitted; `check` — status only, the body isn't read."""
         self._pending.append((url, check))
+
+    def push_later(self, url: str, check: bool, delay_s: float) -> None:
+        """Enqueue a URL after `delay_s` seconds; the crawl isn't finished while it waits. A timer, not a sleep in
+        the caller: Crawlee calls the failed-request handler of a timed-out request in a cancelled task."""
+
+        def due() -> None:
+            self._waiting -= 1
+            self.push(url, check)
+
+        self._waiting += 1
+        asyncio.get_running_loop().call_later(delay_s, due)
 
     async def add_request(self, request: str | Request, *, forefront: bool = False) -> ProcessedRequest:
         request = self._transform_request(request)
@@ -71,13 +84,13 @@ class MemoryQueue(RequestManager):
         return not self._pending
 
     async def is_finished(self) -> bool:
-        return not self._pending and not self._in_flight
+        return not self._pending and not self._in_flight and not self._waiting
 
     async def get_handled_count(self) -> int:
         return self._handled
 
     async def get_total_count(self) -> int:
-        return self._handled + self._in_flight + len(self._pending)
+        return self._handled + self._in_flight + len(self._pending) + self._waiting
 
     async def drop(self) -> None:
         self._pending.clear()

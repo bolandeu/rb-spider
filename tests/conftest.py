@@ -96,6 +96,29 @@ def _isolated_session_db(tmp_path_factory, request) -> Iterator[None]:
             yield
 
 
+_PUSH_LATER = None
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_retry_pauses() -> Iterator[None]:
+    """URLs that don't answer are asked again after crawl.retry_pause_s (5 s, 10 s): the polygon's dead-on-purpose
+    traps would make every crawl wait. Retries still happen, without the wait; test_no_response_retries checks it."""
+    global _PUSH_LATER
+    from rb_spider.core.queue import MemoryQueue
+
+    _PUSH_LATER = MemoryQueue.push_later
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(MemoryQueue, "push_later", lambda self, url, check, _delay: _PUSH_LATER(self, url, check, 0))
+        yield
+
+
+def real_retry_pauses(monkeypatch) -> None:
+    """Undo _no_retry_pauses for one test."""
+    from rb_spider.core.queue import MemoryQueue
+
+    monkeypatch.setattr(MemoryQueue, "push_later", _PUSH_LATER)
+
+
 @pytest.fixture(autouse=True)
 def _isolated_state(tmp_path_factory, monkeypatch) -> Iterator[None]:
     """Every test gets its own crawl database and global config — never the user's real ones. With PostgreSQL the

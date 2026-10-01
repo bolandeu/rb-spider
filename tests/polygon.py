@@ -726,6 +726,7 @@ SETTINGS_TRAPS: dict[str, tuple[int, dict[str, str], str]] = {
     "/cookie-set": (200, {"Set-Cookie": "polygon=1; Path=/"}, _html("cookie-set", "/cookie-check")),
     "/cookie-check": (200, {}, _html("cookie-check", dead_end=True)),
     "/flaky": (200, {}, _html("flaky", dead_end=True)),  # 503 for the first FLAKY_FAILS requests (see _handle)
+    "/flaky-reset": (200, {}, _html("flaky reset", dead_end=True)),  # no response for the first FLAKY_RESETS
     "/members/": (200, {}, _html("members", dead_end=True)),  # 401 without Authorization: Basic (see _handle)
     "/self-refresh": (200, {}, _html("self-refresh", dead_end=True,
                                      head=_head("self-refresh", extra='<meta http-equiv="refresh" content="30; url={base}/self-refresh">'))),
@@ -749,6 +750,9 @@ SETTINGS_TRAPS["/mk-2"] = (200, {}, _html("mk-2", head=_head("mk-2", extra=_KW.f
 SETTINGS_TRAPS["/mk-3"] = (200, {}, _html("mk-3", head=_head("mk-3", extra=_KW.format("стол") + _KW.format("стул"))))
 FLAKY_FAILS = 2
 FLAKY_SEEN: dict[str, int] = {}
+# the HTTP client asks twice by itself (one immediate retry): 3 dropped connections need crawl.retries_no_response >= 1
+FLAKY_RESETS = 3
+FLAKY_RESET_SEEN: dict[str, int] = {}
 BASIC_AUTH = "Basic " + __import__("base64").b64encode(b"stage:pa55").decode()
 
 NO_CANONICAL = {"/c-missing", "/dup-3", "/dup-4", *JS_NO_CANONICAL}  # /dup-3, /dup-4: canonical in the Link header
@@ -1126,6 +1130,12 @@ async def _handle(request: web.Request) -> web.StreamResponse:
         assert request.transport is not None
         request.transport.abort()
         return web.Response()
+    if request.path == "/flaky-reset":
+        FLAKY_RESET_SEEN[request.host] = FLAKY_RESET_SEEN.get(request.host, 0) + 1
+        if FLAKY_RESET_SEEN[request.host] <= FLAKY_RESETS:
+            assert request.transport is not None
+            request.transport.abort()
+            return web.Response()
     if request.path == "/flaky":
         FLAKY_SEEN[request.host] = FLAKY_SEEN.get(request.host, 0) + 1
         if FLAKY_SEEN[request.host] <= FLAKY_FAILS:

@@ -152,6 +152,22 @@ class CrawlSettings(BaseModel):
     retries_5xx: int = Field(
         0, ge=0, le=10, description="Сколько раз повторять запрос, ответивший 5xx, прежде чем записать ошибку."
     )
+    retries_no_response: int = Field(
+        2,
+        ge=0,
+        le=10,
+        description=(
+            "Сколько раз повторить URL, который не ответил вовсе (таймаут, обрыв соединения, ошибка TLS), прежде чем "
+            "записать его неответившим; каждый повтор — после паузы crawl.retry_pause_s. Сверх этого HTTP-клиент "
+            "сам повторяет запрос один раз сразу."
+        ),
+    )
+    retry_pause_s: float = Field(
+        5.0,
+        ge=0,
+        le=300,
+        description="Пауза перед повтором неответившего URL, секунды; растёт с каждой попыткой (5, 10, 15…).",
+    )
     cookies: Literal["session", "none"] = Field(
         "session",
         description="Cookies: session — хранить в пределах обхода (как браузер); none — не хранить и не слать.",
