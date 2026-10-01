@@ -11,6 +11,21 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.3.0] - 2026-10-01
+
+### Added
+
+- Представления `spider_v1_crawls`, `spider_v1_pages`, `spider_v1_issues`, `spider_v1_links` — для Directus и других инструментов; `spider db import-sqlite` — разовый перенос локальной базы в общую.
+
+### Changed
+
+- Общая база PostgreSQL (homeserver): таблицы, индексы и представление ссылок теперь с префиксом `spider_` (`spider_pages`, `spider_links` … — и в `spider query`), у каждой таблицы PRIMARY KEY, таблица версий — `alembic_version_spider`; локальная SQLite переводится сама при первом открытии (миграция 0033 переписывает файл целиком — нужно свободное место размером с базу). PostgreSQL больше не мигрирует при открытии и не получает в `public` своих функций и агрегатов (`sum/max/min(boolean)`, `round`, `group_concat`, `instr`): схему создаёт и обновляет `spider db upgrade`, остальные команды отвечают `DATABASE_NOT_MIGRATED` (выход 1) или `CLI_TOO_OLD` (6). Переменная — `SPIDER_DATABASE_URL`; недоступная база — `DATABASE_UNAVAILABLE` (выход 5, было `REMOTE_DATABASE_UNAVAILABLE`, 1). Функция в `spider query` — `spider_casefold(x)`. Нужен SQLite 3.44+.
+
+### Deprecated
+
+- `SPIDER_DB_URL` → `SPIDER_DATABASE_URL` (старое имя читается с предупреждением, `doctor` показывает `database_env`); `spider db migrate` → `spider db upgrade` (старое имя скрыто и будет убрано).
+
+
 ## [0.2.4] - 2026-09-29
 
 ### Added
