@@ -21,19 +21,19 @@ ONLY: tuple[str, ...] = get_args(Only)
 _ROWS = """
     SELECT s.url AS source, l.kind AS rel, t.url AS target, p.status_code AS target_status,
            p.blocked AS target_blocked, p.indexability_status AS target_indexability
-    FROM link_rows l JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id
-    LEFT JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url
+    FROM spider_link_rows l JOIN spider_urls s ON s.id = l.source_id JOIN spider_urls t ON t.id = l.target_id
+    LEFT JOIN spider_pages p ON p.crawl_id = l.crawl_id AND p.url = t.url
     WHERE l.crawl_id = :crawl_id AND l.kind IN ('next', 'prev')
 """
 FILTERS = {
     "all": "TRUE",
     "non_200": "p.url IS NOT NULL AND (p.status_code <> 200 OR p.blocked IS NOT NULL)",
-    "unlinked": "NOT coalesce(p.external, TRUE) AND NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id"
+    "unlinked": "NOT coalesce(p.external, TRUE) AND NOT EXISTS (SELECT 1 FROM spider_link_rows h WHERE h.crawl_id = l.crawl_id"
     " AND h.target_id = l.target_id AND h.kind = 'hyperlink')",
-    "not_in_anchor": "NOT EXISTS (SELECT 1 FROM link_rows h WHERE h.crawl_id = l.crawl_id AND h.source_id = l.source_id"
+    "not_in_anchor": "NOT EXISTS (SELECT 1 FROM spider_link_rows h WHERE h.crawl_id = l.crawl_id AND h.source_id = l.source_id"
     " AND h.target_id = l.target_id AND h.kind = 'hyperlink')",
     # A.next = B, yet B (read, 200) doesn't point back with prev — or the other way round
-    "sequence_error": "p.parsed AND p.status_code = 200 AND NOT EXISTS (SELECT 1 FROM link_rows b"
+    "sequence_error": "p.parsed AND p.status_code = 200 AND NOT EXISTS (SELECT 1 FROM spider_link_rows b"
     " WHERE b.crawl_id = l.crawl_id AND b.kind IN ('next', 'prev') AND b.source_id = l.target_id"
     " AND b.target_id = l.source_id AND b.kind <> l.kind)",
 }
@@ -55,7 +55,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     """Screaming Frog's Contains Pagination / First Page / Paginated 2+ Pages, over the site's pages."""
     rows = conn.execute(
         sa.text(
-            "SELECT pagination, count(*) FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
+            "SELECT pagination, count(*) FROM spider_pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
             " AND pagination IS NOT NULL GROUP BY pagination"
         ),
         {"crawl_id": crawl_id},
@@ -78,7 +78,7 @@ def looping(conn: sa.Connection, crawl_id: int) -> Iterator[tuple[str, str]]:
             source: target
             for source, target in conn.execute(
                 sa.text(
-                    "SELECT source_id, min(target_id) FROM link_rows l WHERE l.crawl_id = :crawl_id"
+                    "SELECT source_id, min(target_id) FROM spider_link_rows l WHERE l.crawl_id = :crawl_id"
                     " AND l.kind IN ('next', 'prev') AND l.kind = :rel GROUP BY source_id"
                 ),
                 {"crawl_id": crawl_id, "rel": rel},
@@ -100,7 +100,9 @@ def looping(conn: sa.Connection, crawl_id: int) -> Iterator[tuple[str, str]]:
             done.update(path)
         if on_cycle:
             ids = sorted({i for cycle in on_cycle.values() for i in cycle})
-            query = sa.text("SELECT id, url FROM urls WHERE id IN :ids").bindparams(sa.bindparam("ids", expanding=True))
+            query = sa.text("SELECT id, url FROM spider_urls WHERE id IN :ids").bindparams(
+                sa.bindparam("ids", expanding=True)
+            )
             urls: dict[int, str] = {i: url for i, url in conn.execute(query, {"ids": ids})}
             for member, cycle in on_cycle.items():
                 yield urls[member], f"{rel}: " + " → ".join(urls[i] for i in [*cycle, cycle[0]])

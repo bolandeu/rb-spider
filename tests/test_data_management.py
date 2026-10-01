@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from typer.testing import CliRunner
 
 from rb_spider.cli import app
-from rb_spider.core import maintenance, storage
+from rb_spider.core import db, maintenance, storage
 from rb_spider.core.crawl import crawl_site
 from rb_spider.core.errors import InvalidArguments
 from rb_spider.core.settings import CrawlSettings, Settings
@@ -158,10 +158,8 @@ def test_db_migrate_brings_an_old_schema_up(tmp_path) -> None:
     engine = storage.open_db(tmp_path / "old.sqlite")
     try:
         _, head, _ = maintenance._revisions(engine)
-        config = storage.alembic_config()
         with engine.begin() as conn:  # an older spider's database: one revision behind
-            config.attributes["connection"] = conn
-            command.downgrade(config, "-1")
+            command.downgrade(db.alembic_config(conn), "-1")
         info = maintenance.db_info(engine)
         assert info.schema_revision != head and info.pending_migrations == [head]
         assert maintenance.migrate(engine) == [head]
@@ -170,27 +168,48 @@ def test_db_migrate_brings_an_old_schema_up(tmp_path) -> None:
         engine.dispose()
 
 
-def test_url_id_migration_keeps_every_link(base_url: str, tmp_path) -> None:
-    """0014 moves links to urls + link_rows; down and up again, the `links` view gives back the same rows
-    (in the columns 0014 had: later migrations' columns are dropped on the way down)."""
-    from alembic import command
-
-    engine = storage.open_db(tmp_path / "links.sqlite")
+def test_prefix_migration_keeps_every_row(base_url: str, tmp_path) -> None:
+    """0033 rebuilds every table under spider_*: a file from before it (its own alembic_version, tables without the
+    prefix) comes out with the same rows, pages keeping their rowids as ids, the same `links` rows."""
+    path = tmp_path / "old.sqlite"
+    engine = storage.open_db(path)
     try:
         crawl_id = _crawl(engine, base_url, "site")
-        columns = [
-            c for c in storage.links.c if c.name not in ("fragment", "hreflang", "position", "path", "path_type")
-        ]
-        query = sa.select(*columns).where(storage.links.c.crawl_id == crawl_id)
         with engine.connect() as conn:
-            before = sorted(tuple(row) for row in conn.execute(query))
-        config = storage.alembic_config()
-        for step in (lambda: command.downgrade(config, "0013"), lambda: command.upgrade(config, "head")):
-            with engine.begin() as conn:
-                config.attributes["connection"] = conn
-                step()
+            pages = sorted(conn.execute(sa.select(storage.pages.c.id, storage.pages.c.url)).all())
+            links = sorted(tuple(row) for row in conn.execute(sa.select(storage.links)).all())
+            counts = {t.name: conn.execute(sa.select(sa.func.count()).select_from(t)).scalar_one()
+                      for t in storage.metadata.sorted_tables}  # fmt: skip
+        with engine.begin() as conn:  # back to 0032: the data moves to the old tables
+            conn.exec_driver_sql("DROP VIEW spider_v1_crawls")
+            conn.exec_driver_sql("DROP VIEW spider_v1_pages")
+            conn.exec_driver_sql("DROP VIEW spider_v1_issues")
+            conn.exec_driver_sql("DROP VIEW spider_v1_links")
+            conn.exec_driver_sql("DROP VIEW spider_links")
+            indexes = conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+            ).all()
+            for (index,) in indexes:
+                conn.exec_driver_sql(f"DROP INDEX {index}")
+            for table in storage.metadata.sorted_tables:
+                old = table.name.removeprefix("spider_")
+                conn.exec_driver_sql(f"ALTER TABLE {table.name} RENAME TO {old}")
+                if "id" in table.c and old not in ("projects", "crawls", "urls"):  # 0033 adds these ids
+                    conn.exec_driver_sql(f"ALTER TABLE {old} RENAME COLUMN id TO old_id")
+            conn.exec_driver_sql(f"ALTER TABLE {db.VERSION_TABLE} RENAME TO alembic_version")
+            conn.exec_driver_sql("UPDATE alembic_version SET version_num = '0032'")
+        engine.dispose()
+        engine = storage.open_db(path)  # migrated on open
         with engine.connect() as conn:
-            after = sorted(tuple(row) for row in conn.execute(query))
-        assert before and after == before
+            assert sorted(conn.execute(sa.select(storage.pages.c.id, storage.pages.c.url)).all()) == pages
+            assert sorted(tuple(row) for row in conn.execute(sa.select(storage.links)).all()) == links
+            assert {t.name: conn.execute(sa.select(sa.func.count()).select_from(t)).scalar_one()
+                    for t in storage.metadata.sorted_tables} == counts  # fmt: skip
+            names = set(sa.inspect(conn).get_table_names())
+        assert (
+            crawl_id
+            and "alembic_version" not in names
+            and not {n for n in names if not n.startswith("spider_")} - {db.VERSION_TABLE}
+        )
     finally:
         engine.dispose()

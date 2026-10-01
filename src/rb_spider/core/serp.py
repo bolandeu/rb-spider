@@ -56,11 +56,11 @@ def truncate(text: str, max_px: float, font_px: float) -> tuple[str, bool]:
 def compute(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> None:
     """Fill pages.title_px / description_px of the site's HTML pages, a batch at a time."""
     select = sa.text(
-        "SELECT rowid, title, meta_description FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
-        " AND parsed AND (title IS NOT NULL OR meta_description IS NOT NULL) AND rowid > :after ORDER BY rowid"
+        "SELECT id, title, meta_description FROM spider_pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
+        " AND parsed AND (title IS NOT NULL OR meta_description IS NOT NULL) AND id > :after ORDER BY id"
         " LIMIT :limit"
     )
-    update = sa.text("UPDATE pages SET title_px = :t, description_px = :d WHERE rowid = :id")
+    update = sa.text("UPDATE spider_pages SET title_px = :t, description_px = :d WHERE id = :id")
     after = 0
     while rows := conn.execute(select, {"crawl_id": crawl_id, "after": after, "limit": _BATCH}).all():
         conn.execute(update, [
@@ -96,7 +96,7 @@ def snippet(url: str, title: str | None, description: str | None, thresholds: Th
 
 SUMMARY = (
     "SELECT url, title, length(title) AS title_chars, title_px, meta_description AS description,"
-    " length(meta_description) AS description_chars, description_px FROM pages WHERE crawl_id = :crawl_id"
+    " length(meta_description) AS description_chars, description_px FROM spider_pages WHERE crawl_id = :crawl_id"
     " AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200 AND content_type LIKE '%html%'"
 )
 

@@ -11,7 +11,7 @@ from .errors import InvalidArguments
 from .settings import Settings
 
 HTML_PAGES = (
-    "SELECT url FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200"
+    "SELECT url FROM spider_pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200"
     " AND content_type LIKE '%html%'"
 )
 
@@ -21,7 +21,7 @@ def rules(engine: sa.Engine, crawl_id: int) -> list[dict]:
     _, snapshot = storage.get_crawl(engine, crawl_id)
     custom = Settings.model_validate(snapshot or {}).custom
     counts = sa.text(
-        "SELECT kind, name, count(DISTINCT url) FROM custom_values WHERE crawl_id = :crawl_id GROUP BY kind, name"
+        "SELECT kind, name, count(DISTINCT url) FROM spider_custom_values WHERE crawl_id = :crawl_id GROUP BY kind, name"
     )
     with engine.connect() as conn:
         found = {(kind, name): n for kind, name, n in conn.execute(counts, {"crawl_id": crawl_id})}
@@ -41,10 +41,10 @@ def rows(
         raise InvalidArguments("--without lists pages a search found nothing on: use it with --search.")
     params = {"crawl_id": crawl_id, "kind": kind, "name": name, "limit": storage.NO_LIMIT if limit is None else limit}
     if without:
-        query = (f"SELECT url FROM ({HTML_PAGES}) h WHERE NOT EXISTS (SELECT 1 FROM custom_values c"  # noqa: S608
+        query = (f"SELECT url FROM ({HTML_PAGES}) h WHERE NOT EXISTS (SELECT 1 FROM spider_custom_values c"  # noqa: S608
                  " WHERE c.crawl_id = :crawl_id AND c.kind = :kind AND c.name = :name AND c.url = h.url)")  # fmt: skip
     else:
-        query = ("SELECT url, value, n FROM custom_values WHERE crawl_id = :crawl_id AND kind = :kind"
+        query = ("SELECT url, value, n FROM spider_custom_values WHERE crawl_id = :crawl_id AND kind = :kind"
                  " AND name = :name")  # fmt: skip
     with engine.connect() as conn:
         total = conn.execute(sa.text(f"SELECT count(*) FROM ({query})"), params).scalar_one()  # noqa: S608

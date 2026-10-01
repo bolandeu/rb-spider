@@ -27,7 +27,7 @@ def login(
     иначе спрашивается интерактивно (с `--non-interactive` — ошибка, код 2).
     Провайдеры: `proxy` — пароль для `{password}` в `crawl.proxy_urls`, `proxy_key` —
     ключ для `{key}` в `crawl.proxy_change_ip_urls` (смена IP), `site` — пароль сайта
-    при `crawl.auth = basic`, `database` — пароль `SPIDER_DB_URL`. Заменить секрет —
+    при `crawl.auth = basic`, `database` — пароль `SPIDER_DATABASE_URL`. Заменить секрет —
     ещё раз `auth login`; на сервере без keychain вместо него задают переменную
     окружения (`SPIDER_PROXY_API_KEY`, `SPIDER_PROXY_KEY_API_KEY`) — она важнее keychain.
 

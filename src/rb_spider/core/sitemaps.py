@@ -72,25 +72,25 @@ async def read(
 
 Only = Literal["files", "urls", "orphans", "not_in_sitemap"]
 ONLY: tuple[str, ...] = get_args(Only)
-_OWN_PAGE = "LEFT JOIN pages p ON p.crawl_id = s.crawl_id AND p.url = s.url"
+_OWN_PAGE = "LEFT JOIN spider_pages p ON p.crawl_id = s.crawl_id AND p.url = s.url"
 QUERIES = {
-    "files": "SELECT url, kind, bytes, urls, sitemaps, error FROM sitemap_files WHERE crawl_id = :crawl_id",
+    "files": "SELECT url, kind, bytes, urls, sitemaps, error FROM spider_sitemap_files WHERE crawl_id = :crawl_id",
     "urls": (
-        "SELECT s.url, s.source, s.lastmod, p.status_code, p.indexability_status FROM sitemap_urls s "  # noqa: S608
+        "SELECT s.url, s.source, s.lastmod, p.status_code, p.indexability_status FROM spider_sitemap_urls s "  # noqa: S608
         f"{_OWN_PAGE} WHERE s.crawl_id = :crawl_id"
     ),
     # in a sitemap, no <a href> to it anywhere on the site (and, with sitemaps.follow off, maybe never crawled)
     "orphans": (
-        "SELECT s.url, min(s.source) AS source, p.status_code, p.indexability_status FROM sitemap_urls s "  # noqa: S608
+        "SELECT s.url, min(s.source) AS source, p.status_code, p.indexability_status FROM spider_sitemap_urls s "  # noqa: S608
         f"{_OWN_PAGE} WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE) AND NOT EXISTS ("
-        " SELECT 1 FROM urls u JOIN link_rows l ON l.crawl_id = u.crawl_id AND l.target_id = u.id"
+        " SELECT 1 FROM spider_urls u JOIN spider_link_rows l ON l.crawl_id = u.crawl_id AND l.target_id = u.id"
         " AND l.kind = 'hyperlink' WHERE u.crawl_id = s.crawl_id AND u.url = s.url) GROUP BY s.url, p.status_code, p.indexability_status"
     ),
     # indexable HTML pages of the site that no sitemap lists
     "not_in_sitemap": (
-        "SELECT p.url, p.depth, p.inlinks FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"
+        "SELECT p.url, p.depth, p.inlinks FROM spider_pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"
         " AND p.parsed AND p.status_code = 200 AND p.content_type LIKE '%html%' AND p.indexable AND NOT EXISTS ("
-        " SELECT 1 FROM sitemap_urls s WHERE s.crawl_id = p.crawl_id AND s.url = p.url)"
+        " SELECT 1 FROM spider_sitemap_urls s WHERE s.crawl_id = p.crawl_id AND s.url = p.url)"
     ),
 }
 
@@ -110,8 +110,8 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     """Sitemap files and URLs, and the site's pages in and out of them — Screaming Frog's Sitemaps filters."""
     files, urls = conn.execute(
         sa.text(
-            "SELECT (SELECT count(*) FROM sitemap_files WHERE crawl_id = :crawl_id),"
-            " (SELECT count(DISTINCT url) FROM sitemap_urls WHERE crawl_id = :crawl_id)"
+            "SELECT (SELECT count(*) FROM spider_sitemap_files WHERE crawl_id = :crawl_id),"
+            " (SELECT count(DISTINCT url) FROM spider_sitemap_urls WHERE crawl_id = :crawl_id)"
         ),
         {"crawl_id": crawl_id},
     ).one()
@@ -138,7 +138,7 @@ def _pages_query(include: set[str]) -> str:
         allowed.append("p.indexability_status = 'Canonicalised'")
     paginated = "" if "paginated" in include else " AND coalesce(p.pagination, '') <> 'paginated'"
     return (
-        "SELECT p.url, p.last_modified, p.depth FROM pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"  # noqa: S608
+        "SELECT p.url, p.last_modified, p.depth FROM spider_pages p WHERE p.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE)"  # noqa: S608
         f" AND p.status_code = 200 AND ({kinds}) AND ({' OR '.join(allowed)}){paginated} ORDER BY p.url"
     )
 
@@ -203,8 +203,8 @@ def build(
             pictures: list[str] = []
             if images:
                 pictures = list(conn.execute(sa.text(
-                    "SELECT DISTINCT t.url FROM urls s JOIN link_rows l ON l.crawl_id = s.crawl_id AND l.source_id = s.id"
-                    " AND l.kind = 'image' JOIN urls t ON t.id = l.target_id JOIN pages ip ON ip.crawl_id = s.crawl_id"
+                    "SELECT DISTINCT t.url FROM spider_urls s JOIN spider_link_rows l ON l.crawl_id = s.crawl_id AND l.source_id = s.id"
+                    " AND l.kind = 'image' JOIN spider_urls t ON t.id = l.target_id JOIN spider_pages ip ON ip.crawl_id = s.crawl_id"
                     " AND ip.url = t.url AND ip.status_code = 200 WHERE s.crawl_id = :crawl_id AND s.url = :url"
                     " ORDER BY t.url"), {"crawl_id": crawl_id, "url": url}).scalars())  # fmt: skip
                 if not pictures:

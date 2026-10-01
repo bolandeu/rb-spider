@@ -44,10 +44,10 @@ def compute_and_store(engine: sa.Engine, crawl_id: int, limit: int) -> dict:
     with engine.begin() as conn:
         compute(conn, crawl_id)
     with engine.connect() as conn:
-        scored = conn.execute(sa.text("SELECT count(*) FROM pages WHERE crawl_id = :c AND link_score IS NOT NULL"),
+        scored = conn.execute(sa.text("SELECT count(*) FROM spider_pages WHERE crawl_id = :c AND link_score IS NOT NULL"),
                               {"c": crawl_id}).scalar_one()  # fmt: skip
         top = conn.execute(
-            sa.text("SELECT url, link_score, inlinks FROM pages WHERE crawl_id = :c AND link_score IS NOT NULL"
+            sa.text("SELECT url, link_score, inlinks FROM spider_pages WHERE crawl_id = :c AND link_score IS NOT NULL"
                     " ORDER BY link_score DESC, inlinks DESC, url LIMIT :limit"),
             {"c": crawl_id, "limit": limit},
         ).mappings()  # fmt: skip
@@ -56,7 +56,7 @@ def compute_and_store(engine: sa.Engine, crawl_id: int, limit: int) -> dict:
 
 def compute(conn: sa.Connection, crawl_id: int) -> None:
     """Refill `pages.link_score` for a crawl."""
-    conn.execute(sa.text("UPDATE pages SET link_score = NULL WHERE crawl_id = :c"), {"c": crawl_id})
+    conn.execute(sa.text("UPDATE spider_pages SET link_score = NULL WHERE crawl_id = :c"), {"c": crawl_id})
     sqlite = storage.is_sqlite(conn)
     temp = "temp" if sqlite else "pg_temp"
     index = "temp." if sqlite else ""
@@ -66,7 +66,7 @@ def compute(conn: sa.Connection, crawl_id: int) -> None:
     params = {"c": crawl_id}
     run("CREATE TEMP TABLE ls_nodes (id BIGINT PRIMARY KEY, score DOUBLE PRECISION, outdeg BIGINT)")
     conn.execute(sa.text(
-        "INSERT INTO ls_nodes (id, score, outdeg) SELECT u.id, 0, 0 FROM urls u JOIN pages p ON p.crawl_id = u.crawl_id"
+        "INSERT INTO ls_nodes (id, score, outdeg) SELECT u.id, 0, 0 FROM spider_urls u JOIN spider_pages p ON p.crawl_id = u.crawl_id"
         " AND p.url = u.url WHERE u.crawl_id = :c AND NOT coalesce(p.external, FALSE)"
         # the site's pages: HTML, or linked like one (a redirect, a 404) — not the scripts and images they load
         " AND (p.content_type LIKE '%html%' OR p.inlinks > 0)"), params)  # fmt: skip
@@ -75,7 +75,7 @@ def compute(conn: sa.Connection, crawl_id: int) -> None:
         return
     run("CREATE TEMP TABLE ls_edges (src BIGINT, dst BIGINT)")
     conn.execute(sa.text(
-        "INSERT INTO ls_edges (src, dst) SELECT DISTINCT l.source_id, l.target_id FROM link_rows l"
+        "INSERT INTO ls_edges (src, dst) SELECT DISTINCT l.source_id, l.target_id FROM spider_link_rows l"
         " WHERE l.crawl_id = :c AND l.kind = 'hyperlink' AND l.internal AND NOT l.nofollow"
         " AND l.source_id <> l.target_id AND l.source_id IN (SELECT id FROM ls_nodes)"
         " AND l.target_id IN (SELECT id FROM ls_nodes)"), params)  # fmt: skip
@@ -112,7 +112,7 @@ def _scale(conn: sa.Connection, crawl_id: int) -> None:
                   for i, s in batch]  # fmt: skip
         conn.execute(insert, values)
     conn.execute(
-        sa.text("UPDATE pages SET link_score = CAST(s.v AS INTEGER) FROM (SELECT u.url, i.inflow AS v FROM ls_in i"
-                " JOIN urls u ON u.id = i.id) AS s WHERE pages.crawl_id = :c AND pages.url = s.url"),
+        sa.text("UPDATE spider_pages SET link_score = CAST(s.v AS INTEGER) FROM (SELECT u.url, i.inflow AS v FROM ls_in i"
+                " JOIN spider_urls u ON u.id = i.id) AS s WHERE spider_pages.crawl_id = :c AND spider_pages.url = s.url"),
         {"c": crawl_id},
     )  # fmt: skip

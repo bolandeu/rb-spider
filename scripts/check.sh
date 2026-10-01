@@ -5,7 +5,7 @@
 #   --py312  also the tests on the oldest supported Python (3.12), in a throwaway environment
 #   --linux  also the tests on Linux (Docker), Python 3.12 and 3.14; `scripts/release.py` runs it.
 #            JS rendering is left to the macOS run: a browser in the container costs hundreds of MB a run.
-#   --pg     also the tests against PostgreSQL (SPIDER_DB_URL, #41): a throwaway postgres container (Docker).
+#   --pg     also the tests against PostgreSQL: scripts/pg_test.sh (a throwaway postgres:16 container, Docker).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -40,15 +40,8 @@ for flag in "$@"; do
       done
       ;;
     --pg)
-      # data on tmpfs: nothing stays on disk; the container goes away with the run
-      name="spider-check-pg-$$"
-      docker run -d --rm --name "$name" -e POSTGRES_USER=pg -e POSTGRES_PASSWORD=pg -p 127.0.0.1::5432 \
-        --tmpfs /var/lib/postgresql/data postgres:17-alpine >/dev/null
-      trap 'docker stop "$name" >/dev/null 2>&1 || true' EXIT
-      port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
-      until docker exec "$name" pg_isready -h 127.0.0.1 -U pg >/dev/null 2>&1; do sleep 0.5; done  # TCP: the init server has none
       echo "--- PostgreSQL"
-      SPIDER_TEST_PG="postgresql://pg:pg@127.0.0.1:$port/pg" uv run pytest -q --no-cov -p no:cacheprovider
+      scripts/pg_test.sh -q --no-cov -p no:cacheprovider
       ;;
     *)
       echo "check.sh: unknown flag $flag (--py312, --linux, --pg)" >&2

@@ -7,7 +7,7 @@ import typer
 
 from .. import output
 from ..core import crawl as crawl_service
-from ..core import deps, services, settings, storage
+from ..core import deps, services, settings
 from ..core import proxy as proxy_service
 from ..core.errors import CliError, CliTooOld
 from ..core.models import ProjectConfig
@@ -72,7 +72,9 @@ def doctor(
     Первое, что стоит запустить, если команда ведёт себя странно. Код выхода
     всегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.
     `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с
-    `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —
+    `SPIDER_DATABASE_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль;
+    `database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);
+    `database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
     если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
     IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта
@@ -110,35 +112,18 @@ def doctor(
         except CliTooOld as exc:
             checks.append({"name": "cli_compat", "ok": False, "detail": exc.message})
 
-    checks.append(_database_check())
-
     settings_check, needed = _settings_check(root, config)
     checks.append(settings_check)
     checks.extend(_auth_checks(needed))
     checks.append(_lighthouse_check(root, config))
     checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
+    if module_exists(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time
+        checks.extend(importlib.import_module(f"{_PACKAGE_NAME}.core.db").doctor_checks())
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(
         ctx, {"healthy": all_ok, "checks": checks}, render_human=lambda data: output.human.render_doctor(data["checks"])
     )
-
-
-def _database_check() -> dict:
-    """The local SQLite file, or (SPIDER_DB_URL) whether the PostgreSQL server answers with the password it has."""
-    url = storage.db_url()
-    if url is None:
-        database = storage.db_path()
-        return {"name": "database", "ok": True,
-                "detail": f"{database}" + ("" if database.exists() else " (создастся при первом обходе)")}  # fmt: skip
-    from ..core.errors import CliError
-
-    try:
-        shown = storage.remote_url(url).render_as_string(hide_password=True)
-        storage.open_db_url(url).dispose()
-    except CliError as exc:
-        return {"name": "database", "ok": False, "detail": f"{exc.message} {exc.action or ''}".strip()}
-    return {"name": "database", "ok": True, "detail": f"PostgreSQL {shown}"}
 
 
 def _lighthouse_check(root: Path | None, config: ProjectConfig | None) -> dict:

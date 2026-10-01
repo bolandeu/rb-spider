@@ -36,7 +36,7 @@ def _status(*args: str, env: dict[str, str] | None = None) -> tuple[int, dict]:
 
 
 def test_all_four_are_optional_and_missing_is_healthy(keychain, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SPIDER_DB_URL", raising=False)
+    monkeypatch.delenv("SPIDER_DATABASE_URL", raising=False)
     code, payload = _status("--check")
     entries = by_provider(payload)
     assert code == 0 and payload["tool"] == "spider"
@@ -73,15 +73,15 @@ def test_login_stores_under_spider_and_logout_leaves_the_legacy_entry(keychain) 
 
 
 def test_database_without_db_url_is_ok_with_a_note(keychain, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SPIDER_DB_URL", raising=False)
+    monkeypatch.delenv("SPIDER_DATABASE_URL", raising=False)
     _, payload = _status("--check", "--provider", "database", env={"SPIDER_DATABASE_API_KEY": SECRET})
     database = by_provider(payload)["database"]
     assert (database["status"], database["source"]) == ("ok", "env")
-    assert "SPIDER_DB_URL is not set" in database["message"]
+    assert "SPIDER_DATABASE_URL is not set" in database["message"]
 
 
 def test_database_unreachable_is_not_a_failure(keychain) -> None:
     # nothing listens on port 1: the optional provider is `unreachable`, exit stays 0
-    env = {"SPIDER_DATABASE_API_KEY": SECRET, "SPIDER_DB_URL": "postgresql://pg@127.0.0.1:1/pg"}
+    env = {"SPIDER_DATABASE_API_KEY": SECRET, "SPIDER_DATABASE_URL": "postgresql://pg@127.0.0.1:1/pg"}
     code, payload = _status("--check", "--provider", "database", env=env)
     assert (code, by_provider(payload)["database"]["status"]) == (0, "unreachable")

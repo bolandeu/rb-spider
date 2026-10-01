@@ -6,7 +6,9 @@
  Первое, что стоит запустить, если команда ведёт себя странно. Код выхода
  всегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.
  `database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с
- `SPIDER_DB_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль; `settings` —
+ `SPIDER_DATABASE_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль;
+ `database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);
+ `database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —
  настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
  если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
  IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта

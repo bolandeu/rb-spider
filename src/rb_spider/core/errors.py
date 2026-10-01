@@ -282,18 +282,44 @@ class XPathUnavailable(CliError):
         )
 
 
-class RemoteDatabaseUnavailable(CliError):
-    """`SPIDER_DB_URL` that can't be used: not PostgreSQL, no driver, no password, or the server doesn't answer."""
+class DatabaseUnavailable(CliError):
+    """`<TOOL>_DATABASE_URL` is set but unusable: unreachable, wrong credentials, not PostgreSQL (core/db.py).
 
-    def __init__(self, message: str) -> None:
+    Exit 5 like any external service. Never answered by falling back to the
+    local SQLite file — data written there would silently miss the shared base.
+    """
+
+    def __init__(self, message: str, *, action: str | None = None) -> None:
         super().__init__(
-            "REMOTE_DATABASE_UNAVAILABLE",
+            "DATABASE_UNAVAILABLE",
             message,
-            action=(
-                "SPIDER_DB_URL — postgresql://user@host:5432/db; the password goes to the keychain: spider auth "
-                f'login --provider database. The driver: uv tool install --reinstall "{DIST_NAME}[postgres] @ '
-                'git+https://github.com/bolandeu/spider.git" (in a checkout: uv sync --extra postgres). '
-                "Without SPIDER_DB_URL crawls go to the local SQLite file."
-            ),
+            action=action or "Check the database URL and that the server is reachable; then retry.",
+            exit_code=5,
+        )
+
+
+class DatabaseNotMigrated(CliError):
+    """The shared database's schema is behind this CLI's migrations (core/db.py)."""
+
+    def __init__(self, current: str | None, head: str) -> None:
+        super().__init__(
+            "DATABASE_NOT_MIGRATED",
+            f"The database schema is at revision {current or 'none'}, this {_CLI} needs {head}.",
+            action=f"Run '{_CLI} db upgrade' (it changes the shared database — run the released version).",
             exit_code=1,
+        )
+
+
+class DatabaseTooNew(CliError):
+    """The database was migrated by a newer release than this one: the CLI is the one to update.
+
+    The same `CLI_TOO_OLD` code and exit 6 as `CliTooOld` — the cure is the same.
+    """
+
+    def __init__(self, current: str) -> None:
+        super().__init__(
+            "CLI_TOO_OLD",
+            f"The database schema is at revision {current}, which this {_CLI} doesn't know: a newer release migrated it.",
+            action=f"Run 'uv tool upgrade {_DIST}', then retry.",
+            exit_code=6,
         )

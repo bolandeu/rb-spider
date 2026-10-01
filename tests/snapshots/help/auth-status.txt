@@ -5,9 +5,9 @@
 
  Провайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `proxy_key`
  (ключ `{key}` в `crawl.proxy_change_ip_urls`), `site` (пароль сайта при
- `crawl.auth = basic`) и `database` (пароль `SPIDER_DB_URL`); все необязательные:
+ `crawl.auth = basic`) и `database` (пароль `SPIDER_DATABASE_URL`); все необязательные:
  нужны только при этих настройках. Без `--check` — только наличие (статус
- `unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DB_URL`,
+ `unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DATABASE_URL`,
  если он задан; у `proxy`, `proxy_key` и `site` спросить некого (их проверяет только
  обход), найденный секрет — `ok`.
 

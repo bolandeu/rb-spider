@@ -212,18 +212,20 @@ def query(
 
     Для вопросов, на которые нет готовой команды. База открывается только для
     чтения, а SQLite сам отклоняет всё, кроме SELECT: запись, ATTACH, PRAGMA. С
-    PostgreSQL (`SPIDER_DB_URL`) — транзакция только для чтения и одна команда за
+    PostgreSQL (`SPIDER_DATABASE_URL`) — транзакция только для чтения и одна команда за
     раз; надёжнее всего — пользователь базы с правом только на SELECT.
-    Таблицы: pages, links, issues, url_metrics, crawls, projects, frontier; у строк
-    обхода — `crawl_id` (`spider crawls list`). `links` — представление с URL
-    текстом (source, target); хранятся ссылки в link_rows по id из urls — для
-    тяжёлых запросов быстрее группировать link_rows по source_id / target_id и
-    соединять с urls в конце. Колонки — `spider export` с тем же набором или
-    `SELECT * FROM pages LIMIT 1`. Функция casefold(x) — регистр без учёта кириллицы.
+    Таблицы (с 0.3 — с префиксом `spider_`): spider_pages, spider_links, spider_issues,
+    spider_url_metrics, spider_crawls, spider_projects, spider_frontier; у строк
+    обхода — `crawl_id` (`spider crawls list`). `spider_links` — представление с URL
+    текстом (source, target); хранятся ссылки в spider_link_rows по id из spider_urls —
+    для тяжёлых запросов быстрее группировать spider_link_rows по source_id / target_id
+    и соединять с spider_urls в конце. Колонки — `spider export` с тем же набором или
+    `SELECT * FROM spider_pages LIMIT 1`. Функция spider_casefold(x) — регистр без
+    учёта кириллицы.
 
-    Example: spider query "SELECT status_code, count(*) FROM pages WHERE crawl_id = 3 GROUP BY 1"
-    Example: spider --json query "SELECT url, word_count FROM pages WHERE crawl_id = 3 ORDER BY 2 LIMIT 20"
-    Example: spider query "SELECT source, target FROM links WHERE crawl_id = 3 AND anchor = ''" --format csv -o empty.csv
+    Example: spider query "SELECT status_code, count(*) FROM spider_pages WHERE crawl_id = 3 GROUP BY 1"
+    Example: spider --json query "SELECT url, word_count FROM spider_pages WHERE crawl_id = 3 ORDER BY 2 LIMIT 20"
+    Example: spider query "SELECT source, target FROM spider_links WHERE crawl_id = 3 AND anchor = ''" --format csv -o empty.csv
 
     Выход — таблица (не больше `--limit` строк); JSON: `{columns, rows, truncated}`,
     `rows` — массивы значений. С `--format` строки идут потоком без ограничения —

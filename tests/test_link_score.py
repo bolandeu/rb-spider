@@ -25,7 +25,7 @@ def base_url():
 
 def _scores(engine, crawl_id: int, base_url: str) -> dict[str, int | None]:
     with engine.connect() as conn:
-        rows = conn.execute(sa.text("SELECT url, link_score FROM pages WHERE crawl_id = :c AND NOT coalesce(external,"
+        rows = conn.execute(sa.text("SELECT url, link_score FROM spider_pages WHERE crawl_id = :c AND NOT coalesce(external,"
                                     " FALSE)"), {"c": crawl_id})  # fmt: skip
         return {url.removeprefix(base_url): score for url, score in rows}
 

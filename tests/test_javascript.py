@@ -89,7 +89,7 @@ def test_shadow_dom_and_iframes_are_flattened(base_url: str, rendered) -> None:
     assert "/js/shadow-target" in pages and "/js/frame-target" in pages
     with engine.connect() as conn:
         origins = dict(conn.execute(sa.text(
-            "SELECT target, origin FROM links WHERE crawl_id = :c AND source = :s AND kind = 'hyperlink'"),
+            "SELECT target, origin FROM spider_links WHERE crawl_id = :c AND source = :s AND kind = 'hyperlink'"),
             {"c": crawl_id, "s": f"{base_url}/js/links"}).all())  # fmt: skip
     assert origins == {f"{base_url}/js/": "html & rendered", f"{base_url}/js/linked": "rendered"}
 
@@ -167,7 +167,7 @@ def test_background_images_from_stylesheets_are_found_when_rendered(base_url: st
     engine, crawl_id = rendered
     with engine.connect() as conn:
         rows = conn.execute(sa.text(
-            "SELECT target, origin FROM links WHERE crawl_id = :c AND source = :s AND kind = 'image'"),
+            "SELECT target, origin FROM spider_links WHERE crawl_id = :c AND source = :s AND kind = 'image'"),
             {"c": crawl_id, "s": f"{base_url}/js/images"}).all()  # fmt: skip
     assert set(rows) == {(f"{base_url}/img/hero.png", "css background"), (f"{base_url}/img/real.png", None)}
 

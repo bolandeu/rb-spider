@@ -49,7 +49,7 @@ def canonicals(engine: sa.Engine, crawl_id: int, only: str, limit: int | None = 
     query = (
         "SELECT p.url, p.canonical_url AS canonical, t.status_code AS canonical_status,"  # noqa: S608 — fixed text
         " t.indexability_status AS canonical_indexability, coalesce(t.canonical_url, t.redirect_url, t.refresh_url)"
-        " AS next_hop FROM pages p LEFT JOIN pages t ON t.crawl_id = p.crawl_id AND t.url = p.canonical_url"
+        " AS next_hop FROM spider_pages p LEFT JOIN spider_pages t ON t.crawl_id = p.crawl_id AND t.url = p.canonical_url"
         f" WHERE p.crawl_id = :crawl_id AND {OWN} AND p.canonical_url IS NOT NULL AND p.canonical_url <> p.url"
         f"{CANONICALS[only]} ORDER BY p.url"
     )
@@ -66,7 +66,7 @@ def structure(engine: sa.Engine, crawl_id: int, depth: int = 2) -> dict:
     """
     folders: Counter[str] = Counter()
     indexable: Counter[str] = Counter()
-    query = sa.text(f"SELECT p.url, p.indexable FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN}")  # noqa: S608
+    query = sa.text(f"SELECT p.url, p.indexable FROM spider_pages p WHERE p.crawl_id = :crawl_id AND {OWN}")  # noqa: S608
     with engine.connect() as conn:
         for url, is_indexable in storage.streamed(conn, 2000).execute(query, {"crawl_id": crawl_id}):
             segments = [s for s in urlsplit(url).path.split("/")[1:-1] if s][:depth]  # folders, not the page
@@ -74,7 +74,9 @@ def structure(engine: sa.Engine, crawl_id: int, depth: int = 2) -> dict:
             folders[folder] += 1
             indexable[folder] += bool(is_indexable)
         depths = conn.execute(
-            sa.text(f"SELECT p.depth, count(*) FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN} GROUP BY p.depth"),  # noqa: S608
+            sa.text(
+                f"SELECT p.depth, count(*) FROM spider_pages p WHERE p.crawl_id = :crawl_id AND {OWN} GROUP BY p.depth"  # noqa: S608
+            ),
             {"crawl_id": crawl_id},
         ).all()
     return {
@@ -97,17 +99,17 @@ def response_times(engine: sa.Engine, crawl_id: int, slowest: int = 20) -> dict:
     params = {"crawl_id": crawl_id, "slowest": slowest}
     with engine.connect() as conn:
         rows = conn.execute(
-            sa.text(f"SELECT CASE {bands} ELSE '>={BUCKETS[-1]}' END AS band, count(*) FROM pages p"  # noqa: S608
+            sa.text(f"SELECT CASE {bands} ELSE '>={BUCKETS[-1]}' END AS band, count(*) FROM spider_pages p"  # noqa: S608
                     f" WHERE p.crawl_id = :crawl_id AND {OWN} AND response_ms IS NOT NULL GROUP BY band"),
             params,
         ).all()  # fmt: skip
         stats = conn.execute(
-            sa.text(f"SELECT count(*), avg(response_ms), max(response_ms) FROM pages p WHERE p.crawl_id = :crawl_id"  # noqa: S608
+            sa.text(f"SELECT count(*), avg(response_ms), max(response_ms) FROM spider_pages p WHERE p.crawl_id = :crawl_id"  # noqa: S608
                     f" AND {OWN} AND response_ms IS NOT NULL"),
             params,
         ).one()  # fmt: skip
         slow = conn.execute(
-            sa.text(f"SELECT url, response_ms, status_code FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN}"  # noqa: S608
+            sa.text(f"SELECT url, response_ms, status_code FROM spider_pages p WHERE p.crawl_id = :crawl_id AND {OWN}"  # noqa: S608
                     " AND response_ms IS NOT NULL ORDER BY response_ms DESC LIMIT :slowest"),
             params,
         ).mappings()  # fmt: skip
@@ -130,14 +132,14 @@ def crawl_path(engine: sa.Engine, crawl_id: int, url: str) -> list[dict]:
     """Crawl Path: how the crawl reached a URL — from the start page, each step a URL one click shallower that links
     (or redirects, or canonicalises…) to the next."""
     step = sa.text(
-        "SELECT s.url, l.kind, sp.depth FROM urls t JOIN link_rows l ON l.crawl_id = t.crawl_id AND l.target_id = t.id"
-        " JOIN urls s ON s.id = l.source_id JOIN pages sp ON sp.crawl_id = t.crawl_id AND sp.url = s.url"
+        "SELECT s.url, l.kind, sp.depth FROM spider_urls t JOIN spider_link_rows l ON l.crawl_id = t.crawl_id AND l.target_id = t.id"
+        " JOIN spider_urls s ON s.id = l.source_id JOIN spider_pages sp ON sp.crawl_id = t.crawl_id AND sp.url = s.url"
         " WHERE t.crawl_id = :crawl_id AND t.url = :url AND sp.depth = :depth ORDER BY l.kind <> 'hyperlink', s.url"
         " LIMIT 1"
     )
     with engine.connect() as conn:
         depth = conn.execute(
-            sa.text("SELECT depth FROM pages WHERE crawl_id = :crawl_id AND url = :url"),
+            sa.text("SELECT depth FROM spider_pages WHERE crawl_id = :crawl_id AND url = :url"),
             {"crawl_id": crawl_id, "url": url},
         ).scalar()
         if depth is None:
@@ -170,7 +172,7 @@ def meta_keywords(engine: sa.Engine, crawl_id: int, only: str, limit: int | None
         raise InvalidArguments(f"--only: one of {', '.join(META_KEYWORDS)}.")
     query = (
         "SELECT url, keywords, tags FROM (SELECT p.url, p.meta_keywords AS keywords, p.meta_keywords_count AS tags,"  # noqa: S608
-        " count(*) OVER (PARTITION BY p.meta_keywords) AS shared FROM pages p"  # one pass: a window count per value
+        " count(*) OVER (PARTITION BY p.meta_keywords) AS shared FROM spider_pages p"  # one pass: a window count per value
         f" WHERE p.crawl_id = :crawl_id AND {HTML_OK} AND {META_KEYWORDS[only]})"
         f"{' WHERE shared > 1' if only == 'duplicate' else ''} ORDER BY url"
     )
@@ -180,7 +182,7 @@ def meta_keywords(engine: sa.Engine, crawl_id: int, only: str, limit: int | None
 def forms(engine: sa.Engine, crawl_id: int, limit: int | None = None) -> tuple[int, list[dict]]:
     """Forms: every form's page and where it submits, and whether that's plain HTTP."""
     query = (
-        "SELECT source AS page, target AS action, internal, target LIKE 'http://%' AS insecure FROM links"
+        "SELECT source AS page, target AS action, internal, target LIKE 'http://%' AS insecure FROM spider_links"
         " WHERE crawl_id = :crawl_id AND kind = 'form' ORDER BY source, target"
     )
     return _rows(engine, query, {"crawl_id": crawl_id}, limit)
@@ -196,7 +198,7 @@ def headers_summary(engine: sa.Engine, crawl_id: int, cookies: bool = False) -> 
     example: dict[str, str] = {}
     attributes: dict[str, set[str]] = {}
     query = sa.text(
-        f"SELECT p.url, p.headers FROM pages p WHERE p.crawl_id = :crawl_id AND {OWN} AND p.headers IS NOT NULL"  # noqa: S608
+        f"SELECT p.url, p.headers FROM spider_pages p WHERE p.crawl_id = :crawl_id AND {OWN} AND p.headers IS NOT NULL"  # noqa: S608
     )
     with engine.connect() as conn:
         for url, raw in storage.streamed(conn, 1000).execute(query, {"crawl_id": crawl_id}):
@@ -217,12 +219,12 @@ def headers_summary(engine: sa.Engine, crawl_id: int, cookies: bool = False) -> 
 
 JAVASCRIPT = {
     # Chrome Console Log Summary: each console error / warning text and how many pages logged it
-    "console": "SELECT kind, message, count(DISTINCT url) AS pages, min(url) AS example FROM render_events"
+    "console": "SELECT kind, message, count(DISTINCT url) AS pages, min(url) AS example FROM spider_render_events"
     " WHERE crawl_id = :crawl_id AND kind IN ('error', 'warning') GROUP BY kind, message"
     " ORDER BY kind = 'warning', pages DESC, message",
     # resources the browser didn't get: robots.txt (Pages with Blocked Resources), failed, 4xx / 5xx
     "resources": "SELECT resource, kind, min(message) AS reason, count(DISTINCT url) AS pages, min(url) AS example"
-    " FROM render_events WHERE crawl_id = :crawl_id AND kind IN ('blocked', 'failed') GROUP BY resource, kind"
+    " FROM spider_render_events WHERE crawl_id = :crawl_id AND kind IN ('blocked', 'failed') GROUP BY resource, kind"
     " ORDER BY kind, pages DESC, resource",
 }
 
@@ -237,8 +239,8 @@ def javascript(engine: sa.Engine, crawl_id: int, only: str, url: str | None = No
         return _rows(engine, JAVASCRIPT[only], {"crawl_id": crawl_id}, limit)
     kinds = "('error', 'warning')" if only == "console" else "('blocked', 'failed')"
     query = (
-        f"SELECT kind, message, resource FROM render_events WHERE crawl_id = :crawl_id AND url = :url"  # noqa: S608
-        f" AND kind IN {kinds} ORDER BY rowid"
+        f"SELECT kind, message, resource FROM spider_render_events WHERE crawl_id = :crawl_id AND url = :url"  # noqa: S608
+        f" AND kind IN {kinds} ORDER BY id"
     )
     return _rows(engine, query, {"crawl_id": crawl_id, "url": url}, limit)
 
@@ -247,12 +249,12 @@ def javascript(engine: sa.Engine, crawl_id: int, only: str, url: str | None = No
 
 PAGESPEED = {
     # Opportunities Summary: each failed audit — how many measured pages fail it
-    "opportunities": "SELECT audit, count(DISTINCT url) AS pages, min(url) AS example FROM lighthouse_audits"  # noqa: S608 — fixed audit ids
+    "opportunities": "SELECT audit, count(DISTINCT url) AS pages, min(url) AS example FROM spider_lighthouse_audits"  # noqa: S608 — fixed audit ids
     " WHERE crawl_id = :crawl_id AND score < 0.9 AND audit IN ("
     + ", ".join(f"'{a}'" for a in CHECKED_AUDITS)
     + ") GROUP BY audit ORDER BY pages DESC, audit",
     # the pages measured, with their performance score (mobile / desktop)
-    "pages": "SELECT url, strategy, score AS performance FROM lighthouse_audits WHERE crawl_id = :crawl_id"
+    "pages": "SELECT url, strategy, score AS performance FROM spider_lighthouse_audits WHERE crawl_id = :crawl_id"
     " AND audit = 'category:performance' ORDER BY score, url",
 }
 
@@ -270,7 +272,7 @@ def pagespeed(engine: sa.Engine, crawl_id: int, only: str, limit: int | None = N
 def _coverage(engine: sa.Engine, crawl_id: int, limit: int | None) -> tuple[int, list[dict]]:
     """Unused bytes per resource, summed over the measured pages (the items are at most 20 per page: small)."""
     totals: dict[tuple[str, str], list[int]] = {}
-    query = sa.text("SELECT audit, items FROM lighthouse_audits WHERE crawl_id = :crawl_id AND items IS NOT NULL"
+    query = sa.text("SELECT audit, items FROM spider_lighthouse_audits WHERE crawl_id = :crawl_id AND items IS NOT NULL"
                     " AND audit IN ('unused-css-rules', 'unused-javascript')")  # fmt: skip
     with engine.connect() as conn:
         for audit, raw in conn.execute(query, {"crawl_id": crawl_id}):

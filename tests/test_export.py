@@ -126,29 +126,29 @@ def test_export_rejects_bad_filters(crawled, args: list[str]) -> None:
 
 def test_query_reads(crawled) -> None:
     _, crawl_id = crawled
-    sql = f"SELECT status_code, count(*) AS n FROM pages WHERE crawl_id = {crawl_id} GROUP BY 1 ORDER BY 1"  # noqa: S608 — the test builds its own query
+    sql = f"SELECT status_code, count(*) AS n FROM spider_pages WHERE crawl_id = {crawl_id} GROUP BY 1 ORDER BY 1"  # noqa: S608 — the test builds its own query
     code, data = _json("query", sql)
     assert code == 0 and data["columns"] == ["status_code", "n"]
     assert any(row[0] == 404 for row in data["rows"]) and not data["truncated"]
 
-    code, data = _json("query", "SELECT url FROM pages", "--limit", "2")
+    code, data = _json("query", "SELECT url FROM spider_pages", "--limit", "2")
     assert len(data["rows"]) == 2 and data["truncated"]
 
-    code, out = _run("query", "SELECT url FROM pages ORDER BY url", "--format", "csv")
+    code, out = _run("query", "SELECT url FROM spider_pages ORDER BY url", "--format", "csv")
     assert code == 0 and len(_csv(out)) > 2
 
-    code, out = _run("query", "WITH x AS (SELECT casefold('ЁЖ') AS v) SELECT v FROM x")
+    code, out = _run("query", "WITH x AS (SELECT spider_casefold('ЁЖ') AS v) SELECT v FROM x")
     assert code == 0 and "ёж" in out
 
 
 @pytest.mark.parametrize(
     "sql",
     [
-        "DELETE FROM pages",
-        "UPDATE pages SET title = 'x'",
-        "DROP TABLE pages",
+        "DELETE FROM spider_pages",
+        "UPDATE spider_pages SET title = 'x'",
+        "DROP TABLE spider_pages",
         "ATTACH DATABASE 'x.sqlite' AS x",
-        "COMMIT; DELETE FROM pages",  # a second statement never runs (PostgreSQL: not past a read-only transaction)
+        "COMMIT; DELETE FROM spider_pages",  # a second statement never runs (PostgreSQL: not past a read-only transaction)
         "PRAGMA journal_mode = DELETE",
         "SELECT * FROM nope",
         "not sql",
@@ -157,7 +157,7 @@ def test_query_reads(crawled) -> None:
 def test_query_refuses_anything_but_reading(crawled, sql: str) -> None:
     code, data = _json("query", sql)
     assert code == 2 and data["error"]["code"] == "INVALID_ARGUMENTS"
-    _, data = _json("query", "SELECT count(*) FROM pages")
+    _, data = _json("query", "SELECT count(*) FROM spider_pages")
     assert data["rows"][0][0] > 0  # nothing was changed
 
 

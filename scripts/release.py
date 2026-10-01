@@ -29,7 +29,7 @@ the vulnerability audit failed, `release: audit failed` (exit 3):
 The version lives only in git tags (`vX.Y.Z`, read at build time by
 uv-dynamic-versioning); a release bumps the last `v*` tag by `part`. Releasing
 refuses off `main`, on a dirty tree, when `main` is behind its upstream, or
-with no fragments. It never pushes: it prints the push command for you.
+with no fragments. It never pushes: the root agent does, after the user's yes.
 
 Settings in pyproject.toml `[tool.cli-generator]` (so the script itself stays
 verbatim): `gate_extras = ["x"]` runs ruff/ty/pytest with those extras
@@ -93,7 +93,17 @@ TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 # Changes that never need a changelog fragment (standard §3): they don't
 # change what users of the package get. Keep this list identical in
 # scripts/release.py and scripts/check_changelog_fragment.py (a test checks).
-NO_FRAGMENT_NEEDED = ("uv.lock", ".github/", "scripts/", "tests/", ".githooks/", ".claude/", "AGENTS.md", "CLAUDE.md")
+NO_FRAGMENT_NEEDED = (
+    "uv.lock",
+    ".github/",
+    "scripts/",
+    "tests/",
+    "docs/",
+    ".githooks/",
+    ".claude/",
+    "AGENTS.md",
+    "CLAUDE.md",
+)
 
 
 def needs_fragment(path: str) -> bool:
@@ -472,7 +482,7 @@ def main() -> None:
     run("git", "add", "--all", changelog_file(), *([str(FRAGMENTS)] if FRAGMENTS.exists() else []))
     run("git", "commit", "-m", release_commit_message(version))
     run("git", "tag", "-a", tag, "-m", tag)
-    print(f"Released {tag} locally. Push it (needs your confirmation): git push --follow-tags")
+    print(f"Released {tag} locally. Hand it to the root agent (herdr agent prompt tools-root ...) to push it.")
     print(f"Then install it anywhere with: {install_command(tag)}")
 
 

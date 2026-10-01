@@ -23,6 +23,7 @@ dependencies = [
     "openpyxl>=3.1",
     "imagesize>=2.0.1",
     "charset-normalizer>=3.3",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
@@ -38,7 +39,7 @@ structured = ["extruct>=0.18"]
 xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
 sitemaps = ["rb-sitemap-xml>=0.1.3,<0.2"]
-# crawls in PostgreSQL instead of the local SQLite file (`SPIDER_DB_URL`)
+# kept for old install commands: psycopg is a core dependency now (`SPIDER_DATABASE_URL`)
 postgres = ["psycopg[binary]>=3.2"]
 # PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
 gsc = ["rb-google-search-console>=0.4,<0.5"]

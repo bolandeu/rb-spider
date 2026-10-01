@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from selectolax.lexbor import LexborHTMLParser
 
+from .sqltext import count_if
+
 if TYPE_CHECKING:
     import sqlalchemy as sa
 
@@ -259,7 +261,7 @@ def extract(
 # --- reports over a stored crawl ---------------------------------------------------------------
 
 _WITH_DATA = (
-    "SELECT url, sd_messages, sd_features FROM pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
+    "SELECT url, sd_messages, sd_features FROM spider_pages WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE)"
     " AND sd_formats IS NOT NULL ORDER BY url"
 )
 
@@ -301,8 +303,8 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
 
     row = conn.execute(
         sa.text(
-            "SELECT count(*), sum(sd_formats <> ''), sum(sd_formats LIKE '%,json-ld,%'),"
-            " sum(sd_formats LIKE '%,microdata,%'), sum(sd_formats LIKE '%,rdfa,%') FROM pages"
+            f"SELECT count(*), {count_if("sd_formats <> ''")}, {count_if("sd_formats LIKE '%,json-ld,%'")},"  # noqa: S608 — fixed text
+            f" {count_if("sd_formats LIKE '%,microdata,%'")}, {count_if("sd_formats LIKE '%,rdfa,%'")} FROM spider_pages"
             " WHERE crawl_id = :crawl_id AND NOT coalesce(external, FALSE) AND sd_formats IS NOT NULL"
         ),
         {"crawl_id": crawl_id},

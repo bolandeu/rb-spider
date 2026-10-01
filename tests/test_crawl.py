@@ -68,7 +68,7 @@ def test_parser_worker_processes_store_the_same_as_inline(base_url: str, engine,
 
     def crawl(workers: int) -> tuple[dict, list]:
         result = crawl_site(engine, f"{base_url}/", "polygon", Settings(crawl=CrawlSettings(parse_workers=workers)))
-        pages = {url: {k: v for k, v in row.items() if k not in ("fetched_at", "response_ms", "headers")} | {"crawl_id": 0}
+        pages = {url: {k: v for k, v in row.items() if k not in ("id", "fetched_at", "response_ms", "headers")} | {"crawl_id": 0}
                  for url, row in _pages(engine, result.crawl_id).items()}  # fmt: skip
         with engine.connect() as conn:
             query = sa.select(storage.links).where(storage.links.c.crawl_id == result.crawl_id)

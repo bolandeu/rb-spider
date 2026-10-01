@@ -80,7 +80,7 @@ concurrency = 10
 | `crawl.render_console` | `bool` | `true` | Записывать ошибки и предупреждения консоли браузера при рендеринге (JavaScript Error Reporting). |
 | `crawl.render_flatten_shadow_dom` | `bool` | `true` | Читать содержимое Shadow DOM веб-компонентов как часть страницы (Flatten Shadow DOM). |
 | `crawl.render_flatten_iframes` | `bool` | `true` | Читать содержимое iframe как часть страницы, на которой он стоит (Flatten iframes). |
-| `crawl.render_screenshots` | `bool` | `false` | Скриншот каждой отрендеренной страницы (первый экран, JPEG) — папка рядом с базой, путь в pages.screenshot и `spider url`; ~30–100 КБ на страницу. |
+| `crawl.render_screenshots` | `bool` | `false` | Скриншот каждой отрендеренной страницы (первый экран, JPEG) — папка рядом с базой, путь в spider_pages.screenshot и `spider url`; ~30–100 КБ на страницу. |
 | `crawl.render_images` | `bool` | `false` | Загружать картинки в браузере при рендеринге: медленнее, зато видны реальные и отображаемые размеры картинок (Image Details, «Images: Incorrectly Sized Images»); по умолчанию картинки не грузятся. |
 | `crawl.render_tabs` | `int` | `4` | Сколько вкладок браузера открыто одновременно при рендеринге. |
 | `crawl.render_wait_ms` | `int` | `0` | Сколько миллисекунд ещё ждать скрипты после загрузки страницы (AJAX) при рендеринге. |
@@ -205,7 +205,7 @@ concurrency = 10
 | --- | --- | --- |
 | Быстрый первый взгляд | `spider crawl <url> --profile quick-audit` | `spider issues` |
 | Миграция: старые URL → новые | `spider crawl --list old-urls.txt --profile migration` | `spider redirects --only errors`, `spider urls --issue internal_client_error` |
-| Сайт на JavaScript | `spider crawl <url> --profile js-site` (нужен `rb-spider[render]`) | `spider issues`; `pages.rendered = 0` в `spider query` — где рендер не удался |
+| Сайт на JavaScript | `spider crawl <url> --profile js-site` (нужен `rb-spider[render]`) | `spider issues`; `spider_pages.rendered = 0` в `spider query` — где рендер не удался |
 | Только битые ссылки | `spider crawl <url> --profile broken-links` | `spider export links --status 4xx`, `spider export links --status 5xx` |
 | Большой интернет-магазин | `spider crawl <url> --profile big-shop --detach` | `spider status`, затем `spider issues` |
 | Обход через прокси | свой профиль, пример ниже | как обычно |

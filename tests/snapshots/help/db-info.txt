@@ -4,15 +4,16 @@
  Показать базу обходов: где лежит, сколько весит, версия схемы, сколько данных.
 
  По умолчанию база — файл SQLite в папке данных (`SPIDER_DB_PATH` — другой
- путь). `SPIDER_DB_URL=postgresql://пользователь@хост:5432/база` — обходы в
- PostgreSQL (extra `rb-spider[postgres]`); пароль — в keychain: `spider auth
- login --provider database` (или прямо в URL). Сохранённый HTML и тогда лежит
- локальным файлом, отдельным для каждой базы.
+ путь). `SPIDER_DATABASE_URL=postgresql://пользователь@хост:5432/база` — общая база
+ PostgreSQL (на сервере); пароль — в URL или в keychain: `spider auth login
+ --provider database`. Старое имя `SPIDER_DB_URL` пока читается, с предупреждением.
+ Сохранённый HTML и тогда лежит локальным файлом, отдельным для каждой базы.
+ Таблицы spider — `spider_*`; размер у PostgreSQL — только их.
 
  «Свободно внутри» — место удалённых обходов, которое займут следующие обходы
  или вернёт на диск `spider db vacuum` (у PostgreSQL — 0). Схема не обновляется
  этой командой: если ждут миграции, их видно здесь (применяет `spider db
- migrate` или любая другая команда).
+ upgrade`; SQLite — и любая другая команда).
 
  Example: spider db info
  Example: spider --json db info

@@ -122,7 +122,7 @@ def sample(engine: sa.Engine, crawl_id: int, per_template: int, max_pages: int) 
     best: dict[tuple[str, int], list[tuple[int, str]]] = {}
     sizes: dict[tuple[str, int], int] = {}
     query = sa.text(
-        "SELECT url, coalesce(unique_inlinks, 0) FROM pages WHERE crawl_id = :c AND NOT coalesce(external, FALSE)"
+        "SELECT url, coalesce(unique_inlinks, 0) FROM spider_pages WHERE crawl_id = :c AND NOT coalesce(external, FALSE)"
         " AND parsed AND status_code = 200 AND content_type LIKE '%html%' AND coalesce(indexable, TRUE)"
     )
     with engine.connect() as conn:
@@ -372,7 +372,7 @@ def pages_to_measure(engine: sa.Engine, crawl_id: int, urls: list[str], every: b
     if urls:
         with engine.connect() as conn:
             known = {row[0] for row in conn.execute(
-                sa.text("SELECT url FROM pages WHERE crawl_id = :c AND url IN :urls").bindparams(
+                sa.text("SELECT url FROM spider_pages WHERE crawl_id = :c AND url IN :urls").bindparams(
                     sa.bindparam("urls", expanding=True)), {"c": crawl_id, "urls": urls})}  # fmt: skip
         missing = [u for u in urls if u not in known]
         if missing:
@@ -385,7 +385,7 @@ def pages_to_measure(engine: sa.Engine, crawl_id: int, urls: list[str], every: b
 
 def _every(engine: sa.Engine, crawl_id: int) -> Iterator[str]:
     query = sa.text(
-        "SELECT url FROM pages WHERE crawl_id = :c AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200"
+        "SELECT url FROM spider_pages WHERE crawl_id = :c AND NOT coalesce(external, FALSE) AND parsed AND status_code = 200"
         " AND content_type LIKE '%html%' AND url > :after ORDER BY url LIMIT 500"
     )
     after = ""

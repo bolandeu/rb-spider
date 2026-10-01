@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 
 import typer
 
 from .. import output
-from ..core import maintenance, storage
+from ..core import db, maintenance, storage
 
-app = output.group("База обходов: размер и состояние, миграции схемы, сжатие файла.")
+app = output.group("База обходов: размер и состояние, миграции схемы, перенос в общую базу, сжатие файла.")
 
 
 @app.command("info")
@@ -20,15 +21,16 @@ def info(
     """Показать базу обходов: где лежит, сколько весит, версия схемы, сколько данных.
 
     По умолчанию база — файл SQLite в папке данных (`SPIDER_DB_PATH` — другой
-    путь). `SPIDER_DB_URL=postgresql://пользователь@хост:5432/база` — обходы в
-    PostgreSQL (extra `rb-spider[postgres]`); пароль — в keychain: `spider auth
-    login --provider database` (или прямо в URL). Сохранённый HTML и тогда лежит
-    локальным файлом, отдельным для каждой базы.
+    путь). `SPIDER_DATABASE_URL=postgresql://пользователь@хост:5432/база` — общая база
+    PostgreSQL (на сервере); пароль — в URL или в keychain: `spider auth login
+    --provider database`. Старое имя `SPIDER_DB_URL` пока читается, с предупреждением.
+    Сохранённый HTML и тогда лежит локальным файлом, отдельным для каждой базы.
+    Таблицы spider — `spider_*`; размер у PostgreSQL — только их.
 
     «Свободно внутри» — место удалённых обходов, которое займут следующие обходы
     или вернёт на диск `spider db vacuum` (у PostgreSQL — 0). Схема не обновляется
     этой командой: если ждут миграции, их видно здесь (применяет `spider db
-    migrate` или любая другая команда).
+    upgrade`; SQLite — и любая другая команда).
 
     Example: spider db info
     Example: spider --json db info
@@ -43,9 +45,17 @@ def info(
     output.emit_success(ctx, data, render_human=output.human.db_info)
 
 
-@app.command("migrate")
+def _upgrade(ctx: typer.Context) -> None:
+    with storage.database(migrate=False) as engine:
+        info = maintenance.db_info(engine)
+        applied = info.pending_migrations if output.is_dry_run(ctx) else maintenance.migrate(engine)
+    data = {"migrations": applied, "schema_head": info.schema_head, "dry_run": output.is_dry_run(ctx)}
+    output.emit_success(ctx, data, render_human=output.human.migrations)
+
+
+@app.command("upgrade")
 @output.guard
-def migrate(
+def upgrade(
     ctx: typer.Context,
     dry_run: bool = output.DryRunOption,
     json_output: bool = output.JsonOption,
@@ -53,21 +63,69 @@ def migrate(
 ) -> None:
     """Обновить схему базы до версии этого spider (миграции Alembic).
 
-    Обычно не нужна: любая команда сама применяет недостающие миграции при
-    открытии базы. Полезна, чтобы обновить схему явно (после обновления spider,
-    перед долгим фоновым обходом) или посмотреть с `--dry-run`, что изменится.
+    Общая база PostgreSQL (`SPIDER_DATABASE_URL`) сама не мигрирует никогда: после
+    обновления spider, принёсшего миграции, её обновляет эта команда, запущенная из
+    релизной версии (два запуска сразу ждут друг друга). Пока схема отстаёт,
+    остальные команды отвечают `DATABASE_NOT_MIGRATED`. Новая пустая база получает
+    всю схему сразу. Локальный файл SQLite мигрирует и сам, при любом открытии.
 
-    Example: spider db migrate --dry-run
-    Example: spider db migrate
+    Example: spider db upgrade --dry-run
+    Example: spider db upgrade
 
     JSON: `{migrations: [ревизия, ...], schema_head, dry_run}`; `migrations` —
     применённые (или, с `--dry-run`, ожидающие), пусто — схема актуальна.
     """
-    with storage.database(migrate=False) as engine:
-        info = maintenance.db_info(engine)
-        applied = info.pending_migrations if output.is_dry_run(ctx) else maintenance.migrate(engine)
-    data = {"migrations": applied, "schema_head": info.schema_head, "dry_run": output.is_dry_run(ctx)}
-    output.emit_success(ctx, data, render_human=output.human.migrations)
+    _upgrade(ctx)
+
+
+@app.command("migrate", hidden=True, deprecated=True)
+@output.guard
+def migrate(
+    ctx: typer.Context,
+    dry_run: bool = output.DryRunOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """Старое имя `spider db upgrade` (до 0.3); будет убрано.
+
+    Example: spider db migrate --dry-run
+    """
+    _upgrade(ctx)
+
+
+@app.command("import-sqlite")
+@output.guard
+def import_sqlite(
+    ctx: typer.Context,
+    path: Path = typer.Argument(None, help="Файл SQLite, который перенести; по умолчанию — локальная база spider."),
+    dry_run: bool = output.DryRunOption,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """Перенести обходы из файла SQLite в базу из `SPIDER_DATABASE_URL`, разово.
+
+    Для переезда на общую базу PostgreSQL: задать `SPIDER_DATABASE_URL`, обновить
+    схему (`spider db upgrade`), затем запустить эту команду. Файл сначала
+    мигрирует до версии этого spider (даже с `--dry-run`). Все таблицы в целевой
+    базе должны быть пустыми — это переезд, не слияние; все строки идут одной
+    транзакцией. `--dry-run` считает строки и ничего не пишет.
+
+    Example: spider db import-sqlite --dry-run
+    Example: spider db import-sqlite ~/old/spider.sqlite
+
+    JSON: `{source, dry_run, rows: {таблица: строк}}`. Таблица в целевой базе не
+    пуста — выход 2.
+    """
+    source = path or db.sqlite_path()
+    with storage.database() as engine:
+        counts = db.import_sqlite(source, engine, dry_run=output.is_dry_run(ctx))
+    output.emit_success(
+        ctx,
+        {"source": str(source), "dry_run": output.is_dry_run(ctx), "rows": counts},
+        render_human=lambda d: output.human.key_values(
+            ("Будет перенесено" if d["dry_run"] else "Перенесено") + f" из {d['source']}", d["rows"]
+        ),
+    )
 
 
 @app.command("vacuum")
@@ -83,14 +141,14 @@ def vacuum(
     уменьшается — освободившееся место переиспользуют следующие обходы. VACUUM
     переписывает файл заново: нужно свободное место на диске размером с базу, а
     во время работы обходы не должны идти. Сколько вернётся — `spider db info`.
-    PostgreSQL (`SPIDER_DB_URL`) — VACUUM FULL: таблицы переписываются и на это
-    время заблокированы.
+    PostgreSQL (`SPIDER_DATABASE_URL`) — VACUUM FULL только таблиц spider: они
+    переписываются и на это время заблокированы.
 
     Example: spider db vacuum
     Example: spider --json db vacuum
 
-    JSON: `{before_bytes, after_bytes}` — размер файлов баз до и после. База
-    занята идущим обходом — выход 2.
+    JSON: `{before_bytes, after_bytes}` — размер файлов баз (у PostgreSQL — таблиц
+    spider) до и после. База занята идущим обходом — выход 2.
     """
     with storage.database() as engine:
         before, after = maintenance.vacuum(engine)

@@ -54,7 +54,7 @@ wall = time.monotonic() - t0
 out = proc.stdout.read().decode()
 result = json.loads(out.strip().splitlines()[-1])
 con = sqlite3.connect(db)
-started, finished = con.execute("select started_at, finished_at from crawls").fetchone()
+started, finished = con.execute("select started_at, finished_at from spider_crawls").fetchone()
 crawl_s = (datetime.fromisoformat(finished) - datetime.fromisoformat(started)).total_seconds()
 pages = result["pages"]
 print(

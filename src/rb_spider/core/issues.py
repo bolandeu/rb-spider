@@ -31,6 +31,7 @@ from . import storage
 from .errors import InvalidArguments
 from .extract import anchor_hash
 from .settings import Settings, ThresholdSettings
+from .sqltext import count_if
 
 log = logging.getLogger(__name__)
 Finding = tuple[str, str | None]  # (url, detail)
@@ -62,7 +63,7 @@ ONPAGE = f"{HTML_OK} AND (indexable OR NOT :issues_indexable_only)"
 # Why a URL can't be indexed — Screaming Frog's Indexability Status, first matching reason wins.
 _INDEXABILITY = sa.text(
     """
-    UPDATE pages SET indexability_status = CASE
+    UPDATE spider_pages SET indexability_status = CASE
         WHEN blocked = 'robots_txt' THEN 'Blocked by Robots.txt'
         WHEN status_code = 0 THEN 'No Response'
         WHEN status_code BETWEEN 300 AND 399 THEN 'Redirected'
@@ -75,7 +76,7 @@ _INDEXABILITY = sa.text(
     WHERE crawl_id = :crawl_id
     """
 )
-_INDEXABLE = sa.text("UPDATE pages SET indexable = indexability_status IS NULL WHERE crawl_id = :crawl_id")
+_INDEXABLE = sa.text("UPDATE spider_pages SET indexable = indexability_status IS NULL WHERE crawl_id = :crawl_id")
 
 
 def compute_indexability(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings | None = None) -> None:
@@ -92,15 +93,15 @@ def compute_indexability(conn: sa.Connection, crawl_id: int, thresholds: Thresho
 # in index order), then the URL text for the few thousand groups — not a query per page, and no sort of
 # millions of URL strings. UPDATE … FROM needs SQLite 3.33+.
 _LINK_COUNTS = [
-    "UPDATE pages SET inlinks = 0, unique_inlinks = 0, unique_outlinks = 0 WHERE crawl_id = :crawl_id",
-    "UPDATE pages SET inlinks = s.n, unique_inlinks = s.u FROM (SELECT u.url, g.n, g.u FROM (SELECT target_id,"
-    " count(*) AS n, count(DISTINCT source_id) AS u FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink'"
-    " AND internal GROUP BY target_id) AS g JOIN urls u ON u.id = g.target_id) AS s"
-    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.url",
-    "UPDATE pages SET unique_outlinks = s.u FROM (SELECT u.url, g.u FROM (SELECT source_id,"
-    " count(DISTINCT target_id) AS u FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal"
-    " GROUP BY source_id) AS g JOIN urls u ON u.id = g.source_id) AS s"
-    " WHERE pages.crawl_id = :crawl_id AND pages.url = s.url",
+    "UPDATE spider_pages SET inlinks = 0, unique_inlinks = 0, unique_outlinks = 0 WHERE crawl_id = :crawl_id",
+    "UPDATE spider_pages SET inlinks = s.n, unique_inlinks = s.u FROM (SELECT u.url, g.n, g.u FROM (SELECT target_id,"
+    " count(*) AS n, count(DISTINCT source_id) AS u FROM spider_link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink'"
+    " AND internal GROUP BY target_id) AS g JOIN spider_urls u ON u.id = g.target_id) AS s"
+    " WHERE spider_pages.crawl_id = :crawl_id AND spider_pages.url = s.url",
+    "UPDATE spider_pages SET unique_outlinks = s.u FROM (SELECT u.url, g.u FROM (SELECT source_id,"
+    " count(DISTINCT target_id) AS u FROM spider_link_rows WHERE crawl_id = :crawl_id AND kind = 'hyperlink' AND internal"
+    " GROUP BY source_id) AS g JOIN spider_urls u ON u.id = g.source_id) AS s"
+    " WHERE spider_pages.crawl_id = :crawl_id AND spider_pages.url = s.url",
 ]
 
 
@@ -124,7 +125,7 @@ class SqlFinder:
 
     def store(self, conn: sa.Connection, crawl_id: int, code: str, thresholds: ThresholdSettings) -> int:
         insert = sa.text(
-            f"INSERT INTO issues (crawl_id, code, url, detail) SELECT :crawl_id, :rule_code, * FROM ({self.query.text})"  # noqa: S608 — fixed rule text
+            f"INSERT INTO spider_issues (crawl_id, code, url, detail) SELECT :crawl_id, :rule_code, * FROM ({self.query.text})"  # noqa: S608 — fixed rule text
         )
         return conn.execute(insert, self._params(crawl_id, thresholds) | {"rule_code": code}).rowcount
 
@@ -141,7 +142,9 @@ def _sql(where: str, detail: str = "NULL", *, external: bool = False) -> RuleFin
     """A rule that is a filter over the crawl's pages (the site's own, or `external` ones); thresholds bind as :name."""
     among = EXTERNAL if external else INTERNAL
     return _run_sql(
-        sa.text(f"SELECT url, {detail} FROM pages WHERE crawl_id = :crawl_id AND {among} AND ({where}) ORDER BY url")  # noqa: S608 — fixed rule text, values are bound
+        sa.text(
+            f"SELECT url, {detail} FROM spider_pages WHERE crawl_id = :crawl_id AND {among} AND ({where}) ORDER BY url"  # noqa: S608 — fixed rule text, values are bound
+        )
     )
 
 
@@ -157,7 +160,7 @@ def _duplicate(column: str, *, skip_paginated: bool = True) -> RuleFinder:
     return _run_sql(
         sa.text(
             f"SELECT url, 'на ' || n || ' стр.: ' || value FROM ("  # noqa: S608 — fixed column and filter
-            f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM pages"
+            f"  SELECT url, {column} AS value, count(*) OVER (PARTITION BY {column}) AS n FROM spider_pages"
             f"  WHERE crawl_id = :crawl_id AND {among} AND trim(coalesce({column}, '')) <> ''"
             f"{paginated if skip_paginated else ''}"
             ") WHERE n > 1 ORDER BY value, url"
@@ -401,8 +404,8 @@ def _directive(name: str) -> str:
 
 _NON_INDEXABLE_CANONICAL = _run_sql(
     sa.text(
-        "SELECT p.url, p.canonical_url || ' — ' || t.indexability_status FROM pages p"
-        " JOIN pages t ON t.crawl_id = p.crawl_id AND t.url = p.canonical_url"
+        "SELECT p.url, p.canonical_url || ' — ' || t.indexability_status FROM spider_pages p"
+        " JOIN spider_pages t ON t.crawl_id = p.crawl_id AND t.url = p.canonical_url"
         " WHERE p.crawl_id = :crawl_id AND p.canonical_url <> p.url AND NOT t.indexable ORDER BY p.url"  # self: see noindex
     )
 )
@@ -468,7 +471,7 @@ def _soft_404(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings)
     if not patterns:
         return
     rows = storage.streamed(conn, 1000).execute(
-        sa.text(f"SELECT url, title, h1 FROM pages WHERE crawl_id = :crawl_id AND {ONPAGE} ORDER BY url"),  # noqa: S608
+        sa.text(f"SELECT url, title, h1 FROM spider_pages WHERE crawl_id = :crawl_id AND {ONPAGE} ORDER BY url"),  # noqa: S608
         {"crawl_id": crawl_id, "issues_indexable_only": thresholds.issues_indexable_only},
     )
     for url, title, h1 in rows:
@@ -526,9 +529,9 @@ _LOCALHOST = " OR ".join(
 def _by_target(detail: str, where: str, having: str = "TRUE") -> str:
     """Link rows grouped by target: aggregated over URL ids (index order, no string sort), reported by URL."""
     return (
-        f"SELECT u.url, g.detail FROM (SELECT target_id, {detail} AS detail FROM link_rows"  # noqa: S608 — fixed rule text
+        f"SELECT u.url, g.detail FROM (SELECT target_id, {detail} AS detail FROM spider_link_rows"  # noqa: S608 — fixed rule text
         f" WHERE crawl_id = :crawl_id AND {where} GROUP BY target_id HAVING {having}) AS g"
-        " JOIN urls u ON u.id = g.target_id ORDER BY u.url"
+        " JOIN spider_urls u ON u.id = g.target_id ORDER BY u.url"
     )
 
 
@@ -541,8 +544,8 @@ def _non_descriptive(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSe
     if not anchors:
         return []
     query = sa.text(
-        f"SELECT source, count(*) || ' шт., например «' || min(anchor) || '»' FROM links WHERE {HYPERLINK}"  # noqa: S608 — fixed text
-        " AND internal AND casefold(trim(anchor)) IN :anchors GROUP BY source ORDER BY source"
+        f"SELECT source, count(*) || ' шт., например «' || min(anchor) || '»' FROM spider_links WHERE {HYPERLINK}"  # noqa: S608 — fixed text
+        " AND internal AND spider_casefold(trim(anchor)) IN :anchors GROUP BY source ORDER BY source"
     ).bindparams(sa.bindparam("anchors", expanding=True))
     return [(url, detail) for url, detail in conn.execute(query, {"crawl_id": crawl_id, "anchors": anchors})]
 
@@ -566,8 +569,8 @@ def _link_rules() -> list[Rule]:
     return [
         r("links_outlinks_to_localhost", "Outlinks To Localhost", "issue", "high",
           "Ссылки на localhost / 127.0.0.1: на сайте они никуда не ведут, это следы разработки.",
-          _links_sql(f"SELECT source, group_concat(DISTINCT target) FROM links WHERE {HYPERLINK} AND NOT internal"  # noqa: S608
-                     f" AND ({_LOCALHOST}) GROUP BY source ORDER BY source"), (STORE_EXTERNAL,)),
+          _links_sql(f"SELECT source, string_agg(target, ',') FROM (SELECT DISTINCT source, target FROM spider_links"  # noqa: S608
+                     f" WHERE {HYPERLINK} AND NOT internal AND ({_LOCALHOST})) AS d GROUP BY source ORDER BY source"), (STORE_EXTERNAL,)),
         r("links_uncrawlable_outlinks", "Pages With Uncrawlable Internal Outlinks", "warning", "high",
           "«Ссылки», по которым поисковик не перейдёт: javascript:, href не у <a>, переход в onclick.",
           _sql(f"{HTML_OK} AND uncrawlable_outlinks > 0", "uncrawlable_outlinks || ' шт.'")),
@@ -577,11 +580,11 @@ def _link_rules() -> list[Rule]:
         r("links_non_indexable_inlinks_only", "Non-Indexable Page Inlinks Only", "warning", "high",
           "На индексируемую страницу ссылаются только неиндексируемые: поисковик может её не найти.",
           _links_sql(
-              "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
+              "SELECT t.url, NULL FROM spider_pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
               " AND t.indexable"
-              " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+              " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
               "   AND l.kind = 'hyperlink')"
-              " AND NOT EXISTS (SELECT 1 FROM links l JOIN pages s ON s.crawl_id = l.crawl_id AND s.url = l.source"
+              " AND NOT EXISTS (SELECT 1 FROM spider_links l JOIN spider_pages s ON s.crawl_id = l.crawl_id AND s.url = l.source"
               "   WHERE l.crawl_id = t.crawl_id AND l.target = t.url AND l.kind = 'hyperlink' AND s.indexable)"
               " ORDER BY t.url"), (STORE_INTERNAL,)),
         r("links_internal_nofollow_outlinks", "Internal Nofollow Outlinks", "warning", "low",
@@ -595,19 +598,19 @@ def _link_rules() -> list[Rule]:
           _sql(f"{HTML_OK} AND internal_outlinks > :internal_outlinks", "internal_outlinks || ' шт.'")),
         r("links_follow_and_nofollow_inlinks", "Follow & Nofollow Internal Inlinks To Page", "warning", "low",
           "На страницу ведут и follow-, и nofollow-ссылки: сигналы противоречат друг другу.",
-          _links_sql(_by_target("sum(nofollow) || ' nofollow из ' || count(*)", "kind = 'hyperlink' AND internal",
-                                "sum(nofollow) > 0 AND sum(NOT nofollow) > 0")),
+          _links_sql(_by_target(f"{count_if('nofollow')} || ' nofollow из ' || count(*)", "kind = 'hyperlink' AND internal",
+                                f"{count_if('nofollow')} > 0 AND {count_if('NOT nofollow')} > 0")),
           (STORE_INTERNAL,)),
         r("links_nofollow_inlinks_only", "Internal Nofollow Inlinks Only", "warning", "low",
           "На страницу ведут только nofollow-ссылки: поисковик может её не обойти.",
-          _links_sql(_by_target("count(*) || ' шт.'", "kind = 'hyperlink' AND internal", "sum(NOT nofollow) = 0")),
+          _links_sql(_by_target("count(*) || ' шт.'", "kind = 'hyperlink' AND internal", f"{count_if('NOT nofollow')} = 0")),
           (STORE_INTERNAL,)),
         r("links_high_crawl_depth", "Pages With High Crawl Depth", "opportunity", "medium",
           "Страница в thresholds.crawl_depth и более кликах от старта: поисковику и людям до неё далеко.",
           _sql(f"{HTML_OK} AND depth >= :crawl_depth", "depth || ' кликов'")),
         r("links_no_anchor_text", "Internal Outlinks With No Anchor Text", "opportunity", "low",
           "Внутренние ссылки без текста (и картинки-ссылки без alt): поисковик не знает, о чём цель.",
-          _links_sql(f"SELECT source, count(*) || ' шт.' FROM links WHERE {HYPERLINK} AND internal"  # noqa: S608
+          _links_sql(f"SELECT source, count(*) || ' шт.' FROM spider_links WHERE {HYPERLINK} AND internal"  # noqa: S608
                      " AND trim(coalesce(anchor, '')) = '' AND trim(coalesce(alt, '')) = ''"
                      " GROUP BY source ORDER BY source"), (STORE_INTERNAL,)),
         r("links_non_descriptive_anchor", "Non-Descriptive Anchor Text In Internal Outlinks", "opportunity", "low",
@@ -624,10 +627,10 @@ def _link_rules() -> list[Rule]:
         Rule("canonical_unlinked", "Canonicals", "Canonicals: Unlinked", "warning", "medium",
              "URL найден только через canonical: обычные ссылки на него не ведут.",
              _links_sql(
-                 "SELECT t.url, NULL FROM pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
-                 " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+                 "SELECT t.url, NULL FROM spider_pages t WHERE t.crawl_id = :crawl_id AND NOT coalesce(t.external, FALSE)"
+                 " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
                  "   AND l.kind = 'canonical')"
-                 " AND NOT EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
+                 " AND NOT EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = t.crawl_id AND l.target = t.url"
                  "   AND l.kind = 'hyperlink') ORDER BY t.url"),
              (STORE_INTERNAL, STORE_CANONICALS)),
     ]  # fmt: skip
@@ -664,13 +667,15 @@ def url_issue_flags(url: str, internal_search: list[re.Pattern]) -> str | None:
 
 def compute_url_issues(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettings) -> None:
     """Fill pages.url_issues for the site's crawled URLs, a batch at a time (memory stays flat)."""
-    conn.execute(sa.text("UPDATE pages SET url_issues = NULL WHERE crawl_id = :crawl_id"), {"crawl_id": crawl_id})
+    conn.execute(
+        sa.text("UPDATE spider_pages SET url_issues = NULL WHERE crawl_id = :crawl_id"), {"crawl_id": crawl_id}
+    )
     search = [re.compile(p, re.IGNORECASE) for p in thresholds.internal_search]
     select = sa.text(
-        f"SELECT url FROM pages WHERE crawl_id = :crawl_id AND {INTERNAL} AND {URL_PAGES}"  # noqa: S608 — fixed text
+        f"SELECT url FROM spider_pages WHERE crawl_id = :crawl_id AND {INTERNAL} AND {URL_PAGES}"  # noqa: S608 — fixed text
         " AND url > :after ORDER BY url LIMIT :limit"
     )
-    update = sa.text("UPDATE pages SET url_issues = :flags WHERE crawl_id = :crawl_id AND url = :url")
+    update = sa.text("UPDATE spider_pages SET url_issues = :flags WHERE crawl_id = :crawl_id AND url = :url")
     after = ""
     while urls := conn.execute(select, {"crawl_id": crawl_id, "after": after, "limit": _URL_BATCH}).scalars().all():
         rows = [{"crawl_id": crawl_id, "url": url, "flags": flags} for url in urls
@@ -683,9 +688,9 @@ def compute_url_issues(conn: sa.Connection, crawl_id: int, thresholds: Threshold
 def _broken_bookmarks(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> Iterable[Finding]:
     """Pages linked to with a #fragment that names no id / <a name> on them (by the page's fingerprints)."""
     query = sa.text(
-        "SELECT t.url, p.anchor_ids, l.fragment, count(*), min(s.url) FROM link_rows l"
-        " JOIN urls t ON t.id = l.target_id JOIN urls s ON s.id = l.source_id"
-        " JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        "SELECT t.url, p.anchor_ids, l.fragment, count(*), min(s.url) FROM spider_link_rows l"
+        " JOIN spider_urls t ON t.id = l.target_id JOIN spider_urls s ON s.id = l.source_id"
+        " JOIN spider_pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
         " WHERE l.crawl_id = :crawl_id AND l.kind = 'hyperlink' AND l.internal AND l.fragment IS NOT NULL"
         " AND p.status_code = 200 AND p.anchor_ids IS NOT NULL"
         " GROUP BY t.url, p.anchor_ids, l.fragment ORDER BY t.url, l.fragment"
@@ -758,9 +763,9 @@ def _hreflang_by_page(filter_name: str, detail: str, report_target: bool = False
     """Annotations passing one of the report's filters, one finding per page (the annotating page, or the target)."""
     page = "t.url" if report_target else "s.url"
     return _links_sql(
-        f"SELECT {page}, group_concat({detail}, '; ') FROM link_rows l"  # noqa: S608 — fixed rule text
-        " JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
-        " LEFT JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        f"SELECT {page}, string_agg({detail}, '; ') FROM spider_link_rows l"  # noqa: S608 — fixed rule text
+        " JOIN spider_urls s ON s.id = l.source_id JOIN spider_urls t ON t.id = l.target_id"
+        " LEFT JOIN spider_pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
         f" WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND ({hreflang_module.FILTERS[filter_name]})"
         f" GROUP BY {page} ORDER BY {page}"
     )
@@ -769,27 +774,28 @@ def _hreflang_by_page(filter_name: str, detail: str, report_target: bool = False
 def _hreflang_codes(conn: sa.Connection, crawl_id: int, _thresholds: ThresholdSettings) -> Iterable[Finding]:
     """Pages using codes that aren't ISO 639-1 [+ ISO 3166-1 alpha-2]: the distinct codes are few, checked once."""
     codes = conn.execute(
-        sa.text("SELECT DISTINCT hreflang FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"),
+        sa.text("SELECT DISTINCT hreflang FROM spider_link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"),
         {"crawl_id": crawl_id},
     ).scalars()
     invalid = sorted(code for code in codes if not hreflang_module.valid_code(code))
     if not invalid:
         return []
     query = sa.text(
-        "SELECT s.url, group_concat(DISTINCT l.hreflang) FROM link_rows l JOIN urls s ON s.id = l.source_id"
-        " WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND l.hreflang IN :codes GROUP BY s.url ORDER BY s.url"
+        "SELECT url, string_agg(hreflang, ',') FROM (SELECT DISTINCT s.url, l.hreflang FROM spider_link_rows l"
+        " JOIN spider_urls s ON s.id = l.source_id"
+        " WHERE l.crawl_id = :crawl_id AND l.kind = 'hreflang' AND l.hreflang IN :codes) AS d GROUP BY url ORDER BY url"
     ).bindparams(sa.bindparam("codes", expanding=True))
     return [(url, used) for url, used in conn.execute(query, {"crawl_id": crawl_id, "codes": invalid})]
 
 
-_ANNOTATING = "SELECT DISTINCT source_id FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"
+_ANNOTATING = "SELECT DISTINCT source_id FROM spider_link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang'"
 
 
 def _hreflang_pages(where: str, detail: str = "NULL") -> RuleFinder:
     """Pages with hreflang annotations (`h.source_id`, `s.url`, `p` — its page row) matching `where`."""
     return _links_sql(
-        f"SELECT s.url, {detail} FROM ({_ANNOTATING}) h JOIN urls s ON s.id = h.source_id"  # noqa: S608 — fixed text
-        " JOIN pages p ON p.crawl_id = :crawl_id AND p.url = s.url"
+        f"SELECT s.url, {detail} FROM ({_ANNOTATING}) h JOIN spider_urls s ON s.id = h.source_id"  # noqa: S608 — fixed text
+        " JOIN spider_pages p ON p.crawl_id = :crawl_id AND p.url = s.url"
         f" WHERE {where} ORDER BY s.url"
     )
 
@@ -797,12 +803,12 @@ def _hreflang_pages(where: str, detail: str = "NULL") -> RuleFinder:
 def _annotates(target: str, extra: str = "") -> str:
     """The page (h.source_id) has an annotation pointing at `target` (a urls.id expression)."""
     return (
-        "EXISTS (SELECT 1 FROM link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"  # noqa: S608
+        "EXISTS (SELECT 1 FROM spider_link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"  # noqa: S608
         f" AND a.source_id = h.source_id AND a.target_id = {target}{extra})"
     )
 
 
-_CANONICAL_ID = "(SELECT c.id FROM urls c WHERE c.crawl_id = :crawl_id AND c.url = p.canonical_url)"
+_CANONICAL_ID = "(SELECT c.id FROM spider_urls c WHERE c.crawl_id = :crawl_id AND c.url = p.canonical_url)"
 
 
 def _hreflang_rules() -> list[Rule]:
@@ -831,9 +837,9 @@ def _hreflang_rules() -> list[Rule]:
           _hreflang_codes),
         r("hreflang_multiple_entries", "Multiple Entries", "issue", "high",
           "Один и тот же язык/регион указан для разных URL.",
-          _links_sql("SELECT s.url, group_concat(g.code, ', ') FROM (SELECT source_id, lower(hreflang) AS code"
-                     " FROM link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang' GROUP BY source_id,"
-                     " lower(hreflang) HAVING count(DISTINCT target_id) > 1) g JOIN urls s ON s.id = g.source_id"
+          _links_sql("SELECT s.url, string_agg(g.code, ', ') FROM (SELECT source_id, lower(hreflang) AS code"
+                     " FROM spider_link_rows WHERE crawl_id = :crawl_id AND kind = 'hreflang' GROUP BY source_id,"
+                     " lower(hreflang) HAVING count(DISTINCT target_id) > 1) g JOIN spider_urls s ON s.id = g.source_id"
                      " GROUP BY s.url ORDER BY s.url")),
         r("hreflang_not_using_canonical", "Not Using Canonical", "issue", "high",
           "У страницы canonical на другой URL, а её hreflang-разметка не указывает этот canonical.",
@@ -844,10 +850,10 @@ def _hreflang_rules() -> list[Rule]:
           _sql("hreflang_outside_head > 0", "CAST(hreflang_outside_head AS TEXT)"), ()),
         r("hreflang_unlinked", "Unlinked Hreflang URLs", "issue", "medium",
           "URL найден только через hreflang: обычные ссылки на него не ведут.",
-          _links_sql("SELECT u.url, NULL FROM (SELECT DISTINCT target_id FROM link_rows WHERE crawl_id = :crawl_id"
-                     " AND kind = 'hreflang') h JOIN urls u ON u.id = h.target_id"
-                     " JOIN pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, FALSE)"
-                     " WHERE NOT EXISTS (SELECT 1 FROM link_rows l WHERE l.crawl_id = :crawl_id"
+          _links_sql("SELECT u.url, NULL FROM (SELECT DISTINCT target_id FROM spider_link_rows WHERE crawl_id = :crawl_id"
+                     " AND kind = 'hreflang') h JOIN spider_urls u ON u.id = h.target_id"
+                     " JOIN spider_pages t ON t.crawl_id = :crawl_id AND t.url = u.url AND NOT coalesce(t.external, FALSE)"
+                     " WHERE NOT EXISTS (SELECT 1 FROM spider_link_rows l WHERE l.crawl_id = :crawl_id"
                      " AND l.target_id = h.target_id AND l.kind = 'hyperlink') ORDER BY u.url"),
           (STORE_HREFLANG, STORE_INTERNAL)),
         r("hreflang_missing_self_reference", "Missing Self Reference", "warning", "low",
@@ -855,7 +861,7 @@ def _hreflang_rules() -> list[Rule]:
           _hreflang_pages(f"NOT {_annotates('h.source_id')} AND NOT {_annotates(_CANONICAL_ID)}")),
         r("hreflang_missing_x_default", "Missing X-Default", "warning", "low",
           "Нет x-default — версии для остальных языков (необязательно, но рекомендуется).",
-          _hreflang_pages("NOT EXISTS (SELECT 1 FROM link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"
+          _hreflang_pages("NOT EXISTS (SELECT 1 FROM spider_link_rows a WHERE a.crawl_id = :crawl_id AND a.kind = 'hreflang'"
                           " AND a.source_id = h.source_id AND lower(a.hreflang) = 'x-default')")),
     ]  # fmt: skip
 
@@ -869,9 +875,9 @@ def _pagination_by(filter_name: str, detail: str, report_target: bool = False) -
     """rel next / prev links passing one of the report's filters, one finding per page."""
     page = "t.url" if report_target else "s.url"
     return _links_sql(
-        f"SELECT {page}, group_concat({detail}, '; ') FROM link_rows l"  # noqa: S608 — fixed rule text
-        " JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
-        " LEFT JOIN pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
+        f"SELECT {page}, string_agg({detail}, '; ') FROM spider_link_rows l"  # noqa: S608 — fixed rule text
+        " JOIN spider_urls s ON s.id = l.source_id JOIN spider_urls t ON t.id = l.target_id"
+        " LEFT JOIN spider_pages p ON p.crawl_id = l.crawl_id AND p.url = t.url"
         f" WHERE l.crawl_id = :crawl_id AND l.kind IN ('next', 'prev') AND ({pagination_module.FILTERS[filter_name]})"
         f" GROUP BY {page} ORDER BY {page}"
     )
@@ -901,10 +907,10 @@ def _pagination_rules() -> list[Rule]:
           _pagination_by("unlinked", "s.url", report_target=True), (STORE_PAGINATION, STORE_INTERNAL)),
         r("pagination_multiple", "Multiple Pagination URLs", "issue", "low",
           "Несколько разных rel=next или rel=prev на странице: поисковик не поймёт, какая следующая.",
-          _links_sql("SELECT s.url, group_concat(g.kind || ' ×' || g.n, ', ') FROM (SELECT source_id, kind,"
-                     " count(DISTINCT target_id) AS n FROM link_rows l WHERE crawl_id = :crawl_id"
+          _links_sql("SELECT s.url, string_agg(g.kind || ' ×' || g.n, ', ') FROM (SELECT source_id, kind,"
+                     " count(DISTINCT target_id) AS n FROM spider_link_rows l WHERE crawl_id = :crawl_id"
                      " AND l.kind IN ('next', 'prev') GROUP BY source_id, kind HAVING count(DISTINCT target_id) > 1) g"
-                     " JOIN urls s ON s.id = g.source_id GROUP BY s.url ORDER BY s.url")),
+                     " JOIN spider_urls s ON s.id = g.source_id GROUP BY s.url ORDER BY s.url")),
         r("pagination_loop", "Pagination Loop", "issue", "low",
           "Цепочка rel=next (или rel=prev) возвращается на уже пройденную страницу.", _pagination_loops),
         r("pagination_sequence_error", "Sequence Error", "issue", "low",
@@ -921,7 +927,7 @@ def _pagination_rules() -> list[Rule]:
 def _https_to_http(kinds: str) -> RuleFinder:
     """HTTPS pages pointing at HTTP URLs through links of these kinds, one finding per page."""
     return _links_sql(
-        f"SELECT source, group_concat(kind || ' ' || target, '; ') FROM ({security_module.insecure_links(kinds)})"  # noqa: S608
+        f"SELECT source, string_agg(kind || ' ' || target, '; ') FROM ({security_module.insecure_links(kinds)})"  # noqa: S608
         " GROUP BY source ORDER BY source"
     )
 
@@ -1001,7 +1007,7 @@ def _sitemap_rules() -> list[Rule]:
     def r(code, name, kind, priority, description, query, requires=("sitemaps.crawl",)) -> Rule:
         return Rule(code, "Sitemaps", f"Sitemaps: {name}", kind, priority, description, _links_sql(query), requires)
 
-    by_file = "SELECT url, {detail} FROM sitemap_files WHERE crawl_id = :crawl_id AND {where} ORDER BY url"
+    by_file = "SELECT url, {detail} FROM spider_sitemap_files WHERE crawl_id = :crawl_id AND {where} ORDER BY url"
     return [
         r("sitemaps_over_max_urls", "XML Sitemap With Over 50k URLs", "issue", "high",
           "В одном файле sitemap больше thresholds.sitemap_max_urls (50 000) URL: поисковик прочитает не всё.",
@@ -1019,12 +1025,12 @@ def _sitemap_rules() -> list[Rule]:
         r("sitemaps_non_indexable", "Non-Indexable URLs In Sitemap", "issue", "medium",
           "В sitemap неиндексируемый URL (редирект, ошибка, noindex, canonical на другой): sitemap должен "
           "перечислять только то, что стоит индексировать.",
-          "SELECT s.url, min(p.indexability_status) FROM sitemap_urls s JOIN pages p ON p.crawl_id = s.crawl_id"
+          "SELECT s.url, min(p.indexability_status) FROM spider_sitemap_urls s JOIN spider_pages p ON p.crawl_id = s.crawl_id"
           " AND p.url = s.url WHERE s.crawl_id = :crawl_id AND NOT coalesce(p.external, FALSE) AND NOT p.indexable"
           " GROUP BY s.url ORDER BY s.url"),
         r("sitemaps_multiple", "URLs In Multiple Sitemaps", "warning", "low",
           "URL указан в нескольких файлах sitemap.",
-          "SELECT url, count(DISTINCT source) || ' файл(ов)' FROM sitemap_urls WHERE crawl_id = :crawl_id"
+          "SELECT url, count(DISTINCT source) || ' файл(ов)' FROM spider_sitemap_urls WHERE crawl_id = :crawl_id"
           " GROUP BY url HAVING count(DISTINCT source) > 1 ORDER BY url"),
     ]  # fmt: skip
 
@@ -1138,7 +1144,7 @@ PAGESPEED = (
     ("font-display-insight", "Font Display", "low", "Шрифты «мигают» или невидимы при загрузке (нет font-display)."),
 )  # fmt: skip
 _AUDIT_FINDINGS = (
-    "SELECT url, min(coalesce(display, '')) FROM lighthouse_audits WHERE crawl_id = :crawl_id AND audit = '{audit}'"
+    "SELECT url, min(coalesce(display, '')) FROM spider_lighthouse_audits WHERE crawl_id = :crawl_id AND audit = '{audit}'"
     " AND score < 0.9 GROUP BY url ORDER BY url"
 )
 
@@ -1228,8 +1234,8 @@ def _validation_mobile_rules() -> list[Rule]:
         m("mobile_alternate_link", "Mobile Alternate Link", "warning",
           "Отдельная мобильная версия (<link rel=\"alternate\" media=…>): Google рекомендует адаптивный дизайн на "
           "одном URL; убедитесь, что версии связаны в обе стороны.",
-          _links_sql("SELECT s.url, min(t.url) FROM link_rows l JOIN urls s ON s.id = l.source_id"
-                     " JOIN urls t ON t.id = l.target_id WHERE l.crawl_id = :crawl_id AND l.kind = 'mobile_alternate'"
+          _links_sql("SELECT s.url, min(t.url) FROM spider_link_rows l JOIN spider_urls s ON s.id = l.source_id"
+                     " JOIN spider_urls t ON t.id = l.target_id WHERE l.crawl_id = :crawl_id AND l.kind = 'mobile_alternate'"
                      " GROUP BY s.url ORDER BY s.url"), ("collect.mobile_alternate.store",)),
     ]  # fmt: skip
 
@@ -1242,9 +1248,9 @@ def _image_rules() -> list[Rule]:
         """A rule over the page's <img> link rows; reported by image URL, detail — where it's used."""
         query = (  # grouped over URL ids; the example page's URL is looked up once per image
             f"SELECT u.url, g.n || ' стр., например ' || e.url || g.extra FROM (SELECT target_id,"  # noqa: S608 — fixed rule text
-            f" count(DISTINCT source_id) AS n, min(source_id) AS example, {detail} AS extra FROM link_rows"
+            f" count(DISTINCT source_id) AS n, min(source_id) AS example, {detail} AS extra FROM spider_link_rows"
             f" WHERE crawl_id = :crawl_id AND kind = 'image' AND ({where}) GROUP BY target_id) AS g"
-            " JOIN urls u ON u.id = g.target_id JOIN urls e ON e.id = g.example ORDER BY u.url"
+            " JOIN spider_urls u ON u.id = g.target_id JOIN spider_urls e ON e.id = g.example ORDER BY u.url"
         )
         return Rule(code, "Images", f"Images: {name}", kind, priority, description, _links_sql(query), requires)
 
@@ -1254,10 +1260,10 @@ def _image_rules() -> list[Rule]:
                     ("Внешний" if external else "Внутренний") + " ресурс (картинка, CSS, JS…) недоступен: "
                     "запрещён robots.txt, не отвечает или отдаёт ошибку — страница может отображаться неполно.",
                     _links_sql(
-                        "SELECT p.url, coalesce(p.blocked, CAST(p.status_code AS TEXT)) FROM pages p"  # noqa: S608
+                        "SELECT p.url, coalesce(p.blocked, CAST(p.status_code AS TEXT)) FROM spider_pages p"  # noqa: S608
                         f" WHERE p.crawl_id = :crawl_id AND {where}"
                         " AND (p.blocked IS NOT NULL OR p.status_code = 0 OR p.status_code >= 400)"
-                        " AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = p.crawl_id AND l.target = p.url"
+                        " AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = p.crawl_id AND l.target = p.url"
                         f"   AND l.kind IN {RESOURCE_KINDS}) ORDER BY p.url"
                     ),
                     ("collect.images.follow",))  # fmt: skip
@@ -1271,8 +1277,8 @@ def _image_rules() -> list[Rule]:
         Rule("images_over_max_kb", "Images", "Images: Over Max KB", "opportunity", "medium",
              "Картинка тяжелее thresholds.image_kb КБ: замедляет загрузку страницы.",
              _links_sql(
-                 "SELECT p.url, (p.bytes / 1024) || ' КБ' FROM pages p WHERE p.crawl_id = :crawl_id"
-                 " AND p.bytes > :image_kb * 1024 AND EXISTS (SELECT 1 FROM links l WHERE l.crawl_id = p.crawl_id"
+                 "SELECT p.url, (p.bytes / 1024) || ' КБ' FROM spider_pages p WHERE p.crawl_id = :crawl_id"
+                 " AND p.bytes > :image_kb * 1024 AND EXISTS (SELECT 1 FROM spider_links l WHERE l.crawl_id = p.crawl_id"
                  "   AND l.target = p.url AND l.kind = 'image') ORDER BY p.url"),
              ("collect.images.follow", "collect.images.store")),
         img("images_alt_over_max", "Alt Text Over Max Characters", "opportunity", "low",
@@ -1289,7 +1295,7 @@ def _image_rules() -> list[Rule]:
              "больше: лишние байты; отдайте картинку нужного размера (srcset). Нужны рендеринг и crawl.render_images.",
              _run_sql(sa.text(
                  "SELECT image, min(real_width || '×' || real_height || ' → ' || display_width || '×' || display_height"
-                 " || ', ' || url) FROM rendered_images WHERE crawl_id = :crawl_id AND display_width > 0"
+                 " || ', ' || url) FROM spider_rendered_images WHERE crawl_id = :crawl_id AND display_width > 0"
                  " AND display_height > 0 AND (real_width > display_width * :image_oversize_ratio"
                  " OR real_height > display_height * :image_oversize_ratio) GROUP BY image ORDER BY image")),
              (RENDERED, "crawl.render_images")),
@@ -1333,8 +1339,8 @@ def collected(engine: sa.Engine, crawl_id: int) -> dict[str, Any]:
     # data collected on request after the crawl: `data:<what>` is true when the crawl has it
     with engine.connect() as conn:
         audits = conn.execute(
-            sa.text("SELECT min(audit) FROM lighthouse_audits WHERE crawl_id = :c AND audit LIKE 'spider-%'"
-                    " UNION ALL SELECT min(url) FROM lighthouse_audits WHERE crawl_id = :c"), {"c": crawl_id},
+            sa.text("SELECT min(audit) FROM spider_lighthouse_audits WHERE crawl_id = :c AND audit LIKE 'spider-%'"
+                    " UNION ALL SELECT min(url) FROM spider_lighthouse_audits WHERE crawl_id = :c"), {"c": crawl_id},
         ).scalars().all()  # fmt: skip
     flat["data:lighthouse"] = audits[1] is not None
     flat["data:mobile-measures"] = audits[0] is not None

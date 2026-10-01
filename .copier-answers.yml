@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v1.2.10
+_commit: v1.4.6
 _src_path: gh:bolandeu/cli-generator
 author_name: Roman Bolandau
 cli_name: spider
@@ -9,6 +9,7 @@ dist_name: rb-spider
 dist_name_legacy: ''
 include_auth: true
 include_ci: true
+include_db: true
 include_http_provider: true
 package_name: rb_spider
 private_deps: false

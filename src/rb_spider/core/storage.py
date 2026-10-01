@@ -1,16 +1,12 @@
-"""The crawl database: one SQLite file per user, holding every project and crawl.
+"""The crawl database: every project and crawl — a local SQLite file, or the shared PostgreSQL (`SPIDER_DATABASE_URL`).
 
-Lives in the app data dir (not Caches — it's crawl history, and cleaners wipe caches), the way
-the sibling `serp` tool keeps its journal; `SPIDER_DB_PATH` overrides it (tests, a second DB).
-Schema changes go through Alembic migrations (`rb_spider/migrations`), applied automatically
-when the database is opened. `metadata` below mirrors the latest migration.
+Opening, migrations and the dialect bridge are `core/db.py`; the tables are `core/tables.py` (re-exported here,
+`storage.pages` & co. are what the rest of the code uses). This module adds the writer and the crawl bookkeeping.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import re
 import time
 from collections.abc import Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -19,390 +15,49 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-import platformdirs
 import sqlalchemy as sa
 import zstandard
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import event
-from sqlalchemy import exc as sa_exc
 
-from .errors import InvalidArguments, RemoteDatabaseUnavailable
+from . import db
+from .errors import InvalidArguments
 from .extract import Page
 from .scope import LINK_FIELDS
+from .tables import (  # noqa: F401 — re-exported: storage.<table> is what callers use
+    LINK_DATA,
+    crawls,
+    custom_values,
+    frontier,
+    issues,
+    lighthouse_audits,
+    link_rows,
+    links,
+    metadata,
+    near_duplicates,
+    pages,
+    projects,
+    render_events,
+    rendered_images,
+    sitemap_files,
+    sitemap_urls,
+    url_metrics,
+    urls,
+)
 from .version import CLI_NAME
-
-metadata = sa.MetaData()
-
-projects = sa.Table(
-    "projects",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("name", sa.String, nullable=False, unique=True),
-    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-)
-crawls = sa.Table(
-    "crawls",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("project_id", sa.Integer, sa.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("start_url", sa.String, nullable=False),
-    sa.Column("status", sa.String, nullable=False),  # running | finished | failed | interrupted
-    sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
-    sa.Column("finished_at", sa.DateTime(timezone=True)),
-    sa.Column("pages", sa.Integer, nullable=False, server_default="0"),
-    sa.Column("settings", sa.JSON),  # resolved settings the crawl ran with: explains why two crawls differ
-    sa.Column("pid", sa.Integer),  # process running the crawl (a detached one too) — to tell running from dead
-)
-pages = sa.Table(
-    "pages",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("url", sa.String, primary_key=True),
-    sa.Column("status_code", sa.Integer, nullable=False),
-    sa.Column("redirect_url", sa.String),
-    sa.Column("content_type", sa.String),
-    sa.Column("title", sa.String),
-    sa.Column("bytes", sa.Integer, nullable=False),
-    sa.Column("depth", sa.Integer, nullable=False),
-    sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
-    sa.Column("error", sa.String),  # why there is no response (status_code 0)
-    sa.Column("blocked", sa.String),  # "robots_txt": not fetched on purpose (status_code 0)
-    sa.Column("blocked_rule", sa.String),  # the robots.txt line that closed it: "Disallow: /private/"
-    sa.Column("refresh_url", sa.String),  # target of a meta / HTTP Refresh
-    sa.Column("refresh_kind", sa.String),  # "meta" | "http"
-    # on-page elements (HTML pages only); the text is the first element, counts say how many there were
-    sa.Column("title_count", sa.Integer),
-    sa.Column("title_outside_head", sa.Integer),
-    sa.Column("meta_description", sa.String),
-    sa.Column("meta_description_count", sa.Integer),
-    sa.Column("meta_description_outside_head", sa.Integer),
-    sa.Column("meta_keywords", sa.String),  # the first <meta name="keywords">
-    sa.Column("meta_keywords_count", sa.Integer),
-    # computed after the crawl (issues.analyze): the title and description's width in Google's results, pixels
-    sa.Column("title_px", sa.Integer),
-    sa.Column("description_px", sa.Integer),
-    sa.Column("h1", sa.String),
-    sa.Column("h1_count", sa.Integer),
-    sa.Column("h1_from_alt", sa.Boolean),  # the first h1's text comes from an image alt inside it
-    sa.Column("h1_first_heading", sa.Boolean),  # the first heading on the page is the h1
-    sa.Column("h2", sa.String),
-    sa.Column("h2_count", sa.Integer),
-    sa.Column("h2_sequential", sa.Boolean),  # the heading right before the first h2 is an h1
-    # directives: meta robots + X-Robots-Tag, stored as ",noindex,nofollow," so rules can match ",name,"
-    sa.Column("robots_directives", sa.String),
-    sa.Column("robots_outside_head", sa.Integer),
-    # canonical: <link rel=canonical> + `Link: <...>; rel="canonical"`; canonical_url is the first, absolute, no #fragment
-    sa.Column("canonical_url", sa.String),
-    sa.Column("canonical_count", sa.Integer),
-    sa.Column("canonical_conflict", sa.Boolean),  # more than one distinct target
-    sa.Column("canonical_outside_head", sa.Integer),
-    sa.Column("canonical_invalid_attr", sa.Boolean),  # hreflang / lang / media / type on rel=canonical
-    sa.Column("canonical_relative", sa.Boolean),
-    sa.Column("canonical_fragment", sa.Boolean),
-    # computed after the crawl (issues.analyze): can a search engine index this URL, and if not, why
-    sa.Column("indexable", sa.Boolean),
-    sa.Column("indexability_status", sa.String),
-    # content: md5 of the HTML (exact duplicates), words of visible text, a "lorem ipsum" leftover
-    sa.Column("content_md5", sa.String),
-    sa.Column("word_count", sa.Integer),
-    sa.Column("lorem_ipsum", sa.Boolean),
-    # links: `external` — another site (checked, not crawled); `parsed` — the body was read (crawled, not
-    # only checked); outlink counts are <a href> follow links, before any per-page limit
-    sa.Column("external", sa.Boolean),
-    sa.Column("parsed", sa.Boolean),
-    sa.Column("internal_outlinks", sa.Integer),
-    sa.Column("external_outlinks", sa.Integer),
-    sa.Column("internal_nofollow_outlinks", sa.Integer),
-    sa.Column("uncrawlable_outlinks", sa.Integer),
-    # crawl.render: True — data from the rendered DOM; False — rendering failed, raw HTML used; NULL — not rendered
-    sa.Column("rendered", sa.Boolean),
-    # rendered pages: the server's HTML before JavaScript ran (JavaScript rules), links JS added (Link Origin),
-    # console errors / warnings and resources robots.txt kept from the browser (rows: render_events)
-    sa.Column("raw_title", sa.String),
-    sa.Column("raw_meta_description", sa.String),
-    sa.Column("raw_h1", sa.String),
-    sa.Column("raw_canonical", sa.String),
-    sa.Column("raw_directives", sa.String),
-    sa.Column("raw_word_count", sa.Integer),
-    sa.Column("js_outlinks", sa.Integer),
-    sa.Column("js_errors", sa.Integer),
-    sa.Column("js_warnings", sa.Integer),
-    sa.Column("blocked_resources", sa.Integer),
-    # the old AJAX crawling scheme: <meta name="fragment"> and <a href="…#!…"> links
-    sa.Column("ajax_meta_fragment", sa.Boolean),
-    sa.Column("hashbang_links", sa.Integer),
-    # crawl.render_screenshots: the JPEG of the rendered page (a local file, storage.screenshots_dir)
-    sa.Column("screenshot", sa.String),
-    # `spider link-score`: internal PageRank on a 0–100 log scale (Link Score); NULL — not computed
-    sa.Column("link_score", sa.Integer),
-    # images: the real size, from the file's header (Image Details)
-    sa.Column("image_width", sa.Integer),
-    sa.Column("image_height", sa.Integer),
-    # the response: time from sending the request to its headers, Last-Modified, all headers (JSON, lower-case names)
-    sa.Column("response_ms", sa.Integer),
-    sa.Column("last_modified", sa.String),
-    sa.Column("headers", sa.String),
-    # computed after the crawl (issues.analyze): <a href> links to the page from the site / pages linking to it /
-    # distinct pages of the site it links to
-    sa.Column("inlinks", sa.Integer),
-    sa.Column("unique_inlinks", sa.Integer),
-    sa.Column("unique_outlinks", sa.Integer),
-    # bookmark targets (ids, <a name>) as 2-byte fingerprints, base64 (extract.anchor_ids); "" — none
-    sa.Column("anchor_ids", sa.String),
-    # computed after the crawl (issues.analyze): the URL checks the address fails, ",uppercase,parameters,"
-    sa.Column("url_issues", sa.String),
-    sa.Column("hreflang_outside_head", sa.Integer),  # <link rel=alternate hreflang> elements outside <head>
-    sa.Column("pagination", sa.String),  # the page's own rel next/prev: "first" (next only) | "paginated" (has prev)
-    # security: response headers missing or weak (",hsts,csp,xcto,xfo,referrer,"), what the body really is when
-    # Content-Type says otherwise ("image → html"), forms, target=_blank links to other origins without noopener,
-    # resources loaded protocol-relative (//host/...)
-    sa.Column("security_missing", sa.String),
-    sa.Column("sniffed_type", sa.String),
-    sa.Column("forms", sa.Integer),
-    sa.Column("unsafe_blank_links", sa.Integer),
-    sa.Column("protocol_relative", sa.Integer),
-    # HTML validation from the source (collect.html_validation; NULL — not checked): <head> / <body> tags, an element
-    # before <html>, <head> not first in <html>, the first element in <head> that doesn't belong there
-    sa.Column("head_tags", sa.Integer),
-    sa.Column("body_tags", sa.Integer),
-    sa.Column("body_before_html", sa.Boolean),
-    sa.Column("head_not_first", sa.Boolean),
-    sa.Column("invalid_head_element", sa.String),
-    # mobile: <meta name="viewport"> content (NULL — none), Flash / Silverlight / Java plugins
-    sa.Column("viewport", sa.String),
-    sa.Column("plugins", sa.Integer),
-    # content measures of the page's own text: Flesch Reading Ease, words per sentence, visible text as % of the
-    # HTML, MinHash signature (collect.near_duplicates) for near duplicates
-    sa.Column("flesch", sa.Float),
-    sa.Column("words_per_sentence", sa.Float),
-    sa.Column("text_ratio", sa.Float),
-    sa.Column("minhash", sa.String),
-    # structured data (collect.structured_data; NULL — not collected): formats found (",json-ld,"; "" — none),
-    # types, counts of Schema.org validation errors / warnings, Google rich result errors / warnings, unparsable
-    # blocks; the first messages ([severity, scope, type, property, text]) and each rich result feature's status
-    sa.Column("sd_formats", sa.String),
-    sa.Column("sd_types", sa.String),
-    sa.Column("sd_parse_errors", sa.Integer),
-    sa.Column("sd_errors", sa.Integer),
-    sa.Column("sd_warnings", sa.Integer),
-    sa.Column("sd_rich_errors", sa.Integer),
-    sa.Column("sd_rich_warnings", sa.Integer),
-    sa.Column("sd_messages", sa.String),
-    sa.Column("sd_features", sa.String),
-    sa.Index("pages_by_md5", "crawl_id", "content_md5"),
-)
-# Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
-# so after a crash (kill -9) the pending rows are exactly what still has to be fetched: resume
-# rebuilds the in-memory queue from them, nothing is lost and nothing is fetched twice.
-frontier = sa.Table(
-    "frontier",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("url", sa.String, primary_key=True),
-    sa.Column("depth", sa.Integer, nullable=False),
-    sa.Column("check_only", sa.Boolean, nullable=False),  # status only, not read (other sites, resources)
-    sa.Column("done", sa.Boolean, nullable=False, server_default=sa.false()),
-    sa.Index("frontier_pending", "crawl_id", "done"),
-)
-# Every URL a crawl stored a link from or to, once: links refer to URLs by id. With ~33 links a page, two
-# URL strings per link row (and two indexes over them) were most of the database and of the time spent
-# writing it. Unique per crawl, url first: a lookup by URL needs no crawl_id to find its row.
-urls = sa.Table(
-    "urls",
-    metadata,
-    sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.UniqueConstraint("url", "crawl_id", name="urls_by_url"),
-)
-LINK_DATA = (
-    "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang", "position",
-    "path", "path_type", "origin",
-)  # fmt: skip
-link_rows = sa.Table(
-    "link_rows",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("source_id", sa.Integer, nullable=False),  # urls.id
-    sa.Column("target_id", sa.Integer, nullable=False),  # urls.id
-    # hyperlink | canonical | redirect | refresh | hreflang | next | prev | form | mobile_alternate | image | css | js | media | iframe (resources the page loads)
-    sa.Column("kind", sa.String, nullable=False),
-    sa.Column("internal", sa.Boolean, nullable=False),  # target is part of the site
-    sa.Column("anchor", sa.String),
-    sa.Column("alt", sa.String),  # alt of the image inside an image link
-    sa.Column("rel", sa.String),
-    sa.Column("nofollow", sa.Boolean, nullable=False, server_default=sa.false()),
-    sa.Column("alt_attr", sa.Boolean),  # images: the alt attribute is present (even if empty)
-    sa.Column("sized", sa.Boolean),  # images: width and height are set in the HTML
-    sa.Column("fragment", sa.String),  # hyperlinks to a #bookmark: the id it should land on (Broken Bookmark)
-    sa.Column("hreflang", sa.String),  # hreflang annotations: the language / region code, as written
-    sa.Column(
-        "position", sa.String
-    ),  # hyperlinks: nav | header | footer | sidebar (custom.link_positions); NULL — content
-    sa.Column("path", sa.String),  # hyperlinks: the landmark ancestors, /nav.menu/… (collect.link_path)
-    sa.Column("path_type", sa.String),  # hyperlinks: a | p | r | l — the view spells them out (Path Type)
-    # hyperlinks of a rendered page: b — in the server's HTML too, r — added by JavaScript; NULL — not rendered.
-    # images: c — a CSS background image
-    sa.Column("origin", sa.String),
-    sa.Index("link_rows_by_source", "crawl_id", "source_id"),
-    sa.Index("link_rows_by_target", "crawl_id", "target_id"),
-    # links to a #bookmark are few: Broken Bookmark reads them without scanning every link of the crawl
-    sa.Index("link_rows_with_fragment", "crawl_id", sqlite_where=sa.text("fragment IS NOT NULL")),
-    # hreflang annotations: the Hreflang rules and report walk them both ways without scanning every link
-    sa.Index("link_rows_hreflang_by_source", "crawl_id", "source_id", sqlite_where=sa.text("kind = 'hreflang'")),
-    sa.Index("link_rows_hreflang_by_target", "crawl_id", "target_id", sqlite_where=sa.text("kind = 'hreflang'")),
-    # rel next / prev: queries say `kind IN ('next', 'prev')` so SQLite can use it
-    sa.Index("link_rows_pagination", "crawl_id", "source_id", sqlite_where=sa.text("kind IN ('next', 'prev')")),
-    sa.Index("link_rows_mobile", "crawl_id", "source_id", sqlite_where=sa.text("kind = 'mobile_alternate'")),
-)
-# `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
-# `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
-links = sa.Table(  # the view's columns, for reading it with SQLAlchemy (never written to)
-    "links",
-    sa.MetaData(),
-    sa.Column("crawl_id", sa.Integer),
-    sa.Column("source", sa.String),
-    sa.Column("target", sa.String),
-    sa.Column("kind", sa.String),
-    sa.Column("internal", sa.Boolean),
-    sa.Column("anchor", sa.String),
-    sa.Column("alt", sa.String),
-    sa.Column("rel", sa.String),
-    sa.Column("nofollow", sa.Boolean),
-    sa.Column("alt_attr", sa.Boolean),
-    sa.Column("sized", sa.Boolean),
-    sa.Column("fragment", sa.String),
-    sa.Column("hreflang", sa.String),
-    sa.Column("position", sa.String),
-    sa.Column("path", sa.String),
-    sa.Column("path_type", sa.String),
-    sa.Column(
-        "origin", sa.String
-    ),  # hyperlinks: html | rendered | html & rendered (Link Origin); images: css background
-)
-# Metrics enrichers (plugins, `core/enrich.py`) add to URLs: one row per URL, plugin and metric name.
-url_metrics = sa.Table(
-    "url_metrics",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), primary_key=True),
-    sa.Column("url", sa.String, primary_key=True),
-    sa.Column("source", sa.String, primary_key=True),  # the enricher's entry point name
-    sa.Column("name", sa.String, primary_key=True),
-    sa.Column("value", sa.Float),
-    sa.Column("text", sa.String),
-)
-# XML sitemaps a crawl read (sitemaps.crawl): every file, and every URL entry with the file it came from.
-sitemap_files = sa.Table(
-    "sitemap_files",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("kind", sa.String),  # urlset | sitemapindex; NULL — not fetched or not parsed (see error)
-    sa.Column("bytes", sa.Integer),  # uncompressed: the protocol's limit is 50 MB
-    sa.Column("urls", sa.Integer),
-    sa.Column("sitemaps", sa.Integer),  # child sitemaps of an index
-    sa.Column("error", sa.String),
-)
-sitemap_urls = sa.Table(
-    "sitemap_urls",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("source", sa.String, nullable=False),  # the sitemap file
-    sa.Column("lastmod", sa.String),
-    sa.Index("sitemap_urls_by_url", "crawl_id", "url"),
-)
-# Custom Search and Custom Extraction results ([custom]): a search — the number of matches on a page (a row only
-# when there are any); an extraction — each value, `n` its order on the page.
-custom_values = sa.Table(
-    "custom_values",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("kind", sa.String, nullable=False),  # search | extract
-    sa.Column("name", sa.String, nullable=False),
-    sa.Column("value", sa.String),
-    sa.Column("n", sa.Integer, nullable=False),
-    sa.Index("custom_values_by_name", "crawl_id", "kind", "name"),
-)
-# What the browser reported while rendering a page (crawl.render): console errors and warnings, uncaught exceptions,
-# and resources it couldn't load — blocked by robots.txt, failed, or answered 4xx / 5xx. At most 50 of each per page.
-render_events = sa.Table(
-    "render_events",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("kind", sa.String, nullable=False),  # error | warning | blocked | failed
-    sa.Column("message", sa.String),  # console text; for resources why: robots.txt, HTTP 404, failed: …
-    sa.Column("resource", sa.String),  # blocked / failed: the resource's URL
-    sa.Index("render_events_by_url", "crawl_id", "url"),
-)
-# `spider lighthouse`: every audit of every page Lighthouse measured (and spider's own mobile measures, `spider-*`),
-# per strategy. Items — up to 20 of the audit's resources as JSON (URL, wasted bytes / ms), for the reports. From
-# PageSpeed Insights also the CrUX field data: `crux:<metric>` / `crux-origin:<metric>` (score 1 / 0.5 / 0 — FAST /
-# AVERAGE / SLOW; value — the 75th percentile, ms or CLS).
-lighthouse_audits = sa.Table(
-    "lighthouse_audits",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("strategy", sa.String, nullable=False),  # mobile | desktop
-    sa.Column("audit", sa.String, nullable=False),  # Lighthouse's audit id; category:<name> — a category's score
-    sa.Column("score", sa.Float),  # 0–1; NULL — informative / not applicable
-    sa.Column("value", sa.Float),  # numericValue (ms, bytes, CLS…)
-    sa.Column("display", sa.String),  # displayValue as Lighthouse words it
-    sa.Column("items", sa.String),
-    sa.Column("source", sa.String),  # local | psi; NULL — measured before 0032 (local)
-    sa.Index("lighthouse_audits_by_url", "crawl_id", "url"),
-)
-# Images as a rendered page laid them out (crawl.render_images): real size against the size shown (Incorrectly Sized
-# Images, Image Details). At most 200 per page.
-rendered_images = sa.Table(
-    "rendered_images",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url", sa.String, nullable=False),  # the page
-    sa.Column("image", sa.String, nullable=False),
-    sa.Column("real_width", sa.Integer),
-    sa.Column("real_height", sa.Integer),
-    sa.Column("display_width", sa.Integer),
-    sa.Column("display_height", sa.Integer),
-    sa.Index("rendered_images_by_url", "crawl_id", "url"),
-)
-# Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
-near_duplicates = sa.Table(
-    "near_duplicates",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("url_a", sa.String, nullable=False),
-    sa.Column("url_b", sa.String, nullable=False),
-    sa.Column("similarity", sa.Float, nullable=False),  # estimated Jaccard similarity of the texts, 0–1
-    sa.Index("near_duplicates_by_a", "crawl_id", "url_a"),
-    sa.Index("near_duplicates_by_b", "crawl_id", "url_b"),
-)
-issues = sa.Table(
-    "issues",
-    metadata,
-    sa.Column("crawl_id", sa.Integer, sa.ForeignKey("crawls.id", ondelete="CASCADE"), nullable=False),
-    sa.Column("code", sa.String, nullable=False),
-    sa.Column("url", sa.String, nullable=False),
-    sa.Column("detail", sa.String),
-    sa.Index("issues_by_code", "crawl_id", "code"),
-)
 
 
 def db_path() -> Path:
     """`SPIDER_DB_PATH`, else `<app data dir>/spider/spider.sqlite` (~/Library/Application Support on macOS)."""
-    explicit = os.environ.get(f"{CLI_NAME.upper()}_DB_PATH")
-    if explicit:
-        return Path(explicit)
-    return Path(platformdirs.user_data_dir(CLI_NAME, appauthor=False)) / f"{CLI_NAME}.sqlite"
+    return db.sqlite_path()
+
+
+def db_url() -> str | None:
+    """`SPIDER_DATABASE_URL` (or the legacy `SPIDER_DB_URL`) — the shared PostgreSQL instead of the local file."""
+    return db.database_url()
 
 
 def html_db_path() -> Path:
     """Stored HTML (`crawl.store_html`) lives beside the crawl database, not in it: the main DB stays small. With
-    SPIDER_DB_URL it's a local file too, one per remote database (named after it)."""
+    SPIDER_DATABASE_URL it's a local file too, one per remote database (named after it)."""
     main = db_path()
     if url := db_url():
         name = sa.make_url(url).database or "remote"
@@ -438,171 +93,43 @@ def open_html_db(path: Path) -> sa.Engine:
     return engine
 
 
-def _pragmas(dbapi_connection, _record) -> None:
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA journal_mode=WAL")  # readers (`spider status`) never block the writing crawl
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
-    # SQLite's lower() is ASCII-only; rules compare Cyrillic text (anchors) case-insensitively
-    dbapi_connection.create_function("casefold", 1, lambda s: s.casefold() if s else s, deterministic=True)
-
-
-def alembic_config() -> Config:
-    config = Config()
-    config.set_main_option("script_location", "rb_spider:migrations")
-    return config
-
-
 def open_db(path: Path | None = None, *, migrate: bool = True) -> sa.Engine:
-    """Open (creating if needed) the crawl database and bring its schema up to date.
+    """Open the crawl database: an explicit SQLite `path`, else `SPIDER_DATABASE_URL`, else the local file.
 
-    `SPIDER_DB_URL` (and no explicit `path`) — a PostgreSQL server instead of the local SQLite file.
-    `migrate=False` leaves the schema as it is — for `spider db info|migrate`, which report it.
+    SQLite is created and migrated on open; PostgreSQL only checked against this release's schema (`spider db
+    upgrade` migrates it). `migrate=False` leaves it as it is — for `spider db info|upgrade`, which report it.
     """
     if path is None and (url := db_url()) is not None:
-        return _open_remote(url, migrate=migrate)
-    path = path or db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    engine = sa.create_engine(f"sqlite:///{path}")
-    event.listen(engine, "connect", _pragmas)
+        engine = db.postgres_engine(url)
+        if migrate:
+            try:
+                db.check_schema(engine)
+            except Exception:
+                engine.dispose()
+                raise
+        return engine
+    engine = db.sqlite_engine(path or db_path())
     if migrate:
-        config = alembic_config()
-        with engine.begin() as connection:
-            config.attributes["connection"] = connection
-            command.upgrade(config, "head")
+        db.upgrade(engine)
     return engine
-
-
-# --- PostgreSQL ------------------------------------------------------------------------------------
-# The rules, reports and exports are SQL written for SQLite. Rather than two versions of every query, a Postgres
-# database gets the few SQLite functions they use (below) and a `rowid` column where queries page by it; what
-# can't be emulated (booleans as 0 / 1, INSERT OR …) is written in the subset both understand.
-
-DB_CREDENTIAL = "database"  # `spider auth login --provider database`: the password of SPIDER_DB_URL
-
-
-def db_url() -> str | None:
-    """`SPIDER_DB_URL` — where crawls live when not in the local SQLite file (PostgreSQL)."""
-    return os.environ.get(f"{CLI_NAME.upper()}_DB_URL") or None
-
-
-def remote_url(url: str) -> sa.URL:
-    """SPIDER_DB_URL for SQLAlchemy: the psycopg driver, and the keychain's password when the URL has none."""
-    try:
-        parsed = sa.make_url(url)
-    except sa_exc.ArgumentError as exc:
-        raise RemoteDatabaseUnavailable(f"SPIDER_DB_URL is not a database URL: {exc}.") from exc
-    if parsed.get_backend_name() != "postgresql":
-        raise RemoteDatabaseUnavailable(
-            f"SPIDER_DB_URL: only PostgreSQL is supported, not '{parsed.get_backend_name()}'."
-        )
-    parsed = parsed.set(drivername="postgresql+psycopg")
-    if parsed.password is None and parsed.username:
-        from ..providers import secrets
-
-        password = secrets.password(DB_CREDENTIAL)
-        if password:
-            parsed = parsed.set(password=password)
-    return parsed
-
-
-_PG_SHIMS = (
-    # lower() is Unicode-aware in PostgreSQL: casefold (a Python function in SQLite) is just that
-    "CREATE OR REPLACE FUNCTION casefold(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT lower($1) $$",
-    "CREATE OR REPLACE FUNCTION instr(text, text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT strpos($1, $2) $$",
-    "CREATE OR REPLACE FUNCTION round(double precision, integer) RETURNS numeric LANGUAGE sql IMMUTABLE"
-    " AS $$ SELECT round($1::numeric, $2) $$",
-    # group_concat(x[, separator]) and aggregates over booleans, as SQLite has them (a boolean there is 0 / 1)
-    "CREATE OR REPLACE FUNCTION spider_concat(acc text, v text, sep text) RETURNS text LANGUAGE sql IMMUTABLE"
-    " AS $$ SELECT CASE WHEN v IS NULL THEN acc WHEN acc IS NULL THEN v ELSE acc || sep || v END $$",
-    "CREATE OR REPLACE FUNCTION spider_concat(acc text, v text) RETURNS text LANGUAGE sql IMMUTABLE"
-    " AS $$ SELECT spider_concat(acc, v, ',') $$",
-    "CREATE OR REPLACE AGGREGATE group_concat(text, text) (SFUNC = spider_concat, STYPE = text)",
-    "CREATE OR REPLACE AGGREGATE group_concat(text) (SFUNC = spider_concat, STYPE = text)",
-    "CREATE OR REPLACE FUNCTION spider_add(acc bigint, v boolean) RETURNS bigint LANGUAGE sql IMMUTABLE"
-    " AS $$ SELECT CASE WHEN v IS NULL THEN acc ELSE coalesce(acc, 0) + v::int END $$",
-    "CREATE OR REPLACE AGGREGATE sum(boolean) (SFUNC = spider_add, STYPE = bigint)",
-    "CREATE OR REPLACE AGGREGATE max(boolean) (SFUNC = boolor_statefunc, STYPE = boolean)",
-    "CREATE OR REPLACE AGGREGATE min(boolean) (SFUNC = booland_statefunc, STYPE = boolean)",
-)
-# SQLite's implicit rowid, which some passes page by: an identity column with a unique index
-_PG_ROWID = ("pages", "render_events")
-LINKS_VIEW = (
-    "CREATE VIEW links AS SELECT l.crawl_id, s.url AS source, t.url AS target, l.kind, l.internal, l.anchor, l.alt,"
-    " l.rel, l.nofollow, l.alt_attr, l.sized, l.fragment, l.hreflang,"
-    " CASE WHEN l.kind = 'hyperlink' THEN coalesce(l.position, 'content') END AS position, l.path,"
-    " CASE l.path_type WHEN 'a' THEN 'absolute' WHEN 'p' THEN 'protocol-relative' WHEN 'r' THEN 'root-relative'"
-    " WHEN 'l' THEN 'relative' END AS path_type,"
-    " CASE WHEN l.kind = 'hyperlink' THEN CASE l.origin WHEN 'r' THEN 'rendered' WHEN 'b' THEN 'html & rendered'"
-    " ELSE 'html' END WHEN l.kind = 'image' AND l.origin = 'c' THEN 'css background' END AS origin"
-    " FROM link_rows l JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
-)  # the same as the SQLite migrations build (0028)
-
-
-def open_db_url(url: str, *, migrate: bool = True) -> sa.Engine:
-    """A PostgreSQL crawl database by its URL (what SPIDER_DB_URL holds), its schema brought up to date."""
-    return _open_remote(url, migrate=migrate)
-
-
-_GLOB = re.compile(r"\bGLOB '([^'*?]*)\*'")
-
-
-def _pg_statement(_conn, _cursor, statement: str, parameters, _context, _executemany):
-    """SQLite's `x GLOB 'prefix*'` (case-sensitive, and it uses the index) is PostgreSQL's `x LIKE 'prefix%'`."""
-    if "GLOB" in statement:
-        statement = _GLOB.sub(lambda m: "LIKE '" + m.group(1).replace("%", "%%").replace("_", "\\_") + "%%'", statement)
-    return statement, parameters
-
-
-def _open_remote(url: str, *, migrate: bool) -> sa.Engine:
-    try:
-        engine = sa.create_engine(remote_url(url), pool_pre_ping=True)
-    except ModuleNotFoundError as exc:
-        raise RemoteDatabaseUnavailable("PostgreSQL needs the psycopg driver, which is not installed.") from exc
-    event.listen(engine, "before_cursor_execute", _pg_statement, retval=True)
-    if migrate:
-        try:
-            with engine.begin() as conn:
-                prepare_remote(conn)
-        except sa_exc.OperationalError as exc:
-            engine.dispose()
-            raise RemoteDatabaseUnavailable(f"Can't reach the database: {str(exc.orig).strip()}") from exc
-    return engine
-
-
-def prepare_remote(conn: sa.Connection) -> None:
-    """A new database gets the whole schema at once (the SQLite migrations' history isn't replayed) and is stamped
-    as up to date; later migrations run on it as on SQLite."""
-    conn.exec_driver_sql("SELECT pg_advisory_xact_lock(7355608)")  # two spiders starting at once: one creates
-    for statement in _PG_SHIMS:
-        conn.exec_driver_sql(statement)
-    config = alembic_config()
-    config.attributes["connection"] = conn
-    if not sa.inspect(conn).has_table("crawls"):
-        metadata.create_all(conn)
-        for table in _PG_ROWID:
-            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN rowid bigint GENERATED ALWAYS AS IDENTITY")
-            conn.exec_driver_sql(f"CREATE UNIQUE INDEX {table}_rowid ON {table} (rowid)")
-        conn.exec_driver_sql(LINKS_VIEW)
-        command.stamp(config, "head")
-    else:
-        command.upgrade(config, "head")
 
 
 NO_LIMIT = 2**62  # `LIMIT :limit` without a limit: SQLite's -1 is an error in PostgreSQL, NULL one in SQLite
 
 
 def insert_or_replace(conn: sa.Connection, table: sa.Table) -> sa.Insert:
-    """INSERT that replaces a row with the same primary key (SQLite's INSERT OR REPLACE)."""
+    """INSERT that replaces a row with the same natural key — the table's UNIQUE constraint (SQLite's INSERT OR
+    REPLACE); the surrogate `id` is the database's."""
     if is_sqlite(conn):
         return sa.insert(table).prefix_with("OR REPLACE")
     from sqlalchemy.dialects.postgresql import insert
 
     statement = insert(table)
-    keys = [column.name for column in table.primary_key]
+    [unique] = [c for c in table.constraints if isinstance(c, sa.UniqueConstraint)]
+    keys = [column.name for column in unique.columns]
     return statement.on_conflict_do_update(
-        index_elements=keys, set_={c.name: statement.excluded[c.name] for c in table.columns if c.name not in keys}
+        index_elements=keys,
+        set_={c.name: statement.excluded[c.name] for c in table.columns if c.name not in (*keys, "id")},
     )
 
 
@@ -664,7 +191,7 @@ def finish_crawl(engine: sa.Engine, crawl_id: int, status: str) -> int:
         return count
 
 
-_PAGE_COLUMNS = [column.name for column in pages.columns]
+_PAGE_COLUMNS = [column.name for column in pages.columns if column.name != "id"]  # the database numbers rows
 _LINK_COLUMNS = ["crawl_id", *LINK_FIELDS]
 
 
@@ -736,16 +263,16 @@ def _writer_sql(dialect: str) -> _WriterSql:
         # database, so the writer keeps no URL -> id map in memory. Both statements read the same JSON chunk.
         link_urls=(
             f"WITH r AS (SELECT {link_json} FROM {rows_source}) "  # noqa: S608 — fixed names
-            f"{ignore} INTO urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
+            f"{ignore} INTO spider_urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
             f"{no_conflict}"
         ),
         # The ids by a lookup per row through the unique index — not a JOIN: with planner statistics from earlier,
         # smaller crawls in the same database SQLite could pick a scan of `urls` per row (4 pages then a full one: 20 s).
         link_rows=(
             f"WITH r AS (SELECT {link_json} FROM {rows_source}) "  # noqa: S608 — fixed names
-            f"INSERT INTO link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
-            "SELECT r.crawl_id, (SELECT id FROM urls WHERE url = r.source AND crawl_id = r.crawl_id),"
-            " (SELECT id FROM urls WHERE url = r.target AND crawl_id = r.crawl_id),"
+            f"INSERT INTO spider_link_rows (crawl_id, source_id, target_id, {', '.join(LINK_DATA)}) "
+            "SELECT r.crawl_id, (SELECT id FROM spider_urls WHERE url = r.source AND crawl_id = r.crawl_id),"
+            " (SELECT id FROM spider_urls WHERE url = r.target AND crawl_id = r.crawl_id),"
             f" {', '.join(f'r.{c}' for c in LINK_DATA)} FROM r"
         ),
         custom=_insert_json(custom_values, ["crawl_id", "url", "kind", "name", "value", "n"], dialect),
@@ -756,9 +283,9 @@ def _writer_sql(dialect: str) -> _WriterSql:
         queued=_insert_json(frontier, ["crawl_id", "url", "depth", "check_only"], dialect, "INSERT OR IGNORE",
                             "ON CONFLICT DO NOTHING"),
         mark_done=(
-            "UPDATE frontier SET done = TRUE WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
+            "UPDATE spider_frontier SET done = TRUE WHERE crawl_id = ? AND url IN (SELECT value FROM json_each(?))"
             if sqlite
-            else "UPDATE frontier SET done = TRUE WHERE crawl_id = %s AND url IN (SELECT json_array_elements_text(%s::json))"
+            else "UPDATE spider_frontier SET done = TRUE WHERE crawl_id = %s AND url IN (SELECT json_array_elements_text(%s::json))"
         ),
     )  # fmt: skip
 

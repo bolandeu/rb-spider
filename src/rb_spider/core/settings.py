@@ -223,7 +223,7 @@ class CrawlSettings(BaseModel):
         False,
         description=(
             "Скриншот каждой отрендеренной страницы (первый экран, JPEG) — папка рядом с базой, путь в "
-            "pages.screenshot и `spider url`; ~30–100 КБ на страницу."
+            "spider_pages.screenshot и `spider url`; ~30–100 КБ на страницу."
         ),
     )
     render_images: bool = Field(

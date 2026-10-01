@@ -14,8 +14,8 @@ from . import storage
 RESOURCES = "('image', 'css', 'js', 'media', 'iframe')"
 # http:// URLs of the crawl, when it has https:// pages to link to them from (GLOB: case-sensitive, uses the index)
 HTTP_TARGETS = (
-    "SELECT id FROM urls WHERE crawl_id = :crawl_id AND url GLOB 'http://*'"
-    " AND EXISTS (SELECT 1 FROM urls x WHERE x.crawl_id = :crawl_id AND x.url GLOB 'https://*')"
+    "SELECT id FROM spider_urls WHERE crawl_id = :crawl_id AND url GLOB 'http://*'"
+    " AND EXISTS (SELECT 1 FROM spider_urls x WHERE x.crawl_id = :crawl_id AND x.url GLOB 'https://*')"
 )
 
 
@@ -24,8 +24,8 @@ def insecure_links(kinds: str | None = None) -> str:
     only = f" AND l.kind IN {kinds}" if kinds else ""
     return (
         f"SELECT s.url AS source, l.kind, t.url AS target FROM ({HTTP_TARGETS}) h"  # noqa: S608 — fixed text
-        " JOIN link_rows l ON l.crawl_id = :crawl_id AND l.target_id = h.id"
-        " JOIN urls s ON s.id = l.source_id JOIN urls t ON t.id = l.target_id"
+        " JOIN spider_link_rows l ON l.crawl_id = :crawl_id AND l.target_id = h.id"
+        " JOIN spider_urls s ON s.id = l.source_id JOIN spider_urls t ON t.id = l.target_id"
         f" WHERE s.url GLOB 'https://*'{only}"
     )
 
@@ -46,7 +46,7 @@ def counts(conn: sa.Connection, crawl_id: int) -> dict[str, int]:
     """The site's URLs by scheme — Screaming Frog's HTTPS URLs / HTTP URLs filters."""
     rows = conn.execute(
         sa.text(
-            "SELECT substr(url, 1, instr(url, ':') - 1) AS scheme, count(*) FROM pages WHERE crawl_id = :crawl_id"
+            "SELECT substr(url, 1, instr(url, ':') - 1) AS scheme, count(*) FROM spider_pages WHERE crawl_id = :crawl_id"
             " AND NOT coalesce(external, FALSE) GROUP BY scheme ORDER BY scheme"
         ),
         {"crawl_id": crawl_id},

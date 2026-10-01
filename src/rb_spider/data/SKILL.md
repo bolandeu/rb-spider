@@ -98,6 +98,13 @@ crawling again.
   Always: run with `--dry-run`, show the user, get explicit sign-off, then
   `--yes --non-interactive`. Never chain straight to `--yes` without a
   human having seen the dry-run.
+- **Data** lives in the shared PostgreSQL when `SPIDER_DATABASE_URL` is
+  set (else a local SQLite file). `DATABASE_UNAVAILABLE` (exit 5) — the
+  server is unreachable, nothing was written anywhere; `DATABASE_NOT_MIGRATED`
+  → `spider db upgrade` (changes the shared base: ask the user
+  first); `db status --json` shows the revision. Tables are `spider_*`
+  (`spider query` reads them); other tools and reports read only the
+  `spider_v1_*` views.
 - **`doctor --json`** first when something looks off — it reports
   project, config, version compatibility and credential readiness.
 

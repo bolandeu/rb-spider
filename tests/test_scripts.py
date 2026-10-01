@@ -35,13 +35,17 @@ hook = _load("check_changelog_fragment")
         ".claude/settings.json",
         "AGENTS.md",
         "CLAUDE.md",
+        "docs/backlog.md",
+        "docs/findings/2026-10-01.md",
     ],
 )
 def test_tooling_changes_need_no_fragment(path: str) -> None:
     assert not release.needs_fragment(path)
 
 
-@pytest.mark.parametrize("path", ["src/pkg/cli.py", "pyproject.toml", "README.md", "scripts.py", "testsuite/x.py"])
+@pytest.mark.parametrize(
+    "path", ["src/pkg/cli.py", "pyproject.toml", "README.md", "scripts.py", "testsuite/x.py", "docsite/x.md"]
+)
 def test_package_changes_need_a_fragment(path: str) -> None:
     assert release.needs_fragment(path)
 

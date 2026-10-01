@@ -3,7 +3,7 @@
 All four are optional: each is needed only with a setting that uses it. A proxy or
 site password has no endpoint to ask whether it is right — a crawl is what proves it —
 so their check only confirms the secret is there. The database password is checked
-by connecting to `SPIDER_DB_URL` (when it is set).
+by connecting to `SPIDER_DATABASE_URL` (when it is set).
 
 Before 0.2.0 the keychain held `rb_spider:<provider>`; such entries are still read
 (`shared_namespaces`, read-only), so passwords saved by an older spider keep working.
@@ -53,7 +53,7 @@ class SitePassword(_Secret):
 
 
 class DatabasePassword(_Secret):
-    """The password of `SPIDER_DB_URL` when the URL has none (core/storage.py, DB_CREDENTIAL)."""
+    """The password of `SPIDER_DATABASE_URL` when the URL has none (core/db.py, DB_CREDENTIAL)."""
 
     name = "database"
 
@@ -61,13 +61,13 @@ class DatabasePassword(_Secret):
         import sqlalchemy as sa  # heavy: only when actually checking
         from sqlalchemy import exc as sa_exc
 
-        from ..core import storage
+        from ..core import db
 
-        url = storage.db_url()
+        url = db.database_url()
         if url is None:
-            return Health(message="SPIDER_DB_URL is not set: the password isn't used")
+            return Health(message=f"{db.ENV_VAR} is not set: the password isn't used")
         try:
-            engine = sa.create_engine(storage.remote_url(url), connect_args={"connect_timeout": CHECK_TIMEOUT_S})
+            engine = sa.create_engine(db.postgres_url(url), connect_args={"connect_timeout": CHECK_TIMEOUT_S})
         except (CliError, ModuleNotFoundError) as exc:  # not PostgreSQL, or no psycopg driver
             raise ProviderError(self.name, getattr(exc, "message", str(exc))) from exc
         try:

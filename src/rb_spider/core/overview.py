@@ -11,6 +11,7 @@ import sqlalchemy as sa
 
 from . import hreflang, pagination, security, sitemaps, structured
 from .extract import DIRECTIVES
+from .sqltext import count_if
 
 # What a URL is, from its Content-Type — Screaming Frog's Internal / External filters.
 CONTENT_KINDS = ("html", "js", "css", "image", "pdf", "other", "unknown")
@@ -26,9 +27,7 @@ _OWN = "NOT coalesce(external, FALSE)"
 
 
 def _counts(conn: sa.Connection, crawl_id: int, expression: str, where: str = _OWN) -> dict[str, int]:
-    query = (
-        f"SELECT {expression} AS k, count(*) FROM pages WHERE crawl_id = :crawl_id AND {where} GROUP BY k ORDER BY k"  # noqa: S608 — fixed text
-    )
+    query = f"SELECT {expression} AS k, count(*) FROM spider_pages WHERE crawl_id = :crawl_id AND {where} GROUP BY k ORDER BY k"  # noqa: S608 — fixed text
     return {str(key): n for key, n in conn.execute(sa.text(query), {"crawl_id": crawl_id})}
 
 
@@ -41,20 +40,21 @@ def overview(engine: sa.Engine, crawl_id: int) -> dict:
     with engine.connect() as conn:
         totals = conn.execute(
             sa.text(
-                f"SELECT count(*), sum({_OWN}), sum(coalesce(external, FALSE)), sum(blocked IS NOT NULL),"  # noqa: S608
-                f" sum(status_code = 0 AND blocked IS NULL), sum({_OWN} AND coalesce(indexable, FALSE)) FROM pages"
+                f"SELECT count(*), {count_if(_OWN)}, {count_if('external')}, {count_if('blocked IS NOT NULL')},"  # noqa: S608
+                f" {count_if('status_code = 0 AND blocked IS NULL')}, {count_if(f'{_OWN} AND indexable')} FROM spider_pages"
                 " WHERE crawl_id = :crawl_id"
             ),
             {"crawl_id": crawl_id},
         ).one()
         queued = conn.execute(
-            sa.text("SELECT count(*), sum(NOT done) FROM frontier WHERE crawl_id = :crawl_id"), {"crawl_id": crawl_id}
+            sa.text(f"SELECT count(*), {count_if('NOT done')} FROM spider_frontier WHERE crawl_id = :crawl_id"),  # noqa: S608
+            {"crawl_id": crawl_id},
         ).one()
         directives = {}
         for name in sorted(DIRECTIVES):
             n = conn.execute(
                 sa.text(
-                    f"SELECT count(*) FROM pages WHERE crawl_id = :crawl_id AND {html_ok}"  # noqa: S608
+                    f"SELECT count(*) FROM spider_pages WHERE crawl_id = :crawl_id AND {html_ok}"  # noqa: S608
                     " AND robots_directives LIKE :token"
                 ),
                 {"crawl_id": crawl_id, "token": f"%,{name},%"},

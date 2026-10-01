@@ -8,9 +8,9 @@ import pytest
 
 from rb_spider.core import settings
 
-# SPIDER_TEST_PG=postgresql://user:password@host:port/db — run the suite against PostgreSQL (#41): every test gets a
-# database of its own, cloned from a template that already has the schema. Without it the tests use SQLite files.
-PG_ADMIN = os.environ.get("SPIDER_TEST_PG")
+# TEST_DATABASE_URL (set by scripts/pg_test.sh: a throwaway local server) — run the suite against PostgreSQL: every
+# test gets a database of its own, cloned from a template that already has the schema. Without it: SQLite files.
+PG_ADMIN = os.environ.get("TEST_DATABASE_URL")
 _PG_TEMPLATE = "spider_test_template"
 _pg_names = itertools.count()
 
@@ -33,10 +33,13 @@ def db_env(engine=None) -> dict[str, str]:
     """Environment that points a CLI call at a database: `engine`'s (SQLite file or PostgreSQL), or the one the
     current environment points at — for a module fixture to hand its database to later tests."""
     if engine is None:
-        return {"SPIDER_DB_PATH": os.environ["SPIDER_DB_PATH"], "SPIDER_DB_URL": os.environ.get("SPIDER_DB_URL", "")}
+        return {
+            "SPIDER_DB_PATH": os.environ["SPIDER_DB_PATH"],
+            "SPIDER_DATABASE_URL": os.environ.get("SPIDER_DATABASE_URL", ""),
+        }
     if engine.dialect.name == "sqlite":
-        return {"SPIDER_DB_PATH": str(engine.url.database), "SPIDER_DB_URL": ""}
-    return {"SPIDER_DB_URL": engine.url.render_as_string(hide_password=False)}
+        return {"SPIDER_DB_PATH": str(engine.url.database), "SPIDER_DATABASE_URL": ""}
+    return {"SPIDER_DATABASE_URL": engine.url.render_as_string(hide_password=False)}
 
 
 def use_db(monkeypatch, engine=None, env: dict[str, str] | None = None) -> None:
@@ -47,13 +50,15 @@ def use_db(monkeypatch, engine=None, env: dict[str, str] | None = None) -> None:
 
 @pytest.fixture(scope="session")
 def _pg_template() -> Iterator[None]:
-    from rb_spider.core import storage
+    from rb_spider.core import db
 
     admin = _pg_admin()
     with admin.connect() as conn:
         conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {_PG_TEMPLATE} WITH (FORCE)")
         conn.exec_driver_sql(f"CREATE DATABASE {_PG_TEMPLATE}")
-    storage.open_db_url(_pg_url(_PG_TEMPLATE)).dispose()  # the schema, once
+    engine = db.postgres_engine(_pg_url(_PG_TEMPLATE))
+    db.upgrade(engine)  # the schema, once
+    engine.dispose()
     yield
     with admin.connect() as conn:
         conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {_PG_TEMPLATE} WITH (FORCE)")
@@ -79,11 +84,12 @@ def _isolated_session_db(tmp_path_factory, request) -> Iterator[None]:
     without this they would write to the user's real crawl database."""
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("SPIDER_DB_PATH", str(tmp_path_factory.mktemp("session-db") / "spider.sqlite"))
-        patch.delenv("SPIDER_DB_URL", raising=False)
+        patch.delenv("SPIDER_DATABASE_URL", raising=False)
+        patch.delenv("SPIDER_DB_URL", raising=False)  # the legacy name, from the developer's shell
         if PG_ADMIN:
             request.getfixturevalue("_pg_template")
             databases = _pg_database("session")
-            patch.setenv("SPIDER_DB_URL", next(databases))
+            patch.setenv("SPIDER_DATABASE_URL", next(databases))
             yield
             databases.close()
         else:
@@ -103,7 +109,7 @@ def _isolated_state(tmp_path_factory, monkeypatch) -> Iterator[None]:
             monkeypatch.delenv(name)
     if PG_ADMIN:
         databases = _pg_database("t")
-        monkeypatch.setenv("SPIDER_DB_URL", next(databases))
+        monkeypatch.setenv("SPIDER_DATABASE_URL", next(databases))
         yield
         databases.close()
     else:

@@ -68,7 +68,9 @@ class Mapping:
         conn.exec_driver_sql(
             f"CREATE INDEX {'temp.' if storage.is_sqlite(conn) else ''}cmp_old_by_url ON cmp_old (url)"
         )
-        select = sa.text("SELECT url FROM pages WHERE crawl_id = :old AND url > :after ORDER BY url LIMIT :limit")
+        select = sa.text(
+            "SELECT url FROM spider_pages WHERE crawl_id = :old AND url > :after ORDER BY url LIMIT :limit"
+        )
         insert = sa.text("INSERT INTO cmp_old (orig, url) VALUES (:orig, :url)")
         after = ""
         while batch := conn.execute(select, {"old": old, "after": after, "limit": _BATCH}).scalars().all():
@@ -99,7 +101,7 @@ class Mapping:
         """The crawl's own URLs — the old one's as the new crawl spells them."""
         column = self.old("p.url") if crawl == "old" else "p.url"
         own = "NOT coalesce(p.external, FALSE)"
-        return f"SELECT {column} AS url FROM pages p WHERE p.crawl_id = :{crawl} AND {own}"  # noqa: S608 — fixed text
+        return f"SELECT {column} AS url FROM spider_pages p WHERE p.crawl_id = :{crawl} AND {own}"  # noqa: S608 — fixed text
 
 
 def _rules(mapping: list | None) -> list[tuple[str, str]]:
@@ -125,13 +127,15 @@ def summary(engine: sa.Engine, old: int, new: int, fields: list[str], mapping: l
             sa.text(
                 f"WITH oldpages AS ({old_urls}), newpages AS ({new_urls}),"  # noqa: S608
                 " f AS (SELECT i.code, CASE WHEN i.crawl_id = :old THEN "
-                f"{m.old('i.url')} ELSE i.url END AS url, i.crawl_id = :old AS was, i.crawl_id = :new AS is_now"
-                "   FROM issues i WHERE i.crawl_id IN (:old, :new)),"
+                f"{m.old('i.url')} ELSE i.url END AS url, CASE WHEN i.crawl_id = :old THEN 1 ELSE 0 END AS was,"
+                " CASE WHEN i.crawl_id = :new THEN 1 ELSE 0 END AS is_now"
+                "   FROM spider_issues i WHERE i.crawl_id IN (:old, :new)),"
                 " x AS (SELECT code, url, max(was) AS was, max(is_now) AS is_now FROM f GROUP BY code, url),"
-                " y AS (SELECT code, was, is_now, url IN (SELECT url FROM oldpages) AS in_old,"
-                "   url IN (SELECT url FROM newpages) AS in_new FROM x)"
-                " SELECT code, sum(was), sum(is_now), sum(is_now AND NOT was AND in_old), sum(is_now AND NOT in_old),"
-                " sum(was AND NOT is_now AND in_new), sum(was AND NOT in_new) FROM y GROUP BY code"
+                # flags as 0 / 1, not booleans: one spelling for SQLite and PostgreSQL (`AND` becomes `*`)
+                " y AS (SELECT code, was, is_now, CASE WHEN url IN (SELECT url FROM oldpages) THEN 1 ELSE 0 END AS in_old,"
+                "   CASE WHEN url IN (SELECT url FROM newpages) THEN 1 ELSE 0 END AS in_new FROM x)"
+                " SELECT code, sum(was), sum(is_now), sum(is_now * (1 - was) * in_old), sum(is_now * (1 - in_old)),"
+                " sum(was * (1 - is_now) * in_new), sum(was * (1 - in_new)) FROM y GROUP BY code"
             ),
             params,
         ).all()
@@ -156,7 +160,7 @@ def _changed(field: str, m: Mapping) -> str:
     expression = FIELDS[field]
     return (
         f"SELECT n.url, {expression.replace('p.', 'o.')} AS old, {expression.replace('p.', 'n.')} AS new"  # noqa: S608
-        f" FROM pages n JOIN pages o ON o.crawl_id = :old AND o.url = {m.back('n.url')}"
+        f" FROM spider_pages n JOIN spider_pages o ON o.crawl_id = :old AND o.url = {m.back('n.url')}"
         f" AND NOT coalesce(o.external, FALSE)"
         f" WHERE n.crawl_id = :new AND NOT coalesce(n.external, FALSE) AND n.parsed AND o.parsed"
         f" AND {expression.replace('p.', 'o.')} IS DISTINCT FROM {expression.replace('p.', 'n.')}"
@@ -170,16 +174,16 @@ def _issue_urls(code: str, status: str, m: Mapping) -> str:
     presence = "IN" if status in ("added", "removed") else "NOT IN"
     if status in ("added", "new"):  # flagged now (new crawl), not before (old crawl): URLs in the new crawl's terms
         return (
-            "SELECT DISTINCT i.url FROM issues i WHERE i.crawl_id = :new AND i.code = :code"  # noqa: S608
+            "SELECT DISTINCT i.url FROM spider_issues i WHERE i.crawl_id = :new AND i.code = :code"  # noqa: S608
             f" AND i.url {presence} ({m.urls('old')})"
-            " AND NOT EXISTS (SELECT 1 FROM issues j WHERE j.crawl_id = :old AND j.code = :code"
+            " AND NOT EXISTS (SELECT 1 FROM spider_issues j WHERE j.crawl_id = :old AND j.code = :code"
             f" AND j.url = {m.back('i.url')})"
         )
     # flagged before, not now: the old crawl's own URLs
     return (
-        "SELECT DISTINCT i.url FROM issues i WHERE i.crawl_id = :old AND i.code = :code"  # noqa: S608
+        "SELECT DISTINCT i.url FROM spider_issues i WHERE i.crawl_id = :old AND i.code = :code"  # noqa: S608
         f" AND {m.old('i.url')} {presence} ({m.urls('new')})"
-        " AND NOT EXISTS (SELECT 1 FROM issues j WHERE j.crawl_id = :new AND j.code = :code"
+        " AND NOT EXISTS (SELECT 1 FROM spider_issues j WHERE j.crawl_id = :new AND j.code = :code"
         f" AND j.url = {m.old('i.url')})"
     )
 
@@ -210,7 +214,7 @@ def details(
             query = f"SELECT url FROM ({m.urls('new')}) n WHERE url NOT IN ({m.urls('old')})"  # noqa: S608
         elif urls == "missing":  # the old crawl's own URLs
             query = (
-                "SELECT o.url FROM pages o WHERE o.crawl_id = :old AND NOT coalesce(o.external, FALSE)"  # noqa: S608
+                "SELECT o.url FROM spider_pages o WHERE o.crawl_id = :old AND NOT coalesce(o.external, FALSE)"  # noqa: S608
                 f" AND {m.old('o.url')} NOT IN ({m.urls('new')})"
             )
         else:

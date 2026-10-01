@@ -1,17 +1,18 @@
-"""PostgreSQL as the crawl database (#41). The whole suite runs against it with SPIDER_TEST_PG (scripts/check.sh --pg);
+"""PostgreSQL as the crawl database. The whole suite runs against it under scripts/pg_test.sh (TEST_DATABASE_URL);
 these are the parts that don't need a server: choosing and configuring the connection."""
 
 from __future__ import annotations
 
 import pytest
 
-from rb_spider.core import maintenance, storage
-from rb_spider.core.errors import RemoteDatabaseUnavailable
+from rb_spider.core import db, maintenance, storage
+from rb_spider.core.errors import DatabaseUnavailable
 
 from .conftest import PG_ADMIN
 
 
 def test_without_spider_db_url_the_database_is_the_sqlite_file(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("SPIDER_DATABASE_URL", raising=False)
     monkeypatch.delenv("SPIDER_DB_URL", raising=False)
     monkeypatch.setenv("SPIDER_DB_PATH", str(tmp_path / "x.sqlite"))
     with storage.database() as engine:
@@ -19,10 +20,10 @@ def test_without_spider_db_url_the_database_is_the_sqlite_file(monkeypatch, tmp_
 
 
 def test_only_postgresql(monkeypatch) -> None:
-    with pytest.raises(RemoteDatabaseUnavailable, match="only PostgreSQL"):
-        storage.remote_url("mysql://u@h/db")
-    with pytest.raises(RemoteDatabaseUnavailable, match="not a database URL"):
-        storage.remote_url("not a url")
+    with pytest.raises(DatabaseUnavailable, match="only PostgreSQL"):
+        db.postgres_url("mysql://u@h/db")
+    with pytest.raises(DatabaseUnavailable, match="not a database URL"):
+        db.postgres_url("not a url")
 
 
 def test_password_comes_from_the_keychain_when_the_url_has_none(monkeypatch) -> None:
@@ -30,31 +31,41 @@ def test_password_comes_from_the_keychain_when_the_url_has_none(monkeypatch) -> 
 
     asked = []
     monkeypatch.setattr(secrets, "password", lambda provider: asked.append(provider) or "s3cret")
-    url = storage.remote_url("postgresql://spider@db.example:5433/crawls")
+    url = db.postgres_url("postgresql://spider@db.example:5433/crawls")
     assert (url.drivername, url.password, url.port, url.database) == ("postgresql+psycopg", "s3cret", 5433, "crawls")
     assert asked == ["database"]
-    inline = storage.remote_url("postgresql://spider:inline@db.example/crawls")
+    inline = db.postgres_url("postgresql://spider:inline@db.example/crawls")
     assert inline.password == "inline"  # noqa: S105 — the URL's own password wins
 
 
 def test_an_unreachable_server_is_a_clear_error() -> None:
-    with pytest.raises(RemoteDatabaseUnavailable, match="Can't reach the database"):
-        storage.open_db_url("postgresql://spider:x@127.0.0.1:1/none")
+    with pytest.raises(DatabaseUnavailable, match="Can't connect to"):
+        db.postgres_engine("postgresql://spider:x@127.0.0.1:1/none")
 
 
-def test_glob_becomes_like_for_postgresql() -> None:
-    statement, _ = storage._pg_statement(None, None, "SELECT 1 WHERE url GLOB 'https://*' AND x GLOB 'a_b*'", {}, None,
-                                         False)  # fmt: skip
-    assert statement == "SELECT 1 WHERE url LIKE 'https://%%' AND x LIKE 'a\\_b%%'"
+def test_glob_and_instr_are_rewritten_for_postgresql() -> None:
+    statement, _ = db._pg_statement(None, None, "SELECT instr(url, '?') WHERE url GLOB 'https://*' AND x GLOB 'a_b*'",
+                                    {}, None, False)  # fmt: skip
+    assert statement == "SELECT strpos(url, '?') WHERE url LIKE 'https://%%' AND x LIKE 'a\\_b%%'"
+
+
+def test_the_old_variable_name_still_works(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("SPIDER_DATABASE_URL", raising=False)
+    monkeypatch.setenv("SPIDER_DB_URL", "postgresql://u@h/crawls")
+    monkeypatch.setattr(db, "_warned_legacy", False)
+    assert db.database_url() == "postgresql://u@h/crawls"
+    assert "SPIDER_DATABASE_URL" in capsys.readouterr().err
+    monkeypatch.setenv("SPIDER_DATABASE_URL", "postgresql://u@h/new")
+    assert db.database_url() == "postgresql://u@h/new"
 
 
 def test_stored_html_is_a_local_file_per_remote_database(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("SPIDER_DB_PATH", str(tmp_path / "spider.sqlite"))
-    monkeypatch.setenv("SPIDER_DB_URL", "postgresql://u@h/crawls")
+    monkeypatch.setenv("SPIDER_DATABASE_URL", "postgresql://u@h/crawls")
     assert storage.html_db_path() == tmp_path / "spider-html-crawls.sqlite"
 
 
-@pytest.mark.skipif(not PG_ADMIN, reason="needs SPIDER_TEST_PG")
+@pytest.mark.skipif(not PG_ADMIN, reason="needs TEST_DATABASE_URL (scripts/pg_test.sh)")
 def test_db_info_names_the_server() -> None:
     with storage.database() as engine:
         info = maintenance.db_info(engine)
@@ -69,7 +80,7 @@ def test_doctor_reports_an_unreachable_server(monkeypatch) -> None:
 
     from rb_spider.cli import app
 
-    monkeypatch.setenv("SPIDER_DB_URL", "postgresql://spider:x@127.0.0.1:1/none")
+    monkeypatch.setenv("SPIDER_DATABASE_URL", "postgresql://spider:x@127.0.0.1:1/none")
     result = CliRunner().invoke(app, ["--json", "doctor"])
     [check] = [c for c in json.loads(result.stdout)["checks"] if c["name"] == "database"]
-    assert not check["ok"] and "Can't reach" in check["detail"]
+    assert not check["ok"] and "Can't connect" in check["detail"]

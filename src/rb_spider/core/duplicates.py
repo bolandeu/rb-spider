@@ -41,7 +41,7 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
     conn.execute(sa.delete(storage.near_duplicates).where(storage.near_duplicates.c.crawl_id == crawl_id))
     params = _params(crawl_id, thresholds)
     has_signatures = conn.execute(
-        sa.text("SELECT 1 FROM pages WHERE crawl_id = :crawl_id AND minhash IS NOT NULL LIMIT 1"), params
+        sa.text("SELECT 1 FROM spider_pages WHERE crawl_id = :crawl_id AND minhash IS NOT NULL LIMIT 1"), params
     ).first()
     if not has_signatures:
         return
@@ -53,8 +53,8 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
     conn.exec_driver_sql("CREATE TEMP TABLE near_bands (band BIGINT, h BIGINT, page BIGINT)")
     insert = "INSERT INTO near_bands (band, h, page) VALUES " + ("(?, ?, ?)" if sqlite else "(%s, %s, %s)")  # noqa: S608 — fixed text
     select = sa.text(
-        f"SELECT rowid, minhash FROM pages WHERE crawl_id = :crawl_id AND {AMONG} AND minhash IS NOT NULL"  # noqa: S608
-        " AND rowid > :after ORDER BY rowid LIMIT :limit"
+        f"SELECT id, minhash FROM spider_pages WHERE crawl_id = :crawl_id AND {AMONG} AND minhash IS NOT NULL"  # noqa: S608
+        " AND id > :after ORDER BY id LIMIT :limit"
     )
     after = 0
     while batch := conn.execute(select, params | {"after": after, "limit": _BATCH}).all():
@@ -86,7 +86,7 @@ def compute_near(conn: sa.Connection, crawl_id: int, thresholds: ThresholdSettin
     if not sqlite:
         conn.exec_driver_sql("CREATE UNIQUE INDEX near_pairs_rowid ON near_pairs (rowid)")
     conn.exec_driver_sql(f"DROP TABLE {temp}.near_bands")
-    lookup = sa.text("SELECT rowid, url, minhash FROM pages WHERE rowid IN :ids").bindparams(
+    lookup = sa.text("SELECT id, url, minhash FROM spider_pages WHERE id IN :ids").bindparams(
         sa.bindparam("ids", expanding=True)
     )
     next_pairs = sa.text(f"SELECT rowid, a, b FROM {temp}.near_pairs WHERE rowid > :after ORDER BY rowid LIMIT :limit")  # noqa: S608
@@ -112,15 +112,15 @@ NEAR_FINDINGS = (
     "  FROM pairs p GROUP BY url) ORDER BY url"
 )
 PAIRS = (
-    "WITH pairs AS (SELECT url_a AS url, url_b AS other, similarity FROM near_duplicates WHERE crawl_id = :crawl_id"
-    " UNION ALL SELECT url_b, url_a, similarity FROM near_duplicates WHERE crawl_id = :crawl_id) "
+    "WITH pairs AS (SELECT url_a AS url, url_b AS other, similarity FROM spider_near_duplicates WHERE crawl_id = :crawl_id"
+    " UNION ALL SELECT url_b, url_a, similarity FROM spider_near_duplicates WHERE crawl_id = :crawl_id) "
 )
 
 # --- Duplicate Details ---------------------------------------------------------------------------
 
 _EXACT = (
     "SELECT url, first_value(url) OVER (PARTITION BY content_md5 ORDER BY url) AS other, 1.0 AS similarity,"  # noqa: S608
-    " 'exact' AS kind, count(*) OVER (PARTITION BY content_md5) AS n FROM pages"
+    " 'exact' AS kind, count(*) OVER (PARTITION BY content_md5) AS n FROM spider_pages"
     f" WHERE crawl_id = :crawl_id AND {AMONG} AND content_md5 IS NOT NULL"
 )
 
@@ -139,7 +139,7 @@ def report(
     `url` — only pairs with that page; `kind` — all | exact | near. Returns the total and the first `limit`.
     """
     exact = f"SELECT url, other, similarity, kind FROM ({_EXACT}) WHERE n > 1 AND url <> other"  # noqa: S608
-    near = "SELECT url_a AS url, url_b AS other, similarity, 'near' AS kind FROM near_duplicates WHERE crawl_id = :crawl_id"
+    near = "SELECT url_a AS url, url_b AS other, similarity, 'near' AS kind FROM spider_near_duplicates WHERE crawl_id = :crawl_id"
     parts = {"all": [exact, near], "exact": [exact], "near": [near]}[kind]
     query = " UNION ALL ".join(f"SELECT * FROM ({part})" for part in parts)  # noqa: S608
     where = " WHERE url = :url OR other = :url" if url else ""

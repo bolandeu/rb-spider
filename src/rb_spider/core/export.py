@@ -22,7 +22,7 @@ from typing import IO, Any
 import sqlalchemy as sa
 from pydantic import ValidationError
 
-from . import enrich, issues, serp, storage, structured
+from . import db, enrich, issues, serp, storage, structured
 from .errors import InvalidArguments
 from .overview import CONTENT_KIND_SQL, CONTENT_KINDS
 from .settings import Settings, ThresholdSettings
@@ -107,7 +107,7 @@ def dataset(
             where += f" AND p.url GLOB '{scheme}://*'"  # a literal: GLOB uses the index
         if issue is not None:
             issues.rule(issue)
-            where += " AND p.url IN (SELECT url FROM issues WHERE crawl_id = :crawl_id AND code = :code)"
+            where += " AND p.url IN (SELECT url FROM spider_issues WHERE crawl_id = :crawl_id AND code = :code)"
             params["code"] = issue
         if external:
             where += " AND coalesce(p.external, FALSE)"
@@ -115,7 +115,7 @@ def dataset(
             clause, extra = _status_filter(target_status, "p.status_code")
             where, params = f"{where} AND {clause}", params | extra
         select = ", ".join(f"p.{c}" for c in columns[:-1])
-        sql = f"SELECT {select}, {CONTENT_KIND_SQL} FROM pages p WHERE {where} ORDER BY p.url"  # noqa: S608 — fixed names, bound values
+        sql = f"SELECT {select}, {CONTENT_KIND_SQL} FROM spider_pages p WHERE {where} ORDER BY p.url"  # noqa: S608 — fixed names, bound values
     elif what == "links":
         columns = [c.name for c in storage.links.columns if c.name != "crawl_id"] + ["target_status"]
         where = "l.crawl_id = :crawl_id"
@@ -133,8 +133,8 @@ def dataset(
             where += f" AND ({LINK_ISSUES[issue]})"
         select = ", ".join(f"l.{c}" for c in columns[:-1])
         sql = (
-            f"SELECT {select}, t.status_code FROM links l"  # noqa: S608 — fixed names, bound values
-            " LEFT JOIN pages t ON t.crawl_id = l.crawl_id AND t.url = l.target"
+            f"SELECT {select}, t.status_code FROM spider_links l"  # noqa: S608 — fixed names, bound values
+            " LEFT JOIN spider_pages t ON t.crawl_id = l.crawl_id AND t.url = l.target"
             f" WHERE {where} ORDER BY l.source, l.target"
         )
     elif what == "issues":
@@ -155,7 +155,9 @@ def _sql_table(conn: sa.Connection, crawl_id: int, sql: str) -> Table:
 
 def _pages_json(conn: sa.Connection, crawl_id: int, columns: list[str], rows_of) -> Table:
     """A table whose rows come from each page's headers JSON — parsed a page at a time."""
-    sql = sa.text("SELECT url, headers FROM pages WHERE crawl_id = :crawl_id AND headers IS NOT NULL ORDER BY url")
+    sql = sa.text(
+        "SELECT url, headers FROM spider_pages WHERE crawl_id = :crawl_id AND headers IS NOT NULL ORDER BY url"
+    )
 
     def rows() -> Iterator[tuple]:
         for url, raw in storage.streamed(conn, 500).execute(sql, {"crawl_id": crawl_id}):
@@ -201,7 +203,7 @@ def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool, rendered: bo
     from .extract import visible_text
 
     sql = sa.text(
-        "SELECT url FROM pages WHERE crawl_id = :crawl_id AND parsed AND content_type LIKE '%html%' ORDER BY url"
+        "SELECT url FROM spider_pages WHERE crawl_id = :crawl_id AND parsed AND content_type LIKE '%html%' ORDER BY url"
     )
 
     def rows() -> Iterator[tuple]:
@@ -215,7 +217,7 @@ def _stored_html(conn: sa.Connection, crawl_id: int, as_text: bool, rendered: bo
 
 _EXTRA = {
     "queued": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url, depth, check_only FROM frontier WHERE crawl_id = :crawl_id AND NOT done ORDER BY depth, url"),
+        "SELECT url, depth, check_only FROM spider_frontier WHERE crawl_id = :crawl_id AND NOT done ORDER BY depth, url"),
     "headers": lambda conn, crawl_id: _pages_json(conn, crawl_id, ["url", "name", "value"], _headers),
     "cookies": lambda conn, crawl_id: _pages_json(conn, crawl_id, ["url", "name", "value", "domain", "path", "expires",
                                                                   "secure", "httponly", "samesite"], _cookies),
@@ -223,19 +225,19 @@ _EXTRA = {
     "text": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=True),
     "lighthouse": lambda conn, crawl_id: _sql_table(conn, crawl_id,
         "SELECT url, strategy, audit, score, value, display, items, coalesce(source, 'local') AS source"
-        " FROM lighthouse_audits WHERE crawl_id = :crawl_id"
+        " FROM spider_lighthouse_audits WHERE crawl_id = :crawl_id"
         " ORDER BY url, strategy, audit"),
     "rendered-source": lambda conn, crawl_id: _stored_html(conn, crawl_id, as_text=False, rendered=True),
     "screenshots": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url, screenshot FROM pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"),
+        "SELECT url, screenshot FROM spider_pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"),
     "duplicates": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url_a, url_b, similarity FROM near_duplicates WHERE crawl_id = :crawl_id ORDER BY similarity DESC, url_a"),
+        "SELECT url_a, url_b, similarity FROM spider_near_duplicates WHERE crawl_id = :crawl_id ORDER BY similarity DESC, url_a"),
     "custom": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT kind, name, url, value, n FROM custom_values WHERE crawl_id = :crawl_id ORDER BY kind, name, url, n"),
+        "SELECT kind, name, url, value, n FROM spider_custom_values WHERE crawl_id = :crawl_id ORDER BY kind, name, url, n"),
     "sitemap-urls": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url, source, lastmod FROM sitemap_urls WHERE crawl_id = :crawl_id ORDER BY url, source"),
+        "SELECT url, source, lastmod FROM spider_sitemap_urls WHERE crawl_id = :crawl_id ORDER BY url, source"),
     "javascript": lambda conn, crawl_id: _sql_table(conn, crawl_id,
-        "SELECT url, kind, message, resource FROM render_events WHERE crawl_id = :crawl_id ORDER BY url, kind"),
+        "SELECT url, kind, message, resource FROM spider_render_events WHERE crawl_id = :crawl_id ORDER BY url, kind"),
 }  # fmt: skip
 
 
@@ -248,8 +250,8 @@ def _issues_table(conn: sa.Connection, crawl_id: int, issue: str | None) -> Tabl
         where += " AND i.code = :code"
         params["code"] = issue
     sql = (
-        "SELECT i.code, i.url, p.status_code, i.detail FROM issues i"  # noqa: S608 — fixed text
-        " LEFT JOIN pages p ON p.crawl_id = i.crawl_id AND p.url = i.url"
+        "SELECT i.code, i.url, p.status_code, i.detail FROM spider_issues i"  # noqa: S608 — fixed text
+        " LEFT JOIN spider_pages p ON p.crawl_id = i.crawl_id AND p.url = i.url"
         f" WHERE {where} ORDER BY i.code, i.url"
     )
 
@@ -338,7 +340,7 @@ _QUERY_FAILED = "Query failed: {}. Only SELECT is allowed; tables: `spider db in
 
 class _PgReadOnly:
     """PostgreSQL for `spider query`: a read-only transaction, one statement per call (a prepared statement can't
-    hold several — `COMMIT; DELETE …` never gets past the parser). For a hard guarantee, give SPIDER_DB_URL a user
+    hold several — `COMMIT; DELETE …` never gets past the parser). For a hard guarantee, give SPIDER_DATABASE_URL a user
     with SELECT rights only."""
 
     def __init__(self, url: str) -> None:
@@ -346,7 +348,7 @@ class _PgReadOnly:
         from psycopg import sql as pg_sql
 
         self.error, self.sql = psycopg.Error, pg_sql.SQL
-        target = storage.remote_url(url).set(drivername="postgresql")
+        target = db.postgres_url(url).set(drivername="postgresql")
         self.conn = psycopg.connect(target.render_as_string(hide_password=False))
         self.conn.read_only = True
 
@@ -366,7 +368,7 @@ class _PgReadOnly:
 @contextmanager
 def read_only(path: Path | None = None) -> Iterator:
     """A connection that can only read: SQLite opened read-only with an authorizer that refuses anything but SELECT,
-    or (SPIDER_DB_URL) a read-only PostgreSQL transaction."""
+    or (SPIDER_DATABASE_URL) a read-only PostgreSQL transaction."""
     if path is None and (url := storage.db_url()):
         pg = _PgReadOnly(url)
         try:
@@ -378,7 +380,7 @@ def read_only(path: Path | None = None) -> Iterator:
     if not path.is_file():
         raise InvalidArguments("No crawl database yet — run 'spider crawl <url>' first.")
     conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
-    conn.create_function("casefold", 1, lambda s: s.casefold() if s else s, deterministic=True)
+    conn.create_function("spider_casefold", 1, db.casefold, deterministic=True)
     conn.set_authorizer(_authorize)
     try:
         yield conn
@@ -555,7 +557,7 @@ def copy_screenshots(conn: sa.Connection, crawl_id: int, folder: Path) -> int:
 
     folder.mkdir(parents=True, exist_ok=True)
     sql = sa.text(
-        "SELECT url, screenshot FROM pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"
+        "SELECT url, screenshot FROM spider_pages WHERE crawl_id = :crawl_id AND screenshot IS NOT NULL ORDER BY url"
     )
     count = 0
     with (folder / "index.csv").open("w", encoding="utf-8", newline="") as index:

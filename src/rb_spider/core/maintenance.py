@@ -15,10 +15,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import sqlalchemy as sa
-from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 
-from . import storage
+from . import db, storage
 from .errors import InvalidArguments
 from .storage import crawls, projects
 
@@ -177,10 +176,9 @@ def _file_size(path: Path) -> int:
 
 def _revisions(engine: sa.Engine) -> tuple[str | None, str, list[str]]:
     """(current revision, head revision, revisions still to apply, oldest first)."""
-    script = ScriptDirectory.from_config(storage.alembic_config())
+    script = ScriptDirectory.from_config(db.alembic_config())
     head = script.get_current_head() or ""
-    with engine.connect() as conn:
-        current = MigrationContext.configure(conn).get_current_revision()
+    current = db.schema_state(engine).current
     pending = [rev.revision for rev in script.iterate_revisions(head, current)]
     return current, head, list(reversed(pending))
 
@@ -192,17 +190,18 @@ def db_info(engine: sa.Engine) -> DbInfo:
     with engine.connect() as conn:
         tables = set(sa.inspect(conn).get_table_names())
         for name in counts:
-            # links live in link_rows since schema 0014; a database not migrated yet still has the table
-            source = next((t for t in {"links": ("link_rows", "links")}.get(name, (name,)) if t in tables), None)
+            # a local file not migrated yet still has the names from before 0033 (and before 0014, `links`)
+            candidates = {"links": ("spider_link_rows", "link_rows", "links")}.get(name, (f"spider_{name}", name))
+            source = next((t for t in candidates if t in tables), None)
             if source is not None:
                 counts[name] = conn.exec_driver_sql(f"SELECT count(*) FROM {source}").scalar_one()  # noqa: S608 — fixed names
         if storage.is_sqlite(conn):
             free = conn.exec_driver_sql("PRAGMA freelist_count").scalar_one()
             free *= conn.exec_driver_sql("PRAGMA page_size").scalar_one()
             size, server = _file_size(path), None
-        else:  # PostgreSQL: its space is its own business; VACUUM reclaims what deleted crawls leave
+        else:  # PostgreSQL: the shared database — only spider's own tables count; VACUUM reclaims deleted crawls
             free = 0
-            size = conn.exec_driver_sql("SELECT pg_database_size(current_database())").scalar_one()
+            size = _pg_size(conn)
             server = conn.exec_driver_sql("SHOW server_version").scalar_one()
     html = storage.html_db_path()
     return DbInfo(
@@ -222,33 +221,40 @@ def db_info(engine: sa.Engine) -> DbInfo:
 
 
 def migrate(engine: sa.Engine) -> list[str]:
-    """Apply pending migrations; returns the revisions applied (every command does this on its own too)."""
+    """Apply pending migrations; returns the revisions applied."""
     _, _, pending = _revisions(engine)
-    if pending and not storage.is_sqlite(engine):  # a new PostgreSQL database gets the schema at once
-        with engine.begin() as connection:
-            storage.prepare_remote(connection)
-    elif pending:
-        from alembic import command
-
-        config = storage.alembic_config()
-        with engine.begin() as connection:
-            config.attributes["connection"] = connection
-            command.upgrade(config, "head")
+    if pending:
+        db.upgrade(engine)
     return pending
+
+
+def _pg_tables(conn: sa.Connection) -> list[str]:
+    return [t.name for t in storage.metadata.sorted_tables if sa.inspect(conn).has_table(t.name)]
+
+
+def _pg_size(conn: sa.Connection) -> int:
+    """Bytes of spider's tables with their indexes — not the whole shared database."""
+    names = _pg_tables(conn)
+    if not names:
+        return 0
+    query = sa.text(
+        "SELECT coalesce(sum(pg_total_relation_size(quote_ident(t))), 0) FROM unnest(CAST(:names AS text[])) AS t"
+    )
+    return int(conn.execute(query, {"names": names}).scalar_one())
 
 
 def vacuum(engine: sa.Engine) -> tuple[int, int]:
     """Rewrite the database (and the stored-HTML one) without free pages; returns total bytes (before, after).
 
-    PostgreSQL: VACUUM FULL — it rewrites the tables and locks them meanwhile."""
+    PostgreSQL: VACUUM FULL of spider's tables — it rewrites them and locks them meanwhile."""
     html = storage.html_db_path()
     if not storage.is_sqlite(engine):
-        size = "SELECT pg_database_size(current_database())"
         html_before = _file_size(html) if html.is_file() else 0
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            before = conn.exec_driver_sql(size).scalar_one() + html_before
-            conn.exec_driver_sql("VACUUM FULL")
-            after_db = conn.exec_driver_sql(size).scalar_one()
+            before = _pg_size(conn) + html_before
+            for name in _pg_tables(conn):  # never a bare VACUUM FULL: the database is shared
+                conn.exec_driver_sql(f"VACUUM FULL {name}")
+            after_db = _pg_size(conn)
         if html.is_file():
             _vacuum_file(html)
         return before, after_db + (_file_size(html) if html.is_file() else 0)

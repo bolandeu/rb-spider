@@ -487,7 +487,7 @@ def project_deletion(data: dict) -> None:
 def db_info(data: dict) -> None:
     schema = data["schema_revision"] or "пусто"
     if data["pending_migrations"]:
-        schema += f" (ждут миграции: {', '.join(data['pending_migrations'])} — `spider db migrate`)"
+        schema += f" (ждут миграции: {', '.join(data['pending_migrations'])} — `spider db upgrade`)"
     key_values(
         "База обходов",
         {"файл" if data.get("engine", "sqlite") == "sqlite" else "PostgreSQL": data["path"],

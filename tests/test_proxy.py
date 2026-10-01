@@ -64,7 +64,7 @@ def test_pages_robots_and_sitemaps_all_go_through_the_proxy(proxy: polygon.Proxy
         result = crawl_site(engine, f"{proxy.base()}/sm/", "polygon", settings)
         pages = _pages(engine, result.crawl_id)
         with engine.connect() as conn:
-            files = conn.execute(sa.text("SELECT url, error FROM sitemap_files")).all()
+            files = conn.execute(sa.text("SELECT url, error FROM spider_sitemap_files")).all()
     assert result.status == "finished" and result.proxy_down is None
     assert pages[f"{proxy.base()}/sm/"][0] == 200
     read = {url.removeprefix(proxy.base()) for url, error in files if error is None}

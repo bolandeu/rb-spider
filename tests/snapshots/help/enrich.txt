@@ -4,9 +4,9 @@
  Добавить к URL обхода метрики от обогатителей (плагинов).
 
  Каждый плагин получает обход (URL сайта) и пишет метрики в таблицу
- `url_metrics`; повторный запуск заменяет его прошлые метрики этого обхода.
+ `spider_url_metrics`; повторный запуск заменяет его прошлые метрики этого обхода.
  Метрики видны в `spider url <url>` и доступны в `spider query`
- (`SELECT * FROM url_metrics WHERE crawl_id = …`). Список плагинов — `spider enrichers`.
+ (`SELECT * FROM spider_url_metrics WHERE crawl_id = …`). Список плагинов — `spider enrichers`.
 
  Example: spider enrich
  Example: spider enrich 12 --plugin gsc
