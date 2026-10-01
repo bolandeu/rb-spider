@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.3.3] - 2026-10-01
+
+### Added
+
+- `crawl.retries_no_response` (по умолчанию 2) и `crawl.retry_pause_s` (5 с, растёт с каждой попыткой): URL, который не ответил вовсе (таймаут, обрыв соединения, ошибка TLS), спрашивается снова после паузы, прежде чем записать его неответившим — один сбой сети на стартовой странице больше не обрывает весь обход.
+
+
 ## [0.3.2] - 2026-10-01
 
 ### Fixed
