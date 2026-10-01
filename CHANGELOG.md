@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.3.2] - 2026-10-01
+
+### Fixed
+
+- `spider db upgrade` (и `--dry-run`, `db info`) на новой базе PostgreSQL показывает то, что выполняется, — базовую схему 0033 и миграции после неё, а не всю историю SQLite 0001–0032.
+
+
 ## [0.3.1] - 2026-10-01
 
 ### Fixed
