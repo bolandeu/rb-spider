@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.4.1] - 2026-10-02
+
+### Changed
+
+- Шаблон cli-generator v1.5.5: release.py больше не предлагает push — готовый релиз сообщается корневому агенту tools.
+
+
 ## [0.4.0] - 2026-10-02
 
 ### Added
