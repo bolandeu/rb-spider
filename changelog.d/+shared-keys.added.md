@@ -1,1 +1,0 @@
-Колонки `url_key` и `domain_key` (общие ключи rb-keys) в `spider_pages` и `spider_urls` и во вьюхах `spider_v1_pages` (ключи страницы) и `spider_v1_links` (ключи цели ссылки); миграция 0035 заполняет их для существующих строк. Общую базу обновить: `spider db upgrade`.

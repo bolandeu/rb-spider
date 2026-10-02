@@ -11,6 +11,22 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.5.0] - 2026-10-02
+
+### Added
+
+- Колонки `url_key` и `domain_key` (общие ключи rb-keys) в `spider_pages` и `spider_urls` и во вьюхах `spider_v1_pages` (ключи страницы) и `spider_v1_links` (ключи цели ссылки); миграция 0035 заполняет их для существующих строк. Общую базу обновить: `spider db upgrade`.
+
+### Changed
+
+- Шаблон cli-generator v1.5.6: в гейте шаг existing tests (изменённые существующие тесты с последнего тега), группа зависимостей mutation с mutmut.
+- Шаблон cli-generator v1.8.1: контракты потребителей (tests/contracts/) — отдельный шаг гейта; describe --json называет схему PostgreSQL каждой таблицы.
+
+### Fixed
+
+- `spider db upgrade` и `db info` старой версии на базе, мигрированной новой, отвечают `CLI_TOO_OLD` (код 6), а не `UNEXPECTED`.
+
+
 ## [0.4.1] - 2026-10-02
 
 ### Changed
