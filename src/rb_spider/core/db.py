@@ -57,7 +57,6 @@ ENV_VARS = {
     LEGACY_ENV_VAR: f"Deprecated name of {ENV_VAR}, still read",
 }
 VERSION_TABLE = f"alembic_version_{TOOL}"
-SQLITE_FILE = f"{TOOL}.sqlite"  # the local database's name in the user data dir
 CONNECT_TIMEOUT_S = 5
 BASELINE = "0033"  # the revision a new PostgreSQL starts from (migrations/pg_baseline.py)
 DB_CREDENTIAL = "database"  # `spider auth login --provider database`: the password of the database URL
@@ -83,7 +82,7 @@ def sqlite_path() -> Path:
     """The local database: `<TOOL>_DB_PATH`, else the app data dir (not Caches — cleaners wipe caches)."""
     if path := os.environ.get(PATH_ENV_VAR):
         return Path(path).expanduser()
-    return platformdirs.user_data_path(TOOL, appauthor=False) / SQLITE_FILE
+    return platformdirs.user_data_path(TOOL, appauthor=False) / f"{TOOL}.sqlite"
 
 
 def is_postgres(engine: sa.Engine | sa.Connection) -> bool:
