@@ -11,6 +11,13 @@ added/changed/deprecated/removed/fixed/security), а `scripts/release.py` соб
 
 <!-- towncrier release notes start -->
 
+## [0.4.0] - 2026-10-02
+
+### Added
+
+- Команда `spider describe --json` — контракт инструмента в формате OpenCLI: команды, опции, коды выхода, переменные окружения, таблицы, представления `spider_v1_*` с колонками и файлы данных (для каталога инструментов и Windmill).
+
+
 ## [0.3.4] - 2026-10-01
 
 ### Fixed
