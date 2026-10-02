@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic.script import ScriptDirectory
 
 from . import db, storage
-from .errors import InvalidArguments
+from .errors import DatabaseTooNew, InvalidArguments
 from .storage import crawls, projects
 
 # Child tables of a crawl, deleted explicitly by crawl_id: faster than SQLite's per-row cascade on
@@ -178,7 +178,10 @@ def _revisions(engine: sa.Engine) -> tuple[str | None, str, list[str]]:
     """(current revision, head revision, revisions still to apply, oldest first)."""
     script = ScriptDirectory.from_config(db.alembic_config())
     head = script.get_current_head() or ""
-    current = db.schema_state(engine).current
+    state = db.schema_state(engine)
+    if state.too_new:  # a newer release migrated it: the history here can't reach its revision
+        raise DatabaseTooNew(state.current or "")
+    current = state.current
     if current is None and not storage.is_sqlite(engine):  # a new PostgreSQL: the baseline of 0033, then the rest
         later = [rev.revision for rev in script.iterate_revisions(head, db.BASELINE)]
         return current, head, [db.BASELINE, *reversed(later)]

@@ -13,10 +13,12 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 import sqlalchemy as sa
 import zstandard
+from rb_keys import norm_domain, norm_url
 
 from . import db
 from .errors import InvalidArguments
@@ -192,6 +194,23 @@ def finish_crawl(engine: sa.Engine, crawl_id: int, status: str) -> int:
 
 
 _PAGE_COLUMNS = [column.name for column in pages.columns if column.name != "id"]  # the database numbers rows
+_URL_COLUMNS = ["crawl_id", "url", "url_key", "domain_key"]
+
+
+def _key(normalize, url: str) -> str | None:
+    try:
+        return normalize(url)
+    except ValueError:  # not a web URL (mailto:, malformed): no key — an empty one would join every bad URL
+        return None
+
+
+# A site's navigation links come back in every batch: their keys are worked out once (bounded — memory stays flat).
+@lru_cache(maxsize=65536)
+def url_keys(url: str) -> tuple[str | None, str | None]:
+    """`url_key`, `domain_key` of a URL — the shared keys (rb-keys) other tools and Directus join pages by."""
+    return _key(norm_url, url), _key(norm_domain, url)
+
+
 _LINK_COLUMNS = ["crawl_id", *LINK_FIELDS]
 
 
@@ -259,13 +278,10 @@ def _writer_sql(dialect: str) -> _WriterSql:
         # a URL reached twice keeps its latest response
         pages=_insert_json(pages, _PAGE_COLUMNS, dialect, "INSERT OR REPLACE",
                            f"ON CONFLICT (crawl_id, url) DO UPDATE SET {updates}"),
-        # A batch of links: its URLs get ids (new ones inserted), then the rows go in with the ids — all inside the
-        # database, so the writer keeps no URL -> id map in memory. Both statements read the same JSON chunk.
-        link_urls=(
-            f"WITH r AS (SELECT {link_json} FROM {rows_source}) "  # noqa: S608 — fixed names
-            f"{ignore} INTO spider_urls (url, crawl_id) SELECT source, crawl_id FROM r UNION SELECT target, crawl_id FROM r"
-            f"{no_conflict}"
-        ),
+        # A batch of links: its URLs get ids (new ones inserted), then the rows go in with the ids — looked up inside
+        # the database, so the writer keeps no URL -> id map in memory.
+        # The URLs come distinct and keyed from the writer (`_link_urls`): the keys are Python's (rb-keys).
+        link_urls=_insert_json(urls, _URL_COLUMNS, dialect, ignore, no_conflict),
         # The ids by a lookup per row through the unique index — not a JOIN: with planner statistics from earlier,
         # smaller crawls in the same database SQLite could pick a scan of `urls` per row (4 pages then a full one: 20 s).
         link_rows=(
@@ -385,6 +401,7 @@ class PageWriter:
             "refresh_url": page.refresh_url,
             "refresh_kind": page.refresh_kind,
         }
+        row["url_key"], row["domain_key"] = url_keys(page.url)
         self._batch.pages.append(tuple(row.get(column) for column in _PAGE_COLUMNS))
         self._batch.custom.extend((self.crawl_id, page.url, *values) for values in page.custom)
         self._batch.events.extend((self.crawl_id, page.url, *values) for values in page.events)
@@ -435,21 +452,27 @@ class PageWriter:
                 self.failed = exc
                 raise
 
+    def _link_urls(self, links: list[tuple]) -> list[tuple]:
+        """`urls` rows for every URL a batch of links refers to, once each, with their keys."""
+        found = dict.fromkeys(url for row in links for url in row[1:3])  # (crawl_id, source, target, …)
+        return [(self.crawl_id, url, *url_keys(url)) for url in found]
+
     def _write(self, batch: _Batch) -> None:
         if batch.html and self.html_engine is not None:  # a separate file: stored first, harmless if orphaned
             with self.html_engine.begin() as conn:
                 conn.execute(sa.insert(html_pages).prefix_with("OR REPLACE"), batch.html)
         sql = _WRITER_SQL[self.engine.dialect.name]
         with self.engine.begin() as conn:
-            for statements, rows in (
-                ((sql.queued,), batch.queued),
-                ((sql.pages,), batch.pages),
-                ((sql.link_urls, sql.link_rows), batch.links),
+            for statement, rows in (
+                (sql.queued, batch.queued),
+                (sql.pages, batch.pages),
+                (sql.link_urls, self._link_urls(batch.links)),  # before the links: they refer to the URLs' ids
+                (sql.link_rows, batch.links),
             ):
                 for chunk in range(0, len(rows), _JSON_CHUNK):  # SQLite parses a JSON argument whole
-                    data = json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False)
-                    for statement in statements:
-                        conn.exec_driver_sql(statement, (data,))
+                    conn.exec_driver_sql(
+                        statement, (json.dumps(rows[chunk : chunk + _JSON_CHUNK], ensure_ascii=False),)
+                    )
             for rows, statement in ((batch.custom, sql.custom), (batch.events, sql.events), (batch.images, sql.images)):
                 for chunk in range(0, len(rows), _JSON_CHUNK):
                     conn.exec_driver_sql(

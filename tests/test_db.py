@@ -298,9 +298,9 @@ def test_postgres_db_upgrade_command_from_scratch(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv(db.ENV_VAR, _pg_url(name))
     try:
         code, payload = invoke_json("db", "upgrade", "--dry-run")
-        assert code == 0 and payload["dry_run"] and payload["migrations"] == [db.BASELINE, "0034"]
+        assert code == 0 and payload["dry_run"] and payload["migrations"] == [db.BASELINE, "0034", "0035"]
         code, payload = invoke_json("db", "upgrade")
-        assert code == 0 and payload["migrations"] == [db.BASELINE, "0034"]
+        assert code == 0 and payload["migrations"] == [db.BASELINE, "0034", "0035"]
         engine = db.postgres_engine(_pg_url(name))
         try:
             names = set(sa.inspect(engine).get_table_names())

@@ -205,8 +205,13 @@ pages = sa.Table(
     sa.Column("sd_rich_warnings", sa.Integer),
     sa.Column("sd_messages", sa.String),
     sa.Column("sd_features", sa.String),
+    # the shared keys other tools and Directus join pages by (rb-keys: norm_url / norm_domain of `url`, storage.url_keys);
+    # NULL — not a web URL (mailto:, malformed)
+    sa.Column("url_key", sa.String),
+    sa.Column("domain_key", sa.String),
     sa.UniqueConstraint("crawl_id", "url", name="spider_pages_by_url"),  # a URL reached twice keeps its latest row
     sa.Index("spider_pages_by_md5", "crawl_id", "content_md5"),
+    sa.Index("spider_pages_by_url_key", "url_key"),
     info={"kind": "data"},
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
@@ -234,7 +239,10 @@ urls = sa.Table(
     sa.Column("id", ID, primary_key=True),
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("spider_crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("url", sa.String, nullable=False),
+    sa.Column("url_key", sa.String),  # as in pages
+    sa.Column("domain_key", sa.String),
     sa.UniqueConstraint("url", "crawl_id", name="spider_urls_by_url"),
+    sa.Index("spider_urls_by_url_key", "url_key"),
     info={"kind": "data"},
 )
 LINK_DATA = (
@@ -435,8 +443,8 @@ issues = sa.Table(
 
 # The `spider_v1_*` views other tools, Directus and the platform read instead of the tables (migration 0034) — the
 # tool's data contract, published by `describe --json` (x-rb-data.views). tests/test_db.py fails when a view below is
-# missing from the migrated database or its columns differ. Columns never change: a different shape is a new `_v2_`
-# view next to the old one. Kept out of `metadata`, which mirrors the tables only.
+# missing from the migrated database or its columns differ. A column may be added at the end; none is removed,
+# renamed or retyped: a different shape is a new `_v2_` view next to the old one. Kept out of `metadata`, which mirrors the tables only.
 views = sa.MetaData()
 
 v1_crawls = sa.Table(
@@ -474,6 +482,12 @@ v1_pages = sa.Table(
     sa.Column("unique_inlinks", sa.Integer, comment="Distinct pages linking to it"),
     sa.Column("link_score", sa.Integer, comment="Internal PageRank, 0–100; NULL — not computed"),
     sa.Column("fetched_at", sa.DateTime(timezone=True), comment="When it was fetched"),
+    sa.Column(
+        "url_key",
+        sa.String,
+        comment="Shared URL key (rb-keys norm_url): join other tools' rows on it; NULL — not a web URL",
+    ),
+    sa.Column("domain_key", sa.String, comment="Shared domain key (rb-keys norm_domain); NULL — not a web URL"),
     comment="One row per URL of a crawl: response and on-page SEO data",
 )
 v1_issues = sa.Table(
@@ -499,5 +513,7 @@ v1_links = sa.Table(
     sa.Column("nofollow", sa.Boolean, comment="rel=nofollow (or the page's nofollow)"),
     sa.Column("position", sa.String, comment="nav | header | footer | sidebar; NULL — content"),
     sa.Column("origin", sa.String, comment="html | rendered | html & rendered; images: css background"),
+    sa.Column("url_key", sa.String, comment="Shared URL key of the target (rb-keys norm_url); NULL — not a web URL"),
+    sa.Column("domain_key", sa.String, comment="Shared domain key of the target (rb-keys norm_domain)"),
     comment="One row per link, resource or directive between two URLs of a crawl",
 )

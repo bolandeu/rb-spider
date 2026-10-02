@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def _link(source: str, target: str) -> tuple:
     return (source, target, "hyperlink", True, None, None, None, False, None, None, None, None, None, None, None, None)
 
 
-def _write(engine: sa.Engine, pages: list[str], links: list[tuple[str, str]] = ()) -> int:
+def _write(engine: sa.Engine, pages: list[str], links: list[tuple[str, str]] | tuple = ()) -> int:
     crawl_id = storage.start_crawl(engine, "keys", "https://example.com/")
     writer = storage.PageWriter(engine, crawl_id)
     for url in pages:
@@ -180,7 +181,7 @@ def test_migration_0035_backfills_an_existing_sqlite_database(tmp_path: Path) ->
 
 
 @pytest.fixture
-def pg_scratch() -> str:
+def pg_scratch() -> Iterator[str]:
     assert PG_ADMIN and sa.make_url(PG_ADMIN).host in ("127.0.0.1", "localhost")
     from .conftest import _pg_admin, _pg_url
 

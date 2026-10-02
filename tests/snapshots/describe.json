@@ -7348,6 +7348,16 @@
                   "name": "sd_features",
                   "type": "VARCHAR",
                   "nullable": true
+                },
+                {
+                  "name": "url_key",
+                  "type": "VARCHAR",
+                  "nullable": true
+                },
+                {
+                  "name": "domain_key",
+                  "type": "VARCHAR",
+                  "nullable": true
                 }
               ]
             },
@@ -7409,6 +7419,16 @@
                   "name": "url",
                   "type": "VARCHAR",
                   "nullable": false
+                },
+                {
+                  "name": "url_key",
+                  "type": "VARCHAR",
+                  "nullable": true
+                },
+                {
+                  "name": "domain_key",
+                  "type": "VARCHAR",
+                  "nullable": true
                 }
               ]
             },
@@ -8033,6 +8053,16 @@
                   "name": "fetched_at",
                   "type": "DATETIME",
                   "description": "When it was fetched"
+                },
+                {
+                  "name": "url_key",
+                  "type": "VARCHAR",
+                  "description": "Shared URL key (rb-keys norm_url): join other tools' rows on it; NULL — not a web URL"
+                },
+                {
+                  "name": "domain_key",
+                  "type": "VARCHAR",
+                  "description": "Shared domain key (rb-keys norm_domain); NULL — not a web URL"
                 }
               ]
             },
@@ -8120,6 +8150,16 @@
                   "name": "origin",
                   "type": "VARCHAR",
                   "description": "html | rendered | html & rendered; images: css background"
+                },
+                {
+                  "name": "url_key",
+                  "type": "VARCHAR",
+                  "description": "Shared URL key of the target (rb-keys norm_url); NULL — not a web URL"
+                },
+                {
+                  "name": "domain_key",
+                  "type": "VARCHAR",
+                  "description": "Shared domain key of the target (rb-keys norm_domain)"
                 }
               ]
             }
