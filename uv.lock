@@ -2320,6 +2320,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rb-keys"
+version = "0.1.0"
+source = { git = "https://github.com/bolandeu/keys?tag=v0.1.0#ddf5aa6ea11296906ef91e8ad2d47cac3cca8d34" }
+dependencies = [
+    { name = "packaging" },
+    { name = "platformdirs" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "tomli-w" },
+    { name = "typer" },
+    { name = "w3lib" },
+]
+
+[[package]]
 name = "rb-sitemap-xml"
 version = "0.1.3"
 source = { git = "https://github.com/bolandeu/sitemap-xml?tag=v0.1.3#4a3cd2a04e17cf981ef7b6c2e97a1d4ad1f9e12c" }
@@ -2350,6 +2364,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
+    { name = "rb-keys" },
     { name = "rich" },
     { name = "selectolax" },
     { name = "sqlalchemy" },
@@ -2421,6 +2436,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "rb-google-search-console", marker = "extra == 'gsc'", git = "https://github.com/bolandeu/google-search-console?tag=v0.4.0" },
+    { name = "rb-keys", git = "https://github.com/bolandeu/keys?tag=v0.1.0" },
     { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", git = "https://github.com/bolandeu/sitemap-xml?tag=v0.1.3" },
     { name = "rich", specifier = ">=13.7" },
     { name = "selectolax", specifier = ">=0.4" },
@@ -3109,11 +3125,11 @@ wheels = [
 
 [[package]]
 name = "w3lib"
-version = "2.4.1"
+version = "2.5.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c0/91/b2eb59c2cf243de5de1e91c963655df78c015509f51297685a8c86a27b8c/w3lib-2.4.1.tar.gz", hash = "sha256:8dd69ee39ff6398d708c793abc779c334a69bac7cee1cdf71736c669ed6be864", size = 48494, upload-time = "2026-03-20T09:50:27.477Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/77/5138921cc21adf763e941671b4cc6bbf00813663c983aa3fb8dac273f081/w3lib-2.5.0.tar.gz", hash = "sha256:a7ddf714508ddc1b8563bd19ace2feb28080bbaca39326cbc964359f6754f615", size = 385035, upload-time = "2026-09-30T10:10:54.571Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/c3/f8b216cbd742e5b84c40f045204c764ccb7524d2aeab021054ec69446b0a/w3lib-2.4.1-py3-none-any.whl", hash = "sha256:40930132907e68de906a5b89331ab8c8ff4f01bd35b5539ef7896017d814138d", size = 21695, upload-time = "2026-03-20T09:50:26.187Z" },
+    { url = "https://files.pythonhosted.org/packages/99/bb/e977329315ba4e14f6f6ca0fee7de816a80d161c115a181405bbab92aecf/w3lib-2.5.0-py3-none-any.whl", hash = "sha256:136fd5edfe64b53b8579838e2a7e803495bbbe6b69ddfaeed3c29a794b44f6ba", size = 37047, upload-time = "2026-09-30T10:10:53.179Z" },
 ]
 
 [[package]]
