@@ -19,3 +19,7 @@ storage/
 .python-version
 # локальные настройки Claude Code (разрешения) — у каждого свои
 .claude/settings.local.json
+.coverage
+htmlcov/
+# mutmut's working copy and results (uv run --group mutation mutmut run)
+mutants/
