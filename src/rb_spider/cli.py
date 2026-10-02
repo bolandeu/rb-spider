@@ -12,6 +12,7 @@ from .commands import (
     crawls,
     custom,
     db,
+    describe,
     doctor,
     duplicates,
     enrich,
@@ -69,6 +70,7 @@ app.command(name="lighthouse")(lighthouse.lighthouse)
 app.command(name="init")(init.init)
 app.command(name="status")(status.status)
 app.command(name="doctor")(doctor.doctor)
+app.command(name="describe")(describe.describe)
 app.command(name="crawl")(crawl.crawl)
 app.command(name="issues")(issues.issues)
 app.command(name="urls")(issues.urls)

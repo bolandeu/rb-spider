@@ -5,6 +5,10 @@ Every name starts with `PREFIX` (`spider_`): the shared PostgreSQL holds every t
 and this metadata disagree. Every table has a single-column PRIMARY KEY — Directus can't show or edit a table without
 one and doesn't support a composite one: a surrogate `id` (in SQLite an alias of the rowid: free to write, and what
 passes page by), with the natural key as a UNIQUE constraint.
+
+Every table says what its rows are, `info={"kind": "data"}` or `"cache"` (tests/test_db.py fails without it): `data`
+is the tool's result and lost when deleted; `cache` is a copy of something it can fetch again. `describe --json`
+publishes it (x-rb-data).
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ projects = sa.Table(
     sa.Column("id", sa.Integer, primary_key=True),
     sa.Column("name", sa.String, nullable=False, unique=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    info={"kind": "data"},
 )
 crawls = sa.Table(
     "spider_crawls",
@@ -56,6 +61,7 @@ crawls = sa.Table(
     sa.Column("pages", sa.Integer, nullable=False, server_default="0"),
     sa.Column("settings", sa.JSON),  # resolved settings the crawl ran with: explains why two crawls differ
     sa.Column("pid", sa.Integer),  # process running the crawl (a detached one too) — to tell running from dead
+    info={"kind": "data"},
 )
 pages = sa.Table(
     "spider_pages",
@@ -196,6 +202,7 @@ pages = sa.Table(
     sa.Column("sd_features", sa.String),
     sa.UniqueConstraint("crawl_id", "url", name="spider_pages_by_url"),  # a URL reached twice keeps its latest row
     sa.Index("spider_pages_by_md5", "crawl_id", "content_md5"),
+    info={"kind": "data"},
 )
 # Every URL handed to the crawl queue. `done` is set in the same transaction that stores the page,
 # so after a crash (kill -9) the pending rows are exactly what still has to be fetched: resume
@@ -211,6 +218,7 @@ frontier = sa.Table(
     sa.Column("done", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.UniqueConstraint("crawl_id", "url", name="spider_frontier_by_url"),
     sa.Index("spider_frontier_pending", "crawl_id", "done"),
+    info={"kind": "data"},
 )
 # Every URL a crawl stored a link from or to, once: links refer to URLs by id. With ~33 links a page, two
 # URL strings per link row (and two indexes over them) were most of the database and of the time spent
@@ -222,6 +230,7 @@ urls = sa.Table(
     sa.Column("crawl_id", sa.Integer, sa.ForeignKey("spider_crawls.id", ondelete="CASCADE"), nullable=False),
     sa.Column("url", sa.String, nullable=False),
     sa.UniqueConstraint("url", "crawl_id", name="spider_urls_by_url"),
+    info={"kind": "data"},
 )
 LINK_DATA = (
     "kind", "internal", "anchor", "alt", "rel", "nofollow", "alt_attr", "sized", "fragment", "hreflang", "position",
@@ -263,6 +272,7 @@ link_rows = sa.Table(
     # rel next / prev: queries say `kind IN ('next', 'prev')` so SQLite can use it
     sa.Index("spider_link_rows_pagination", "crawl_id", "source_id", **_partial("kind IN ('next', 'prev')")),
     sa.Index("spider_link_rows_mobile", "crawl_id", "source_id", **_partial("kind = 'mobile_alternate'")),
+    info={"kind": "data"},
 )
 # `links` is a view over link_rows with the URLs as text (migration 0014) — what rules, reports and
 # `spider query` read. SQLite folds it into each query: a filter on `target` finds the id through `urls` first.
@@ -301,6 +311,7 @@ url_metrics = sa.Table(
     sa.Column("value", sa.Float),
     sa.Column("text", sa.String),
     sa.UniqueConstraint("crawl_id", "url", "source", "name", name="spider_url_metrics_key"),
+    info={"kind": "data"},
 )
 # XML sitemaps a crawl read (sitemaps.crawl): every file, and every URL entry with the file it came from.
 sitemap_files = sa.Table(
@@ -314,6 +325,7 @@ sitemap_files = sa.Table(
     sa.Column("urls", sa.Integer),
     sa.Column("sitemaps", sa.Integer),  # child sitemaps of an index
     sa.Column("error", sa.String),
+    info={"kind": "data"},
 )
 sitemap_urls = sa.Table(
     "spider_sitemap_urls",
@@ -324,6 +336,7 @@ sitemap_urls = sa.Table(
     sa.Column("source", sa.String, nullable=False),  # the sitemap file
     sa.Column("lastmod", sa.String),
     sa.Index("spider_sitemap_urls_by_url", "crawl_id", "url"),
+    info={"kind": "data"},
 )
 # Custom Search and Custom Extraction results ([custom]): a search — the number of matches on a page (a row only
 # when there are any); an extraction — each value, `n` its order on the page.
@@ -338,6 +351,7 @@ custom_values = sa.Table(
     sa.Column("value", sa.String),
     sa.Column("n", sa.Integer, nullable=False),
     sa.Index("spider_custom_values_by_name", "crawl_id", "kind", "name"),
+    info={"kind": "data"},
 )
 # What the browser reported while rendering a page (crawl.render): console errors and warnings, uncaught exceptions,
 # and resources it couldn't load — blocked by robots.txt, failed, or answered 4xx / 5xx. At most 50 of each per page.
@@ -351,6 +365,7 @@ render_events = sa.Table(
     sa.Column("message", sa.String),  # console text; for resources why: robots.txt, HTTP 404, failed: …
     sa.Column("resource", sa.String),  # blocked / failed: the resource's URL
     sa.Index("spider_render_events_by_url", "crawl_id", "url"),
+    info={"kind": "data"},
 )
 # `spider lighthouse`: every audit of every page Lighthouse measured (and spider's own mobile measures, `spider-*`),
 # per strategy. Items — up to 20 of the audit's resources as JSON (URL, wasted bytes / ms), for the reports. From
@@ -370,6 +385,7 @@ lighthouse_audits = sa.Table(
     sa.Column("items", sa.String),
     sa.Column("source", sa.String),  # local | psi; NULL — measured before 0032 (local)
     sa.Index("spider_lighthouse_audits_by_url", "crawl_id", "url"),
+    info={"kind": "data"},
 )
 # Images as a rendered page laid them out (crawl.render_images): real size against the size shown (Incorrectly Sized
 # Images, Image Details). At most 200 per page.
@@ -385,6 +401,7 @@ rendered_images = sa.Table(
     sa.Column("display_width", sa.Integer),
     sa.Column("display_height", sa.Integer),
     sa.Index("spider_rendered_images_by_url", "crawl_id", "url"),
+    info={"kind": "data"},
 )
 # Near-duplicate pairs (issues.analyze, from pages.minhash): each pair once, url_a < url_b.
 near_duplicates = sa.Table(
@@ -397,6 +414,7 @@ near_duplicates = sa.Table(
     sa.Column("similarity", sa.Float, nullable=False),  # estimated Jaccard similarity of the texts, 0–1
     sa.Index("spider_near_duplicates_by_a", "crawl_id", "url_a"),
     sa.Index("spider_near_duplicates_by_b", "crawl_id", "url_b"),
+    info={"kind": "data"},
 )
 issues = sa.Table(
     "spider_issues",
@@ -407,4 +425,74 @@ issues = sa.Table(
     sa.Column("url", sa.String, nullable=False),
     sa.Column("detail", sa.String),
     sa.Index("spider_issues_by_code", "crawl_id", "code"),
+    info={"kind": "data"},
+)
+
+# The `spider_v1_*` views other tools, Directus and the platform read instead of the tables (migration 0034) — the
+# tool's data contract, published by `describe --json` (x-rb-data.views). tests/test_db.py fails when a view below is
+# missing from the migrated database or its columns differ. Columns never change: a different shape is a new `_v2_`
+# view next to the old one. Kept out of `metadata`, which mirrors the tables only.
+views = sa.MetaData()
+
+v1_crawls = sa.Table(
+    f"{PREFIX}v1_crawls",
+    views,
+    sa.Column("crawl_id", sa.Integer, comment="Crawl id"),
+    sa.Column("project", sa.String, comment="Project name"),
+    sa.Column("start_url", sa.String, comment="The URL the crawl started from"),
+    sa.Column("status", sa.String, comment="running | finished | failed | interrupted"),
+    sa.Column("started_at", sa.DateTime(timezone=True), comment="When the crawl started"),
+    sa.Column("finished_at", sa.DateTime(timezone=True), comment="When it ended; NULL while running"),
+    sa.Column("pages", sa.Integer, comment="URLs stored"),
+    comment="One row per crawl",
+)
+v1_pages = sa.Table(
+    f"{PREFIX}v1_pages",
+    views,
+    sa.Column("id", ID, comment="Page row id"),
+    sa.Column("crawl_id", sa.Integer, comment="Crawl id (spider_v1_crawls)"),
+    sa.Column("url", sa.String, comment="The URL"),
+    sa.Column("status_code", sa.Integer, comment="HTTP status; 0 — no response or blocked by robots.txt"),
+    sa.Column("redirect_url", sa.String, comment="Location of a redirect"),
+    sa.Column("content_type", sa.String, comment="Content-Type"),
+    sa.Column("indexable", sa.Boolean, comment="Can a search engine index the URL"),
+    sa.Column("indexability_status", sa.String, comment="Why not: noindex, canonicalised, redirect, …"),
+    sa.Column("title", sa.String, comment="The first <title>"),
+    sa.Column("meta_description", sa.String, comment="The first meta description"),
+    sa.Column("h1", sa.String, comment="The first h1"),
+    sa.Column("canonical_url", sa.String, comment="The canonical URL, absolute"),
+    sa.Column("robots_directives", sa.String, comment="meta robots + X-Robots-Tag as ',noindex,nofollow,'"),
+    sa.Column("depth", sa.Integer, comment="Clicks from the start URL"),
+    sa.Column("word_count", sa.Integer, comment="Words of visible text"),
+    sa.Column("response_ms", sa.Integer, comment="Time to the response headers, ms"),
+    sa.Column("inlinks", sa.Integer, comment="<a href> links to the page from the site"),
+    sa.Column("unique_inlinks", sa.Integer, comment="Distinct pages linking to it"),
+    sa.Column("link_score", sa.Integer, comment="Internal PageRank, 0–100; NULL — not computed"),
+    sa.Column("fetched_at", sa.DateTime(timezone=True), comment="When it was fetched"),
+    comment="One row per URL of a crawl: response and on-page SEO data",
+)
+v1_issues = sa.Table(
+    f"{PREFIX}v1_issues",
+    views,
+    sa.Column("id", ID, comment="Issue row id"),
+    sa.Column("crawl_id", sa.Integer, comment="Crawl id (spider_v1_crawls)"),
+    sa.Column("code", sa.String, comment="Check code (`spider issues`)"),
+    sa.Column("url", sa.String, comment="The URL the check found"),
+    sa.Column("detail", sa.String, comment="What exactly, when the check says"),
+    comment="One row per issue a check found on a URL",
+)
+v1_links = sa.Table(
+    f"{PREFIX}v1_links",
+    views,
+    sa.Column("crawl_id", sa.Integer, comment="Crawl id (spider_v1_crawls)"),
+    sa.Column("source", sa.String, comment="The page the link is on"),
+    sa.Column("target", sa.String, comment="Where it points"),
+    sa.Column("kind", sa.String, comment="hyperlink | canonical | redirect | hreflang | image | css | js | …"),
+    sa.Column("internal", sa.Boolean, comment="The target is part of the site"),
+    sa.Column("anchor", sa.String, comment="Anchor text"),
+    sa.Column("rel", sa.String, comment="rel attribute"),
+    sa.Column("nofollow", sa.Boolean, comment="rel=nofollow (or the page's nofollow)"),
+    sa.Column("position", sa.String, comment="nav | header | footer | sidebar; NULL — content"),
+    sa.Column("origin", sa.String, comment="html | rendered | html & rendered; images: css background"),
+    comment="One row per link, resource or directive between two URLs of a crawl",
 )

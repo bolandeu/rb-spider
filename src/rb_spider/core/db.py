@@ -50,7 +50,14 @@ _PACKAGE_NAME = __name__.split(".")[0]
 ENV_VAR = f"{TOOL.upper()}_DATABASE_URL"
 PATH_ENV_VAR = f"{TOOL.upper()}_DB_PATH"  # the local SQLite file elsewhere (a second database, an existing file)
 LEGACY_ENV_VAR = f"{TOOL.upper()}_DB_URL"  # the name before 0.3; read while machines move to ENV_VAR
+# What each one is for — `describe --json` lists them (x-rb-env).
+ENV_VARS = {
+    ENV_VAR: "Shared PostgreSQL URL; unset → the local SQLite file",
+    PATH_ENV_VAR: "The local SQLite file, instead of the one in the user data dir",
+    LEGACY_ENV_VAR: f"Deprecated name of {ENV_VAR}, still read",
+}
 VERSION_TABLE = f"alembic_version_{TOOL}"
+SQLITE_FILE = f"{TOOL}.sqlite"  # the local database's name in the user data dir
 CONNECT_TIMEOUT_S = 5
 BASELINE = "0033"  # the revision a new PostgreSQL starts from (migrations/pg_baseline.py)
 DB_CREDENTIAL = "database"  # `spider auth login --provider database`: the password of the database URL
@@ -76,7 +83,7 @@ def sqlite_path() -> Path:
     """The local database: `<TOOL>_DB_PATH`, else the app data dir (not Caches — cleaners wipe caches)."""
     if path := os.environ.get(PATH_ENV_VAR):
         return Path(path).expanduser()
-    return platformdirs.user_data_path(TOOL, appauthor=False) / f"{TOOL}.sqlite"
+    return platformdirs.user_data_path(TOOL, appauthor=False) / SQLITE_FILE
 
 
 def is_postgres(engine: sa.Engine | sa.Connection) -> bool:

@@ -107,6 +107,9 @@ crawling again.
   `spider_v1_*` views.
 - **`doctor --json`** first when something looks off — it reports
   project, config, version compatibility and credential readiness.
+- **`describe --json`** — the whole CLI as one machine-readable OpenCLI
+  document (commands, options, exit codes, env vars, data): the bare
+  document, no `{"ok": ...}` envelope.
 
 ## Errors
 

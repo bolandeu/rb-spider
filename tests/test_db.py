@@ -84,6 +84,29 @@ def test_every_table_has_a_single_column_primary_key(tmp_path: Path) -> None:
         assert len(columns) == 1, f"{name}: PRIMARY KEY must be one column, is {columns}"
 
 
+def test_every_table_says_whether_it_is_data_or_cache() -> None:
+    for table in tables.metadata.sorted_tables:
+        assert table.info.get("kind") in ("data", "cache"), (
+            f'{table.name}: info={{"kind": "data" | "cache"}} is required'
+        )
+
+
+def test_declared_views_exist_with_their_columns(tmp_path: Path) -> None:
+    """Every view in tables.views is created by the migrations, with exactly the declared columns."""
+    _assert_views_match(_local(tmp_path, "views.sqlite"))
+
+
+def _assert_views_match(engine: sa.Engine) -> None:
+    inspector = sa.inspect(engine)
+    existing = set(inspector.get_view_names())
+    assert tables.views.sorted_tables, "tables.views declares no view"
+    for view in tables.views.sorted_tables:
+        assert view.name.startswith(f"{db.PREFIX}v"), f"{view.name}: a view's name is spider_v<N>_<name>"
+        assert view.name in existing, f"{view.name} is declared in tables.views but no migration creates it"
+        columns = [column["name"] for column in inspector.get_columns(view.name)]
+        assert columns == [column.name for column in view.columns], f"{view.name}: columns differ from tables.views"
+
+
 def test_tables_match_the_migrations(tmp_path: Path) -> None:
     """tables.py and migrations/versions/ describe the same schema."""
     with _local(tmp_path, "schema.sqlite").connect() as conn:
@@ -222,6 +245,7 @@ def test_postgres_from_scratch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         with pytest.raises(DatabaseNotMigrated):
             storage.open_db()
         assert db.upgrade(engine).up_to_date
+        _assert_views_match(engine)
         with engine.connect() as conn:
             context = MigrationContext.configure(
                 conn, opts={"include_name": lambda n, type_, *_: type_ != "table" or n.startswith(db.PREFIX)}
