@@ -194,6 +194,7 @@ def data() -> dict:
         out["tables"] = [
             {
                 "name": table.name,
+                "schema": table.schema or "public",
                 "kind": table.info.get("kind"),
                 **({"description": table.comment} if table.comment else {}),
                 "columns": [

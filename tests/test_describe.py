@@ -26,7 +26,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.testing import CliRunner
 
 from rb_spider.cli import app
-from rb_spider.core import db, errors, opencli
+from rb_spider.core import db, errors, opencli, tables
 
 CLI = "spider"
 SCHEMA = json.loads((Path(__file__).parent / "data" / "opencli.schema.json").read_text())
@@ -147,6 +147,12 @@ def test_database_file_is_where_sqlite_path_puts_it(monkeypatch: pytest.MonkeyPa
     files = _meta(opencli.document(typer.main.get_command(app))["command"])["x-rb-data"]["user_data_dir"]["files"]
     assert files[0]["path"] == "own.sqlite"
     assert os.environ[db.PATH_ENV_VAR] == str(tmp_path / "elsewhere.db")
+
+
+def test_tables_name_their_schema() -> None:
+    """PostgreSQL schema per table: `cache` for kind="cache" (T30), `public` for the data."""
+    found = {t["name"]: t["schema"] for t in _meta(DOCUMENT["command"])["x-rb-data"]["tables"]}
+    assert found == {t.name: t.schema or "public" for t in tables.metadata.sorted_tables}
 
 
 class Color(enum.Enum):

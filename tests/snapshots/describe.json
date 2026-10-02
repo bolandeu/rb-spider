@@ -6754,6 +6754,7 @@
           "tables": [
             {
               "name": "spider_projects",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -6776,6 +6777,7 @@
             },
             {
               "name": "spider_crawls",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -6828,6 +6830,7 @@
             },
             {
               "name": "spider_pages",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7350,6 +7353,7 @@
             },
             {
               "name": "spider_frontier",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7387,6 +7391,7 @@
             },
             {
               "name": "spider_urls",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7409,6 +7414,7 @@
             },
             {
               "name": "spider_link_rows",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7506,6 +7512,7 @@
             },
             {
               "name": "spider_url_metrics",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7548,6 +7555,7 @@
             },
             {
               "name": "spider_sitemap_files",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7595,6 +7603,7 @@
             },
             {
               "name": "spider_sitemap_urls",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7627,6 +7636,7 @@
             },
             {
               "name": "spider_custom_values",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7669,6 +7679,7 @@
             },
             {
               "name": "spider_render_events",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7706,6 +7717,7 @@
             },
             {
               "name": "spider_lighthouse_audits",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7763,6 +7775,7 @@
             },
             {
               "name": "spider_rendered_images",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7810,6 +7823,7 @@
             },
             {
               "name": "spider_near_duplicates",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {
@@ -7842,6 +7856,7 @@
             },
             {
               "name": "spider_issues",
+              "schema": "public",
               "kind": "data",
               "columns": [
                 {

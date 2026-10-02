@@ -9,6 +9,10 @@ passes page by), with the natural key as a UNIQUE constraint.
 Every table says what its rows are, `info={"kind": "data"}` or `"cache"` (tests/test_db.py fails without it): `data`
 is the tool's result and lost when deleted; `cache` is a copy of something it can fetch again. `describe --json`
 publishes it (x-rb-data).
+
+A `cache` table lives in PostgreSQL schema `cache` — `schema=CACHE_SCHEMA` here (the test checks kind and schema
+agree); `public` holds the data. On SQLite the schema is ignored (core/db.py maps it away). The schema is created by
+the infrastructure, not by the tool; `db upgrade` checks it exists and this role may CREATE in it.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import sqlalchemy as sa
 from .._distribution import TOOL
 
 PREFIX = f"{TOOL}_"
+CACHE_SCHEMA = "cache"
 
 # Deterministic constraint names: a later migration can drop or alter them by name on both PostgreSQL and SQLite
 # (batch mode); they start with the (prefixed) table name.

@@ -232,3 +232,24 @@ def test_existing_tests_step_reports_against_the_last_tag(tmp_path: Path, monkey
     assert "tests/test_x.py::test_a changed" in detail
     assert "tests/snapshots/help.txt changed" in detail
     assert "test_added" not in detail
+
+
+CONTRACT_RUN = """
+tests/test_contracts.py::test_contract[tools-catalog:describe-json] PASSED [ 25%]
+tests/test_contracts.py::test_contract[windmill:search-json] FAILED [ 50%]
+tests/test_contracts.py::test_contract[windmill:old-field] SKIPPED (windmill:old-field: provider <0.7) [ 75%]
+tests/test_contracts.py::test_contract[astro:pages-view] PASSED [100%]
+"""
+
+
+def test_contract_summary() -> None:
+    assert release.contract_summary(CONTRACT_RUN) == "4 cases from 3 consumers: 1 failed, 1 skipped (provider version)"
+    assert release.contract_summary("") == "0 cases"
+    passed = CONTRACT_RUN.replace("FAILED", "PASSED").replace("SKIPPED (windmill:old-field: provider <0.7)", "PASSED")
+    assert release.contract_summary(passed) == "4 cases from 3 consumers"
+
+
+def test_gate_runs_contracts_as_their_own_step() -> None:
+    pytest_step = dict(release.COMMANDS)["pytest"]
+    assert "--ignore=tests/test_contracts.py" in pytest_step
+    assert release.check_contracts.__name__ == "check_contracts"

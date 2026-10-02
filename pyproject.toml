@@ -88,6 +88,7 @@ dev = [
     "aiohttp>=3.10",
     "jsonschema>=4.23",
     "pytest>=8.0",
+    "pyyaml>=6.0",  # tests/contracts/*.yaml
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "syrupy>=4.8",

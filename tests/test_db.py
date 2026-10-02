@@ -113,7 +113,7 @@ def test_tables_match_the_migrations(tmp_path: Path) -> None:
         context = MigrationContext.configure(
             conn, opts={"include_name": lambda name, type_, *_: type_ != "table" or name.startswith(db.PREFIX)}
         )
-        assert compare_metadata(context, tables.metadata) == []
+        assert compare_metadata(context, db.metadata_for(conn)) == []
 
 
 def test_url_never_falls_back_to_sqlite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -314,3 +314,12 @@ def test_postgres_db_upgrade_command_from_scratch(monkeypatch: pytest.MonkeyPatc
         with admin.connect() as conn:
             conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
         admin.dispose()
+
+
+# --- kind="cache" tables live in PostgreSQL schema `cache` (template v1.6, T30); spider has none so far
+
+
+def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
+    for table in tables.metadata.sorted_tables:
+        expected = tables.CACHE_SCHEMA if table.info.get("kind") == "cache" else None
+        assert table.schema == expected, f"{table.name}: kind={table.info.get('kind')} needs schema={expected!r}"
