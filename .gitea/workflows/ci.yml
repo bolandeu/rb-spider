@@ -25,6 +25,10 @@ jobs:
       UV_PYTHON_INSTALL_DIR: /cache/python
       UV_LINK_MODE: copy
       PLAYWRIGHT_BROWSERS_PATH: /cache/playwright
+      # The job runs as root: Chromium's sandbox cannot start there, and Crawlee turns it on by default
+      CRAWLEE_DISABLE_BROWSER_SANDBOX: "1"
+      # The browser's own log inside a failing test's output
+      DEBUG: pw:browser
     steps:
       - uses: actions/checkout@v4
         with:

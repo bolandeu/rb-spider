@@ -56,6 +56,12 @@ def test_container_has_a_shared_memory_chromium_survives_in() -> None:
     assert sizes[0][-1] in "gG" or sizes[0].endswith("GB")
 
 
+def test_job_env_lets_chromium_start_as_root_and_logs_its_launch() -> None:
+    env = yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]["env"]
+    assert env["CRAWLEE_DISABLE_BROWSER_SANDBOX"] == "1"  # Crawlee's sandbox default cannot start as root
+    assert env["DEBUG"] == "pw:browser"
+
+
 def test_scanners_are_installed_before_the_gate_at_pinned_versions() -> None:
     steps = _steps()
     gate = next(i for i, step in enumerate(steps) if str(step.get("run", "")).strip() == GATE)
