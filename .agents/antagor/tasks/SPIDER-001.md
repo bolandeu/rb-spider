@@ -3,11 +3,11 @@ id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
 status: publish
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: gate_failed
 phase: null
 tests_hash: null
-publish_stage: null
+publish_stage: gate
 created_by: architect
 approved_by: human
 worker: claude-code
