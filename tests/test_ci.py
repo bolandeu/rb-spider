@@ -48,6 +48,14 @@ def test_chromium_is_installed_before_the_gate_at_the_locked_playwright_version(
     assert any(f"playwright@{version} install --with-deps chromium" in run for run in install)
 
 
+def test_container_has_a_shared_memory_chromium_survives_in() -> None:
+    options = yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]["container"]["options"].split()
+    assert "--init" in options
+    sizes = [o.split("=", 1)[1] for o in options if o.startswith("--shm-size=")]
+    assert sizes
+    assert sizes[0][-1] in "gG" or sizes[0].endswith("GB")
+
+
 def test_scanners_are_installed_before_the_gate_at_pinned_versions() -> None:
     steps = _steps()
     gate = next(i for i, step in enumerate(steps) if str(step.get("run", "")).strip() == GATE)

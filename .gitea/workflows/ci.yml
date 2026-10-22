@@ -15,7 +15,8 @@ jobs:
     runs-on: docker
     container:
       image: node:22-bookworm
-      options: --init
+      # Chromium needs more than Docker's 64 MB /dev/shm, or it dies at launch
+      options: --init --shm-size=1g
       volumes:
         - ci-cache:/cache
     env:
@@ -52,6 +53,9 @@ jobs:
       # (the browser build must match; tests/test_ci.py checks the pin), with system libraries.
       - name: Chromium for Playwright
         run: uvx playwright@1.63.0 install --with-deps chromium
+      # A launch with the browser's own log: a failed run then says why Chromium died.
+      - name: Chromium smoke
+        run: DEBUG=pw:browser uvx playwright@1.63.0 screenshot about:blank /tmp/smoke.png
       # Everything: lock, lint, format, types, tests (incl. help snapshots and
       # the auth status shape), wheel build + install + `--version` / `--help`.
       # The gate of the template tag of this project (.copier-answers.yml `_commit`), through uvx.
