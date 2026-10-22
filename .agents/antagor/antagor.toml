@@ -1,0 +1,36 @@
+schema = 1
+mode = "fast"
+prefix = "SPIDER"
+name = "spider"
+checks = ["python3 scripts/check_command_docstrings.py"]
+heavy = ["rb-release check"]
+
+[review]
+required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
+
+[publish]
+versioning = "semver"
+changelog = "CHANGELOG.md"
+deploy_command = "sh scripts/deploy.sh"
+gate = "remote"
+gate_status_url = "https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/spider/commits/{commit}/status"
+
+[connector]
+webhook_secret = "PLANE_WEBHOOK_SECRET_TOOLS"
+kind = "plane"
+base_url = "https://homeserver.tailee01ab.ts.net:8443"
+workspace = "tools"
+project_id = "f64b1edf-32d3-414a-b3a4-5358d7389515"
+humans = ["r.bolandau@gmail.com"]
+
+[connector.states]
+ideas = "Backlog"
+queue = "Todo"
+in_progress = "In Progress"
+in_review = "In Review"
+publish = "Publishing"
+done = "Done"
+cancelled = "Cancelled"
+
+[daemon]
+enabled = true
