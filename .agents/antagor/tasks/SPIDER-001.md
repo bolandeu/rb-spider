@@ -1,7 +1,7 @@
 ---
 id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
-status: queue
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null
