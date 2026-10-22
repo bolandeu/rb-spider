@@ -6,6 +6,12 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.0 — 2026-10-22
+
+### Outside epics
+
+- Template v1.27.1: bring spider onto the CLI Standard (SPIDER-001)
+
 ## [0.5.0] - 2026-10-02
 
 ### Added
