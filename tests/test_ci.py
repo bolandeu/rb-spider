@@ -35,6 +35,19 @@ def _steps() -> list[dict]:
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]["steps"]
 
 
+def test_chromium_is_installed_before_the_gate_at_the_locked_playwright_version() -> None:
+    import tomllib
+
+    lock = tomllib.loads((ROOT / "uv.lock").read_text())
+    version = next(pkg["version"] for pkg in lock["package"] if pkg["name"] == "playwright")
+    job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["gate"]
+    assert job["env"]["PLAYWRIGHT_BROWSERS_PATH"].startswith("/cache/")
+    steps = job["steps"]
+    gate = next(i for i, step in enumerate(steps) if str(step.get("run", "")).strip() == GATE)
+    install = [step["run"] for step in steps[:gate] if "playwright" in step.get("run", "")]
+    assert any(f"playwright@{version} install --with-deps chromium" in run for run in install)
+
+
 def test_scanners_are_installed_before_the_gate_at_pinned_versions() -> None:
     steps = _steps()
     gate = next(i for i, step in enumerate(steps) if str(step.get("run", "")).strip() == GATE)
