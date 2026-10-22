@@ -1,13 +1,13 @@
 ---
 id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
-status: publish
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: gate_failed
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: human
 worker: claude-code
@@ -68,3 +68,7 @@ Remote gate (Gitea CI run 420, job 608; log saved by the Architect) failed on th
 ### Blocked: gate_failed (stage gate)
 
 Remote gate round 2 (Gitea CI run 421, job 609; log: /private/tmp/claude-501/-Users-bolandau-Work-tools-spider/8c08234b-656f-40e5-b387-3fb85e3a1957/scratchpad/ci421.log). Chromium now installs (uvx playwright@1.63.0 install --with-deps chromium, ok), but it dies at launch: 'BrowserType.launch_persistent_context: Target page, context or browser has been closed' for chromium_headless_shell-1243 and chromium-1243 under /cache/playwright. Same 36 tests as before (test_javascript x30, test_render, test_fetch::test_render_gives_the_js_page, test_fingerprint x3, test_proxy::test_the_browser_goes_through_the_proxy_too) plus test_proxy::test_the_browser_refuses_a_socks_proxy_with_a_password; test_lighthouse now passes. The real browser stderr is cut from the message. Reproduce locally in Docker like the runner: image node:22-bookworm, options --init, run the install step then the pytest of those files as root (see scripts/check.sh --linux for the docker pattern). Likely causes to try, most probable first: (1) /dev/shm is 64 MB in the container -> Chrome crashes: add 'options: --init --shm-size=1g' (or --ipc=host) to container in .gitea/workflows/ci.yml, or '--disable-dev-shm-usage' in the launch args of core/render.py only if the env var/CI needs it; (2) running as root needs --no-sandbox; (3) missing system libs. Print Chromium's real stderr to see which. Prefer the workflow fix over product code. Keep tests/test_ci.py consistent, the Gate step last. No skips, no weaker tests.
+
+### Blocked: gate_failed (stage gate)
+
+Remote gate round 3 (Gitea CI run 422, job 610; log: /private/tmp/claude-501/-Users-bolandau-Work-tools-spider/8c08234b-656f-40e5-b387-3fb85e3a1957/scratchpad/ci422.log). The 'Chromium smoke' step PASSES on the runner (stock 'playwright screenshot' launches chrome-headless-shell fine with --shm-size=1g), but the same 36 browser tests (test_javascript x30, test_render, test_fetch::test_render_gives_the_js_page, test_fingerprint x3, test_proxy x2) still fail: 'BrowserType.launch_persistent_context: Target page, context or browser has been closed' for chromium_headless_shell-1243, chromium-1243. So the crash is specific to how spider launches (Crawlee BrowserPool/PlaywrightBrowserPlugin, persistent context, launch args, fingerprint, user-data-dir, headless mode, python playwright version vs the npm 1.63.0 used for install). No Docker. Find the cause by reading the code (core/render.py around _launch_choices, line ~150-290) and make the next run self-explaining: set DEBUG: pw:browser (and PWDEBUG-free) in the job env so the browser's stderr shows inside the failing pytest output, and make sure the python playwright in uv.lock matches the browser build installed (install with the locked python version: 'uv run --extra render playwright install --with-deps chromium' instead of npm playwright@1.63.0, if versions differ — check uv.lock playwright version). Fix the most probable cause now, not only the diagnostics. Two proxy tests also fail: test_the_browser_refuses_a_socks_proxy_with_a_password (regex mismatch) — read why. No skips, no weaker tests; if a browser test truly cannot run on the runner tell the Architect.
