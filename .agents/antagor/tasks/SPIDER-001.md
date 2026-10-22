@@ -1,13 +1,13 @@
 ---
 id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
-status: publish
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: gate_failed
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: human
 worker: claude-code
@@ -72,3 +72,7 @@ Remote gate round 2 (Gitea CI run 421, job 609; log: /private/tmp/claude-501/-Us
 ### Blocked: gate_failed (stage gate)
 
 Remote gate round 3 (Gitea CI run 422, job 610; log: /private/tmp/claude-501/-Users-bolandau-Work-tools-spider/8c08234b-656f-40e5-b387-3fb85e3a1957/scratchpad/ci422.log). The 'Chromium smoke' step PASSES on the runner (stock 'playwright screenshot' launches chrome-headless-shell fine with --shm-size=1g), but the same 36 browser tests (test_javascript x30, test_render, test_fetch::test_render_gives_the_js_page, test_fingerprint x3, test_proxy x2) still fail: 'BrowserType.launch_persistent_context: Target page, context or browser has been closed' for chromium_headless_shell-1243, chromium-1243. So the crash is specific to how spider launches (Crawlee BrowserPool/PlaywrightBrowserPlugin, persistent context, launch args, fingerprint, user-data-dir, headless mode, python playwright version vs the npm 1.63.0 used for install). No Docker. Find the cause by reading the code (core/render.py around _launch_choices, line ~150-290) and make the next run self-explaining: set DEBUG: pw:browser (and PWDEBUG-free) in the job env so the browser's stderr shows inside the failing pytest output, and make sure the python playwright in uv.lock matches the browser build installed (install with the locked python version: 'uv run --extra render playwright install --with-deps chromium' instead of npm playwright@1.63.0, if versions differ — check uv.lock playwright version). Fix the most probable cause now, not only the diagnostics. Two proxy tests also fail: test_the_browser_refuses_a_socks_proxy_with_a_password (regex mismatch) — read why. No skips, no weaker tests; if a browser test truly cannot run on the runner tell the Architect.
+
+### Blocked: gate_failed (stage gate)
+
+Remote gate round 4 (Gitea CI run 423, job 611) failed only on 'ruff format --check': tests/test_proxy.py:86 — the comment after monkeypatch.setenv(...) makes the line too long (ruff wants it wrapped). Run 'uv run ruff format .' (and ruff check) on your branch, and run the whole local gate before submit: uvx --from 'git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate' rb-release check, via scripts/run_detached.sh. Put the comment on its own line above the call. Nothing else to change unless the gate shows more.
