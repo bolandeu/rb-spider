@@ -3,11 +3,11 @@ id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
 status: publish
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: merge_conflict
 phase: null
 tests_hash: null
-publish_stage: null
+publish_stage: merge
 created_by: architect
 approved_by: human
 worker: claude-code
@@ -54,3 +54,9 @@ Apply the finished migration patch and commit it. The Architect did the work by 
 ## Out of scope
 
 - Any behaviour change of spider commands; the release (antagor publish is the Human's)
+
+## Feedback
+
+### Redo from the current main (merge_conflict)
+
+Main now holds the Antagor config (31cc7ce) and the 3 state commits. Redo from main: apply .agents/antagor/scratch/standard-migration.patch if useful (it was made on 176c7a9; the previous result is kept in branch backup/SPIDER-001-manual: cherry-pick its commit 0fdcaee instead, it already passed rb-release check). Run the gate again before submit.
