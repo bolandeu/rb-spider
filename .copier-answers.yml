@@ -1,6 +1,7 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v1.8.1
+_commit: v1.27.1
 _src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git
+antagor_prefix: SPIDER
 author_name: Roman Bolandau
 cli_name: spider
 description: SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO
@@ -8,10 +9,14 @@ description: SEO-краулер для технического аудита с�
 dist_name: rb-spider
 dist_name_legacy: ''
 include_auth: true
-include_ci: true
+include_contracts: true
 include_db: true
+include_describe: true
 include_http_provider: true
+include_project: true
+include_skill: true
+install_homeserver_users: rbtools
+install_mac: true
 package_name: rb_spider
-private_deps: false
 project_name: rb-spider
 repository_url: https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider

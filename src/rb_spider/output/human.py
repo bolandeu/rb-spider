@@ -1,4 +1,8 @@
+"""Human-readable output (messages, key-value lists, the doctor report), kept apart from the JSON output."""
+
 from __future__ import annotations
+
+import sys
 
 from rich.console import Console
 from rich.markup import escape
@@ -653,11 +657,11 @@ def link_score(data: dict) -> None:
 def page_source(data: dict) -> None:
     """The HTML or the diff as it is — plain print, so `> page.html` gets a clean file."""
     if "diff" in data:
-        print("\n".join(data["diff"]) or "Исходный и отрендеренный HTML совпадают.")
+        sys.stdout.write(("\n".join(data["diff"]) or "Исходный и отрендеренный HTML совпадают.") + "\n")
         if data["truncated"]:
-            print("… (diff обрезан)")
+            sys.stdout.write("… (diff обрезан)\n")
     else:
-        print(data["html"])
+        sys.stdout.write(data["html"] + "\n")
 
 
 def _lh_source(data: dict) -> str:

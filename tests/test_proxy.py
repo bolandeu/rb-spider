@@ -81,8 +81,10 @@ def test_the_browser_goes_through_the_proxy_too(proxy: polygon.Proxy) -> None:
     assert len(agents) == 2 and any("Chrome" in agent for agent in agents)  # the plain request, then the browser
 
 
-def test_the_browser_refuses_a_socks_proxy_with_a_password() -> None:
+def test_the_browser_refuses_a_socks_proxy_with_a_password(monkeypatch) -> None:
     pytest.importorskip("playwright")
+    # no keychain on a server: the password comes from the environment
+    monkeypatch.setenv("SPIDER_PROXY_API_KEY", polygon.Proxy.PASSWORD)
     settings = CrawlSettings(proxy_urls=["socks5h://user:{password}@127.0.0.1:1"], render="always")
     with storage.database() as engine, pytest.raises(Exception, match="SOCKS5"):
         register_crawl(engine, "http://polygon.test/", "polygon", Settings(crawl=settings))

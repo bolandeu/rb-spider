@@ -14,24 +14,20 @@ prints this document.
 ## Install (if `spider --version` fails)
 
 ```bash
-uv tool install "rb-spider @ git+https://github.com/bolandeu/spider.git@vX.Y.Z"
+uv tool install rb-spider --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
+```
+
+From the git tag instead:
+
+```bash
+uv tool install "rb-spider @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider.git@vX.Y.Z"
 ```
 
 Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
-branch: standard §9).
+branch: [the Standard](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md), Install).
 
 Same command on macOS, Linux and Windows; `uv tool upgrade rb-spider`
 updates it. Do not run from source unless asked to develop the CLI.
-
-The repository may be private. On an auth error (`Authentication failed`,
-`could not read Username`, `Repository not found`) do not ask for a token:
-run `gh auth status`; if it passes, `gh auth setup-git` and retry; if not,
-ask the user to run `gh auth login`. With SSH keys configured, this works
-without any of that:
-
-```bash
-uv tool install "rb-spider @ git+ssh://git@github.com/bolandeu/spider.git@vX.Y.Z"
-```
 
 ## Crawl: pick a profile, don't hand-tune flags
 
@@ -63,12 +59,12 @@ shows the built-in ones with a one-line purpose; pick by the task:
 
 ## Analysis: drill down, never dump everything
 
-1. `spider issues --json` — which checks fired and on how many URLs, most
+1. Run `spider issues --json`: which checks fired and on how many URLs, most
    urgent first. `not_checked` lists checks whose data wasn't collected —
    never report those as passed.
-2. `spider urls --issue <code> --json` — the URLs of one check (`--limit`;
+2. Run `spider urls --issue <code> --json`: the URLs of one check (`--limit`;
    `total` tells how many there are).
-3. `spider url <url> --json` — everything about one page;
+3. Run `spider url <url> --json`: everything about one page;
    `spider links <url> --in|--out` — who links to it / where it links;
    `spider redirects` — redirect paths and chains.
 4. Only then bulk data: `spider export …` (CSV/JSON, streamed; `-o file`)
@@ -106,7 +102,8 @@ crawling again.
   (`spider query` reads them); other tools and reports read only the
   `spider_v1_*` views.
 - **`doctor --json`** first when something looks off — it reports
-  project, config, version compatibility and credential readiness.
+  what the CLI needs to run: its version, the project, its config,
+  credential readiness, the database and the external programs.
 - **`describe --json`** — the whole CLI as one machine-readable OpenCLI
   document (commands, options, exit codes, env vars, data): the bare
   document, no `{"ok": ...}` envelope.

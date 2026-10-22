@@ -1,0 +1,50 @@
+# Commands not yet brought to the help standard (the Standard, Commands):
+# one command path per line, e.g. `config set`; comments start with #.
+# The help test fails when a listed command already meets the standard: remove its line.
+auth login
+compare
+config validate
+crawl
+crawls delete
+crawls list
+crawls prune
+crawls resume
+crawls show
+custom
+db info
+db vacuum
+doctor
+enrich
+enrichers
+export
+fetch
+hreflang
+init
+insecure
+issues
+lighthouse
+link-score
+links
+overview
+pagination
+projects delete
+projects list
+query
+redirects
+report canonicals
+report crawl-path
+report forms
+report headers
+report javascript
+report meta-keywords
+report pagespeed
+report response-times
+report structure
+serp preview
+serp summary
+sitemaps build
+sitemaps show
+status
+structured
+url
+urls

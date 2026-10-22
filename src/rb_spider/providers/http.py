@@ -1,3 +1,7 @@
+"""The HTTP provider: one httpx client with retries, timeouts and the User-Agent of this CLI, and the mapping of HTTP
+failures to the CLI's errors.
+"""
+
 from __future__ import annotations
 
 import functools
@@ -15,7 +19,7 @@ log = logging.getLogger(__name__)
 
 # Responses worth retrying: the server said "not now", not "no".
 _RETRY_STATUSES = frozenset({429, 502, 503, 504})
-PROBE_TIMEOUT = 10.0  # auth status --check budget per provider (standard §8), as the httpx timeout
+PROBE_TIMEOUT = 10.0  # auth status --check budget per provider, as the httpx timeout
 
 
 class HttpProvider(Provider):
