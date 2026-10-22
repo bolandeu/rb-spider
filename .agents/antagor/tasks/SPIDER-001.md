@@ -1,13 +1,13 @@
 ---
 id: SPIDER-001
 title: 'Template v1.27.1: bring spider onto the CLI Standard'
-status: publish
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: gate_failed
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: human
 worker: claude-code
@@ -60,3 +60,7 @@ Apply the finished migration patch and commit it. The Architect did the work by 
 ### Redo from the current main (merge_conflict)
 
 Main now holds the Antagor config (31cc7ce) and the 3 state commits. Redo from main: apply .agents/antagor/scratch/standard-migration.patch if useful (it was made on 176c7a9; the previous result is kept in branch backup/SPIDER-001-manual: cherry-pick its commit 0fdcaee instead, it already passed rb-release check). Run the gate again before submit.
+
+### Blocked: gate_failed (stage gate)
+
+Remote gate (Gitea CI run 420, job 608; log saved by the Architect) failed on the runner: 15 failed + 23 errors, all from the Linux container, not from the migration. (1) No browser: RenderUnavailable 'no browser could start (playwright chromium …)' in tests/test_javascript.py, test_render.py, test_fetch.py::test_render_gives_the_js_page, test_fingerprint.py (3), test_proxy.py::test_the_browser_goes_through_the_proxy_too. Fix in .gitea/workflows/ci.yml: add a step BEFORE the Gate step that installs Chromium for Playwright with system deps (e.g. 'uvx playwright install --with-deps chromium', browsers cached under /cache via PLAYWRIGHT_BROWSERS_PATH) — keep the Gate step LAST (tests/test_ci.py checks it). (2) Other failures to investigate and fix test-first, maybe also browser-related: tests/test_lighthouse.py::test_every_rule_finds_its_page[all] (AssertionError mobile_content_not_sized), tests/test_proxy.py::test_the_browser_refuses_a_socks_proxy_with_a_password (regex did not match). Reproduce on Linux with scripts/check.sh --linux if possible. Do not skip or weaken tests; do not lower floors. If a test truly cannot run on the CI runner, tell the Architect instead of marking it skipped.
