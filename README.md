@@ -32,8 +32,8 @@ spider crawls prune --keep-last 5   # чистка старых обходов
 ## Установка
 
 ```bash
-uv tool install "git+https://github.com/bolandeu/spider.git"   # на любой машине, репозиторий приватный
-uv tool install .                                              # из локальной копии
+uv tool install rb-spider --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple   # на любой машине
+uv tool install "rb-spider @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider.git@vX.Y.Z"   # из git-тега вместо реестра
 uv tool upgrade rb-spider                                      # обновить
 spider                                                         # список команд
 ```
@@ -41,14 +41,12 @@ spider                                                         # список к
 JS-рендеринг (`spider crawl --render always`) — дополнительно, с Playwright:
 
 ```bash
-uv tool install "rb-spider[render] @ git+https://github.com/bolandeu/spider.git"
+uv tool install "rb-spider[render]" --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
 ```
 
 Браузер отдельно ставить не нужно, если уже есть любой Chromium в кэше Playwright (`ms-playwright`) или Google Chrome — spider найдёт его сам; другой — `--set crawl.render_browser=<путь>`. Если нет ничего: `playwright install --only-shell chromium`.
 
-Запасной HTTP-клиент на curl (`--set crawl.http_client=curl`) — extra `curl`: `uv tool install "rb-spider[curl] @ git+…"`; оба extra вместе — `rb-spider[render,curl]`.
-
-Отказ с ошибкой авторизации при установке — один раз `gh auth login` (или `gh auth setup-git`), либо ссылка вида `git+ssh://git@github.com/bolandeu/spider.git`.
+Запасной HTTP-клиент на curl (`--set crawl.http_client=curl`) — extra `curl`: `uv tool install "rb-spider[curl]" --index …`; оба extra вместе — `rb-spider[render,curl]`.
 
 У каждой команды `--help` — это и есть документация. `--json` — вывод для агентов; `spider --ai` печатает инструкцию для ИИ-агентов, `spider skill install` ставит её в Claude Code.
 
@@ -56,8 +54,7 @@ uv tool install "rb-spider[render] @ git+https://github.com/bolandeu/spider.git"
 
 ```bash
 uv sync
-uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest
-scripts/install_hooks.sh    # хук commit-msg: формат коммитов и актуальность --help
+uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" rb-release check   # гейт; тот же шаг, что в .gitea/workflows/ci.yml
 ```
 
 Правила разработки — в [AGENTS.md](AGENTS.md).

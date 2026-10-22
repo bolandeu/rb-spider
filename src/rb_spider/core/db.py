@@ -78,7 +78,7 @@ def database_url() -> str | None:
     if url := os.environ.get(LEGACY_ENV_VAR):
         if not _warned_legacy:
             _warned_legacy = True
-            print(f"warning: {LEGACY_ENV_VAR} is deprecated, rename it to {ENV_VAR}.", file=sys.stderr)
+            sys.stderr.write(f"warning: {LEGACY_ENV_VAR} is deprecated, rename it to {ENV_VAR}.\n")
         return url
     return None
 
@@ -215,7 +215,7 @@ def _check_cache_schema(connection: sa.Connection) -> None:
     ).scalar()
     action = (
         f"Schema '{CACHE_SCHEMA}' with USAGE and CREATE for this tool's role is set up by the infrastructure "
-        "— report it to the root agent; nothing was migrated."
+        "— ask the user (sysadmin sets it up); nothing was migrated."
     )
     if not exists:
         raise DatabaseUnavailable(
@@ -263,7 +263,7 @@ class SchemaState:
             return False
         try:
             return ScriptDirectory.from_config(alembic_config()).get_revision(self.current) is None
-        except (RevisionError, CommandError):  # alembic raises (not returns None) for an unknown id
+        except RevisionError, CommandError:  # alembic raises (not returns None) for an unknown id
             return True
 
 

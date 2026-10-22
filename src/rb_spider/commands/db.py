@@ -1,3 +1,5 @@
+"""The `db` command group: migrate, inspect and reset the tool's database."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -9,6 +11,11 @@ from .. import output
 from ..core import db, maintenance, storage
 
 app = output.group("База обходов: размер и состояние, миграции схемы, перенос в общую базу, сжатие файла.")
+
+
+def register(root: typer.Typer) -> None:
+    """Add the `db` group to the CLI's root (the database part, copier's include_db)."""
+    root.add_typer(app, name="db")
 
 
 @app.command("info")

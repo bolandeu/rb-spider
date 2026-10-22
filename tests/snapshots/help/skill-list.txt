@@ -1,0 +1,13 @@
+
+ Usage: spider skill list [OPTIONS]
+
+ List the agent skills this CLI bundles: name and description.
+
+ Example: spider skill list
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json           Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).          │
+│ --quiet          Печатать только основной результат, без пояснений.                              │
+│ --help           Show this message and exit.                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

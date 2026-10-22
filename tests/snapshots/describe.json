@@ -9,22 +9,6 @@
     "name": "spider",
     "options": [
       {
-        "name": "--project",
-        "arguments": [
-          {
-            "name": "PROJECT",
-            "required": true
-          }
-        ],
-        "description": "Корень проекта (каталог с `.spider/`); по умолчанию ищется вверх от текущего.",
-        "metadata": [
-          {
-            "name": "x-rb-type",
-            "value": "str"
-          }
-        ]
-      },
-      {
         "name": "--json",
         "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
         "metadata": [
@@ -109,8 +93,27 @@
         ]
       },
       {
+        "name": "--project",
+        "arguments": [
+          {
+            "name": "TEXT",
+            "required": true,
+            "arity": {
+              "maximum": 1
+            }
+          }
+        ],
+        "description": "Path to the project root.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "str"
+          }
+        ]
+      },
+      {
         "name": "--ai",
-        "description": "Напечатать инструкцию для ИИ-агентов (встроенный SKILL.md) и выйти.",
+        "description": "Print AI-oriented usage documentation (the bundled skill doc) and exit.",
         "metadata": [
           {
             "name": "x-rb-type",
@@ -153,7 +156,10 @@
             "arguments": [
               {
                 "name": "ROBOTS_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Свой robots.txt вместо настоящего — проверить правку до выкладки.",
@@ -169,7 +175,10 @@
             "arguments": [
               {
                 "name": "USER_AGENT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "От чьего имени читать правила (иначе crawl.robots_user_agent / user_agent).",
@@ -185,7 +194,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -201,7 +213,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -291,7 +306,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько страниц с наибольшим Link Score показать.",
@@ -362,7 +380,10 @@
             "arguments": [
               {
                 "name": "CRAWL_ID",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Номер обхода; по умолчанию — последний.",
@@ -457,7 +478,10 @@
             "arguments": [
               {
                 "name": "CRAWL_ID",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Номер обхода; по умолчанию — последний.",
@@ -473,7 +497,10 @@
             "arguments": [
               {
                 "name": "URL_LIST",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Файл со списком URL (как у `spider crawl --list`); - — stdin.",
@@ -504,6 +531,9 @@
               {
                 "name": "STRATEGY",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "mobile",
                   "desktop"
@@ -524,6 +554,9 @@
               {
                 "name": "SOURCE",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "local",
                   "psi"
@@ -557,7 +590,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -573,7 +609,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -655,199 +694,8 @@
         ]
       },
       {
-        "name": "init",
-        "description": "Создать проект spider в каталоге: файл `.spider/config.toml`.\n\nПроект хранит настройки и данные обходов одного или нескольких сайтов.\nКаталог — текущий или заданный через `--project`. Повторный вызов ничего\nне меняет (`already_initialized: true`), `--force` пересоздаёт конфиг.\n\nExample: spider init\nExample: spider --project ~/audits/shop init --name shop\n\nJSON: `{project, path, already_initialized}`.",
-        "options": [
-          {
-            "name": "--name",
-            "arguments": [
-              {
-                "name": "NAME",
-                "required": true
-              }
-            ],
-            "description": "Имя проекта; по умолчанию — имя каталога.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "str"
-              }
-            ]
-          },
-          {
-            "name": "--force",
-            "description": "Перезаписать конфиг уже инициализированного проекта.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--json",
-            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--quiet",
-            "description": "Печатать только основной результат, без пояснений.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--verbose",
-            "description": "Подробная диагностика в stderr.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "status",
-        "description": "Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли процесс.\n\nДля обхода в фоне (`spider crawl --detach`) — основной способ следить за ним.\nДанные в базе обновляются во время обхода каждые ~2 с. Проект — если команда\nзапущена в каталоге проекта (или с `--project`), иначе null.\n\nExample: spider status\nExample: spider --json status 12\n\nJSON: `{project, path, crawl: {id, project, start_url, status, pages, pending, pid,\nalive}}`; `crawl` null — обходов ещё нет. `alive` — жив ли процесс обхода (null —\nне определить, например на Windows). Статус running при `alive: false` — процесс\nумер, обход можно продолжить: `spider crawls resume <id>`.",
-        "options": [
-          {
-            "name": "--json",
-            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--quiet",
-            "description": "Печатать только основной результат, без пояснений.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--verbose",
-            "description": "Подробная диагностика в stderr.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          }
-        ],
-        "arguments": [
-          {
-            "name": "crawl_id",
-            "required": false,
-            "arity": {
-              "minimum": 0,
-              "maximum": 1
-            },
-            "description": "Номер обхода; по умолчанию — последний.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "int"
-              }
-            ]
-          }
-        ]
-      },
-      {
         "name": "doctor",
         "description": "Проверить окружение: Python, версию CLI, проект, конфиг и настройки, базу обходов, секреты.\n\nПервое, что стоит запустить, если команда ведёт себя странно. Код выхода\nвсегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.\n`database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с\n`SPIDER_DATABASE_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль;\n`database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);\n`database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —\nнастройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,\nесли `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены\nIP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта\nпри `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse\n(`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при\n`lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;\n`external:<программа>` — внешние программы из `[[tool.rb.external]]` (`lighthouse`, `npx`):\nверсия или «не установлена»; все необязательные, на healthy не влияют. Пароли ищутся и в\nkeychain `rb_spider:<провайдер>`, где их хранил spider до 0.2.0.\n\nExample: spider doctor\nExample: spider --json doctor\n\nJSON: `{healthy, checks: [{name, ok, detail}]}`.",
-        "options": [
-          {
-            "name": "--json",
-            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--quiet",
-            "description": "Печатать только основной результат, без пояснений.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          },
-          {
-            "name": "--verbose",
-            "description": "Подробная диагностика в stderr.",
-            "metadata": [
-              {
-                "name": "x-rb-type",
-                "value": "boolean"
-              },
-              {
-                "name": "x-rb-default",
-                "value": false
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "describe",
-        "description": "Напечатать машиночитаемый контракт spider — документ OpenCLI (opencli.org).\n\nДля каталога инструментов, Windmill и агентов: всё, что раньше собиралось из\n`--help` каждой команды, одним документом. Человеку удобнее `spider --help`.\n\nВнутри: команды, опции, аргументы, коды выхода и метаданные `x-rb-*` —\nпеременные окружения, таблицы, представления `spider_v1_*` с колонками,\nфайлы в папке данных, внешние программы, версия шаблона.\n\nExample: spider describe --json\nExample: spider describe\n\nВыход: с --json — голый документ одной строкой (без обёртки {\"ok\": ...}),\nключи верхнего уровня `opencli`, `info`, `command`; без --json — тот же\nдокумент с отступами.",
         "options": [
           {
             "name": "--json",
@@ -902,7 +750,10 @@
             "arguments": [
               {
                 "name": "URL_LIST",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Режим списка: файл с URL (по одному в строке, # — комментарий; CSV или Excel с колонкой url / address / loc; XML sitemap) или - для stdin; обходятся только они и их редиректы (ключ crawl.mode = list).",
@@ -918,7 +769,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -934,7 +788,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -970,7 +827,10 @@
             "arguments": [
               {
                 "name": "MAX_URLS",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Остановиться после стольких URL (ключ crawl.max_urls; не задан — весь сайт).",
@@ -986,7 +846,10 @@
             "arguments": [
               {
                 "name": "CONCURRENCY",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько запросов одновременно (ключ crawl.concurrency, по умолчанию 20).",
@@ -1002,7 +865,10 @@
             "arguments": [
               {
                 "name": "MAX_DEPTH",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Не глубже стольких кликов от старта (ключ crawl.max_depth).",
@@ -1018,7 +884,10 @@
             "arguments": [
               {
                 "name": "USER_AGENT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "User-Agent: пресет (googlebot, googlebot-smartphone, bingbot, yandexbot, chrome) или строка (crawl.user_agent).",
@@ -1063,6 +932,9 @@
               {
                 "name": "RENDER",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "never",
                   "always",
@@ -1210,7 +1082,10 @@
             "arguments": [
               {
                 "name": "ISSUE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Код проверки из `spider issues`, например internal_client_error.",
@@ -1226,7 +1101,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько URL показать (всего — в поле total).",
@@ -1297,7 +1175,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -1313,7 +1194,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -1401,6 +1285,9 @@
               {
                 "name": "ONLY",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "all",
                   "chains",
@@ -1425,7 +1312,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько редиректов показать (всего — в поле total).",
@@ -1459,7 +1349,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -1475,7 +1368,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -1563,6 +1459,9 @@
               {
                 "name": "ONLY",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "all",
                   "non_200",
@@ -1592,7 +1491,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (всего — в поле total).",
@@ -1664,6 +1566,9 @@
               {
                 "name": "ONLY",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "all",
                   "non_200",
@@ -1688,7 +1593,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (всего — в поле total).",
@@ -1759,7 +1667,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (всего — в поле total).",
@@ -1831,6 +1742,9 @@
               {
                 "name": "KIND",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "all",
                   "exact",
@@ -1855,7 +1769,10 @@
             "arguments": [
               {
                 "name": "URL",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Только пары с этой страницей.",
@@ -1885,7 +1802,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько пар показать (всего — в поле total).",
@@ -1905,7 +1825,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -1921,7 +1844,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -2009,6 +1935,9 @@
               {
                 "name": "REPORT",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "validation",
                   "features"
@@ -2083,7 +2012,10 @@
             "arguments": [
               {
                 "name": "SEARCH",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Страницы, где нашёлся этот поиск (имя из custom.search).",
@@ -2099,7 +2031,10 @@
             "arguments": [
               {
                 "name": "EXTRACT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Значения этого извлечения (имя из custom.extract).",
@@ -2129,7 +2064,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (всего — в поле total).",
@@ -2200,7 +2138,10 @@
             "arguments": [
               {
                 "name": "ISSUE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Список URL одной проверки (код из `spider issues`).",
@@ -2217,6 +2158,9 @@
               {
                 "name": "STATUS",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "added",
                   "new",
@@ -2242,7 +2186,10 @@
             "arguments": [
               {
                 "name": "FIELD",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "URL, у которых поле изменилось (из compare.fields).",
@@ -2259,6 +2206,9 @@
               {
                 "name": "URLS",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "new",
                   "missing"
@@ -2278,7 +2228,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (всего — в поле total).",
@@ -2318,7 +2271,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -2334,7 +2290,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -2436,7 +2395,10 @@
             "arguments": [
               {
                 "name": "CRAWL_ID",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Номер обхода; по умолчанию — последний.",
@@ -2480,7 +2442,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько ссылок показать (всего — в поле total).",
@@ -2551,7 +2516,10 @@
             "arguments": [
               {
                 "name": "CRAWL_ID",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Номер обхода; по умолчанию — последний.",
@@ -2669,7 +2637,10 @@
             "arguments": [
               {
                 "name": "CRAWL_ID",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Номер обхода; по умолчанию — последний.",
@@ -2686,6 +2657,9 @@
               {
                 "name": "FMT",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "csv",
                   "json",
@@ -2713,7 +2687,10 @@
             "arguments": [
               {
                 "name": "PATH",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Записать в файл; без него — поток данных в stdout (без JSON-конверта).",
@@ -2729,7 +2706,10 @@
             "arguments": [
               {
                 "name": "PRESET",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Несколько наборов за раз (export.presets: audit, links, full): -o — папка или .xlsx.",
@@ -2745,7 +2725,10 @@
             "arguments": [
               {
                 "name": "ISSUE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Только URL (pages), находки (issues) или ссылки (links) этой проверки.",
@@ -2761,7 +2744,10 @@
             "arguments": [
               {
                 "name": "TARGET_STATUS",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Код ответа: 404 или класс 4xx — у URL (pages) или у цели ссылки (links).",
@@ -2791,7 +2777,10 @@
             "arguments": [
               {
                 "name": "KIND",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Только URL этого типа (pages): html, js, css, image, pdf, other, unknown.",
@@ -2807,7 +2796,10 @@
             "arguments": [
               {
                 "name": "SCHEME",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Только URL по этому протоколу (pages): https или http.",
@@ -2823,7 +2815,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -2839,7 +2834,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -2943,7 +2941,10 @@
             "arguments": [
               {
                 "name": "LIMIT",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько строк показать (без --format).",
@@ -2964,6 +2965,9 @@
               {
                 "name": "FMT",
                 "required": true,
+                "arity": {
+                  "maximum": 1
+                },
                 "acceptedValues": [
                   "csv",
                   "json"
@@ -2986,7 +2990,10 @@
             "arguments": [
               {
                 "name": "PATH",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Записать в файл; без него — поток данных в stdout (без JSON-конверта).",
@@ -3053,7 +3060,10 @@
             "arguments": [
               {
                 "name": "URL_LIST",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Файл с URL (по одному в строке, # — комментарий; CSV с колонкой url; XML sitemap) или - для stdin.",
@@ -3083,7 +3093,10 @@
             "arguments": [
               {
                 "name": "INCLUDE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Что добавить к SEO-данным, через запятую: headers, links, resources, text, markdown, html.",
@@ -3117,7 +3130,10 @@
             "arguments": [
               {
                 "name": "CONCURRENCY",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Сколько страниц скачивать одновременно (ключ crawl.concurrency).",
@@ -3133,7 +3149,10 @@
             "arguments": [
               {
                 "name": "PROFILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -3149,7 +3168,10 @@
             "arguments": [
               {
                 "name": "CONFIG_FILE",
-                "required": true
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
               }
             ],
             "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -3336,328 +3358,194 @@
         ]
       },
       {
-        "name": "config",
-        "description": "Настройки: проектный файл, итоговые значения по слоям, проверка и схема.",
-        "commands": [
+        "name": "init",
+        "description": "Создать проект spider в каталоге: файл `.spider/config.toml`.\n\nПроект хранит настройки и данные обходов одного или нескольких сайтов.\nКаталог — текущий или заданный через `--project`. Повторный вызов ничего\nне меняет (`already_initialized: true`), `--force` пересоздаёт конфиг.\n\nExample: spider init\nExample: spider --project ~/audits/shop init --name shop\n\nJSON: `{project, path, already_initialized}`.",
+        "options": [
           {
-            "name": "list",
-            "description": "Показать проектный файл `.spider/config.toml` как он записан.\n\nТолько то, что задано в проекте. Итоговые значения со всеми слоями\n(профиль, флаги, переменные окружения) — `spider config show`.\n\nExample: spider config list\n\nJSON: содержимое файла (поля проекта и разделы настроек, например `crawl`).",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "get",
-            "description": "Показать одно значение из проектного файла.\n\nExample: spider config get crawl.concurrency\n\nJSON: `{key, value}`; `value` — null, если в проекте ключ не задан (действует\nзначение из другого слоя — см. `spider config show`). Неизвестный ключ — выход 2.",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
+            "name": "--name",
             "arguments": [
               {
-                "name": "key",
+                "name": "NAME",
                 "required": true,
                 "arity": {
-                  "minimum": 1,
                   "maximum": 1
-                },
-                "description": "Ключ через точку: поле проекта (name) или настройка (crawl.max_urls).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "set",
-            "description": "Записать одно значение в проектный файл. Не для секретов: пароли — `spider auth login`.\n\nЗначение разбирается как TOML (`500` — число, `false` — логическое), иначе\nсохраняется строкой. Весь файл проверяется до записи.\n\nExample: spider config set crawl.concurrency 10\nExample: spider config set crawl.robots report\nExample: spider config set name shop\n\nJSON: `{key, value}`. Неизвестный ключ или неверный тип — выход 2.",
-            "options": [
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
+                }
               }
             ],
-            "arguments": [
+            "description": "Имя проекта; по умолчанию — имя каталога.",
+            "metadata": [
               {
-                "name": "key",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Ключ через точку: поле проекта (name) или настройка (crawl.max_urls).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "value",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "Значение: число, true/false, \"строка\" или [список] в синтаксисе TOML.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
+                "name": "x-rb-type",
+                "value": "str"
               }
             ]
           },
           {
-            "name": "show",
-            "description": "Итоговые настройки обхода и слой, откуда пришло каждое значение.\n\nРовно то, с чем запустится `spider crawl` при тех же `--profile` / `--config`\n/ `--set`, — проверить профиль до обхода. Слои: default, global, project,\nprofile:<имя>, file:<путь>, env, flag, set.\n\nExample: spider config show\nExample: spider config show --profile googlebot --set crawl.max_urls=500\n\nJSON: `{settings: {раздел: {ключ: значение}}, sources: {\"раздел.ключ\": слой}}`.\nОшибка в любом слое — выход 2 с указанием ключа и слоя.",
-            "options": [
+            "name": "--force",
+            "description": "Перезаписать конфиг уже инициализированного проекта.",
+            "metadata": [
               {
-                "name": "--profile",
-                "arguments": [
-                  {
-                    "name": "PROFILE",
-                    "required": true
-                  }
-                ],
-                "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
+                "name": "x-rb-type",
+                "value": "boolean"
               },
               {
-                "name": "--config",
-                "arguments": [
-                  {
-                    "name": "CONFIG_FILE",
-                    "required": true
-                  }
-                ],
-                "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "path"
-                  }
-                ]
-              },
-              {
-                "name": "--set",
-                "arguments": [
-                  {
-                    "name": "KEY=VALUE",
-                    "required": true
-                  }
-                ],
-                "description": "Переопределить любой ключ: `--set crawl.max_urls=500`; можно повторять.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-multiple",
-                    "value": true
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
+                "name": "x-rb-default",
+                "value": false
               }
             ]
           },
           {
-            "name": "validate",
-            "description": "Проверить файл профиля до использования: ключи, типы, цепочку `extends`.\n\nExample: spider config validate .spider/profiles/shop.toml\nExample: spider --json config validate my-settings.toml\n\nJSON: `{file, valid: true, extends}`. Ошибки — выход 2, в сообщении каждый\nневерный ключ и причина.",
-            "options": [
+            "name": "--json",
+            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+            "metadata": [
               {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
+                "name": "x-rb-type",
+                "value": "boolean"
               },
               {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "file",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "TOML-файл профиля или настроек.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "file"
-                  }
-                ]
+                "name": "x-rb-default",
+                "value": false
               }
             ]
           },
           {
-            "name": "schema",
-            "description": "JSON Schema файла профиля: все ключи, типы, значения по умолчанию, описания.\n\nПо ней агент составляет корректный профиль без угадывания. Всегда печатает\nсаму схему (без конверта `{ok}`), чтобы её можно было сразу сохранить в файл.\n\nExample: spider config schema\nExample: spider config schema > spider-profile.schema.json",
-            "options": [
+            "name": "--quiet",
+            "description": "Печатать только основной результат, без пояснений.",
+            "metadata": [
               {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
+                "name": "x-rb-type",
+                "value": "boolean"
               },
               {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--verbose",
+            "description": "Подробная диагностика в stderr.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "Прогресс обхода и проект: сколько URL сохранено, сколько ждёт в очереди, жив ли процесс.\n\nДля обхода в фоне (`spider crawl --detach`) — основной способ следить за ним.\nДанные в базе обновляются во время обхода каждые ~2 с. Проект — если команда\nзапущена в каталоге проекта (или с `--project`), иначе null.\n\nExample: spider status\nExample: spider --json status 12\n\nJSON: `{project, path, crawl: {id, project, start_url, status, pages, pending, pid,\nalive}}`; `crawl` null — обходов ещё нет. `alive` — жив ли процесс обхода (null —\nне определить, например на Windows). Статус running при `alive: false` — процесс\nумер, обход можно продолжить: `spider crawls resume <id>`.",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--quiet",
+            "description": "Печатать только основной результат, без пояснений.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--verbose",
+            "description": "Подробная диагностика в stderr.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "crawl_id",
+            "required": false,
+            "arity": {
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Номер обхода; по умолчанию — последний.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "int"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "describe",
+        "description": "Напечатать машиночитаемый контракт spider — документ OpenCLI (opencli.org).\n\nДля каталога инструментов, Windmill и агентов: всё, что раньше собиралось из\n`--help` каждой команды, одним документом. Человеку удобнее `spider --help`.\n\nВнутри: команды, опции, аргументы, коды выхода и метаданные `x-rb-*` —\nпеременные окружения, таблицы, представления `spider_v1_*` с колонками,\nфайлы в папке данных, внешние программы, версия шаблона.\n\nExample: spider describe --json\nExample: spider describe\n\nВыход: с --json — голый документ одной строкой (без обёртки {\"ok\": ...}),\nключи верхнего уровня `opencli`, `info`, `command`; без --json — тот же\nдокумент с отступами.",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--quiet",
+            "description": "Печатать только основной результат, без пояснений.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--verbose",
+            "description": "Подробная диагностика в stderr.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
               }
             ]
           }
@@ -3690,7 +3578,10 @@
                 "arguments": [
                   {
                     "name": "PROVIDER",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Только этот провайдер: proxy, proxy_key, site или database (по умолчанию — все).",
@@ -3740,7 +3631,10 @@
                 "arguments": [
                   {
                     "name": "PROVIDER",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Провайдер: proxy, proxy_key, site или database.",
@@ -3808,7 +3702,10 @@
                 "arguments": [
                   {
                     "name": "PROVIDER",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Провайдер: proxy, proxy_key, site или database.",
@@ -3820,80 +3717,6 @@
                   {
                     "name": "x-rb-default",
                     "value": "default"
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "skill",
-        "description": "Инструкция spider для ИИ-агентов (SKILL.md).",
-        "commands": [
-          {
-            "name": "install",
-            "description": "Скопировать встроенный SKILL.md в каталог скиллов ИИ-инструмента.\n\nExample: spider skill install                  # ~/.claude/skills/spider/\nExample: spider skill install --tool agents --project\n\nJSON: `{tool, scope, path}`.",
-            "options": [
-              {
-                "name": "--tool",
-                "arguments": [
-                  {
-                    "name": "TOOL",
-                    "required": true
-                  }
-                ],
-                "description": "Для какого ИИ-инструмента: claude-code, agents.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "claude-code"
-                  }
-                ]
-              },
-              {
-                "name": "--project",
-                "description": "Установить в текущий проект, а не в каталог пользователя.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
                   }
                 ]
               },
@@ -3942,7 +3765,10 @@
                 "arguments": [
                   {
                     "name": "LIMIT",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Сколько последних обходов показать.",
@@ -4098,7 +3924,10 @@
                 "arguments": [
                   {
                     "name": "URL_LIST",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Файл с URL (как у `spider crawl --list`) или - для stdin.",
@@ -4283,7 +4112,10 @@
                 "arguments": [
                   {
                     "name": "KEEP_LAST",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Оставить столько последних обходов каждого проекта, остальные удалить.",
@@ -4299,7 +4131,10 @@
                 "arguments": [
                   {
                     "name": "OLDER_THAN",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Удалить обходы старше этого: 90d, 12h, 2w, 1y.",
@@ -4315,7 +4150,10 @@
                 "arguments": [
                   {
                     "name": "PROJECT",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Только обходы этого проекта; по умолчанию — всех.",
@@ -4502,7 +4340,10 @@
                 "arguments": [
                   {
                     "name": "FROM_PROFILE",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "От какого профиля наследовать (`extends`).",
@@ -4641,7 +4482,10 @@
                 "arguments": [
                   {
                     "name": "NAME",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Имя для crawl.fingerprint; по умолчанию — имя файла.",
@@ -4722,7 +4566,10 @@
                 "arguments": [
                   {
                     "name": "OS",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Система: windows, macos, linux или android (телефон).",
@@ -4742,7 +4589,10 @@
                 "arguments": [
                   {
                     "name": "CHROME",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Версия Chrome (major), например 155; по умолчанию — из данных генератора.",
@@ -4758,7 +4608,10 @@
                 "arguments": [
                   {
                     "name": "LOCALE",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Язык браузера (navigator.language, Accept-Language).",
@@ -4778,7 +4631,10 @@
                 "arguments": [
                   {
                     "name": "TIMEZONE",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Часовой пояс браузера (IANA).",
@@ -4863,7 +4719,10 @@
                 "arguments": [
                   {
                     "name": "PROFILE",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
@@ -4879,7 +4738,10 @@
                 "arguments": [
                   {
                     "name": "CONFIG_FILE",
-                    "required": true
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
                   }
                 ],
                 "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
@@ -5162,6 +5024,1789 @@
         ]
       },
       {
+        "name": "sitemaps",
+        "description": "XML sitemap: что прочитал обход (файлы, URL, сироты) и генерация sitemap по обходу.",
+        "commands": [
+          {
+            "name": "show",
+            "description": "Показать, что обход прочитал из XML sitemap, и сравнение с найденным по ссылкам.\n\nSitemap читается в начале обхода с `sitemaps.crawl = true` (extra\n`rb-spider[sitemaps]`): найденные через robots.txt и стандартные пути\n(`sitemaps.discover`) и заданные `sitemaps.urls`; их URL обходятся\n(`sitemaps.follow`). Проблемы — `spider issues`, группа Sitemaps; число URL\nв sitemap и вне — `spider overview`.\n\nExample: spider sitemaps show\nExample: spider sitemaps show --only orphans\nExample: spider --json sitemaps show 12 --only not_in_sitemap --limit 1000\n\nJSON: `{crawl_id, only, total, rows}`; files — `{url, kind, bytes, urls, sitemaps, error}`\n(kind null — файл не получен, см. error), urls — `{url, source, lastmod, status_code,\nindexability_status}`, orphans — `{url, source, status_code, indexability_status}`,\nnot_in_sitemap — `{url, depth, inlinks}`.",
+            "options": [
+              {
+                "name": "--only",
+                "arguments": [
+                  {
+                    "name": "ONLY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    },
+                    "acceptedValues": [
+                      "files",
+                      "urls",
+                      "orphans",
+                      "not_in_sitemap"
+                    ]
+                  }
+                ],
+                "description": "files — файлы sitemap (размер, число URL, ошибка); urls — все URL из них; orphans — URL без ссылок на сайте (Orphan Pages); not_in_sitemap — индексируемые страницы, которых нет в sitemap.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "choice"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "files"
+                  }
+                ]
+              },
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "build",
+            "description": "Сгенерировать XML sitemap (или Image Sitemap) по обходу — через rb-sitemap-xml.\n\nВ sitemap идут индексируемые HTML-страницы сайта с кодом 200 (без страниц\nпагинации 2+); `--include` добавляет noindex, canonicalised, пагинацию, PDF. Больше\n49 999 URL — файлы sitemap-N.xml и индекс sitemap.xml. Нужен extra\n`rb-spider[sitemaps]`. Пишет только в каталог `--out`.\n\nExample: spider sitemaps build -o public/\nExample: spider sitemaps build 12 -o out/ --lastmod --include pdf\nExample: spider sitemaps build -o out/ --images\nExample: spider sitemaps build -o out/ --priority depth --changefreq weekly\n\nJSON: `{crawl_id, files: [путь…], urls}`; индекс — первым. Неизвестное значение\n`--include` / `--changefreq`, неверный `--priority` — выход 2; нет extra —\nSITEMAPS_UNAVAILABLE, выход 1.",
+            "options": [
+              {
+                "name": "--out",
+                "aliases": [
+                  "-o"
+                ],
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "OUT_DIR",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Каталог, куда записать sitemap.xml (и sitemap-N.xml).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "path"
+                  }
+                ]
+              },
+              {
+                "name": "--base-url",
+                "arguments": [
+                  {
+                    "name": "BASE_URL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Где файлы будут лежать на сайте (для индекса); по умолчанию — корень стартового URL.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--include",
+                "arguments": [
+                  {
+                    "name": "INCLUDE",
+                    "required": true
+                  }
+                ],
+                "description": "Добавить и такие страницы: noindex, canonicalised, paginated (2+), pdf. Можно несколько раз.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-multiple",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "name": "--lastmod",
+                "description": "Проставить lastmod из заголовка Last-Modified ответа.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--images",
+                "description": "Image Sitemap: страницы с картинками (картинки с кодом 200).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--changefreq",
+                "arguments": [
+                  {
+                    "name": "CHANGEFREQ",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "changefreq всех URL: always, hourly, daily, weekly, monthly, yearly, never.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--priority",
+                "arguments": [
+                  {
+                    "name": "PRIORITY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "priority: число 0.0–1.0 для всех URL или depth — 1.0 у стартовой, на 0.1 меньше за клик.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "serp",
+        "description": "Выдача Google: ширина title и description в пикселях, сниппет по обходу и для своего текста.",
+        "commands": [
+          {
+            "name": "summary",
+            "description": "SERP Summary: title и description каждой HTML-страницы — в символах и пикселях.\n\nПиксели — ширина в выдаче Google (Arial: title — `thresholds.serp_title_font_px`,\ndescription — `serp_description_font_px`), считаются в `spider analyze`. Проблемы\n(шире / уже порогов) — `spider issues`, группы Page Titles и Meta Description;\nсниппет одной страницы — `spider url`.\n\nExample: spider serp summary\nExample: spider --json serp summary 12 --limit 1000\n\nJSON: `{crawl_id, total, pages: [{url, title, title_chars, title_px, description,\ndescription_chars, description_px}]}`.",
+            "options": [
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько страниц показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "preview",
+            "description": "Предпросмотр сниппета Google для своего title и description — без обхода.\n\nДля подбора текста до публикации: ширина в пикселях и как выдача обрежет\ntitle и description (по словам, с «…»). Пороги и кегли — `thresholds.title_max_px`,\n`description_max_px`, `serp_*_font_px` (из `--profile` / `--set`).\n\nExample: spider serp preview --title \"Купить диван в Москве — каталог\" --description \"Доставка за день…\"\nExample: spider --json serp preview --title \"…\" --set thresholds.title_max_px=600\n\nJSON: `{url, title, title_px, title_truncated, description, description_px,\ndescription_truncated}`; title / description — как их покажет выдача.",
+            "options": [
+              {
+                "name": "--title",
+                "arguments": [
+                  {
+                    "name": "TITLE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Title, который проверить.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": ""
+                  }
+                ]
+              },
+              {
+                "name": "--description",
+                "arguments": [
+                  {
+                    "name": "DESCRIPTION",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Meta description, который проверить.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": ""
+                  }
+                ]
+              },
+              {
+                "name": "--url",
+                "arguments": [
+                  {
+                    "name": "URL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "URL страницы — строка адреса сниппета.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "https://example.com/"
+                  }
+                ]
+              },
+              {
+                "name": "--profile",
+                "arguments": [
+                  {
+                    "name": "PROFILE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--config",
+                "arguments": [
+                  {
+                    "name": "CONFIG_FILE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "path"
+                  }
+                ]
+              },
+              {
+                "name": "--set",
+                "arguments": [
+                  {
+                    "name": "KEY=VALUE",
+                    "required": true
+                  }
+                ],
+                "description": "Переопределить любой ключ: `--set crawl.max_urls=500`; можно повторять.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-multiple",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "report",
+        "description": "Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы, заголовки, консоль JavaScript, PageSpeed.",
+        "commands": [
+          {
+            "name": "canonicals",
+            "description": "Canonical Chains и Non-Indexable Canonicals: страницы с canonical на другой URL и что с этим URL.\n\nЦепочка — canonical ведёт на страницу, которая сама canonical-ит дальше или\nредиректит; поисковик может не дойти до конца. Цепочки вместе с редиректами —\n`spider redirects --canonicals`.\n\nExample: spider report canonicals\nExample: spider --json report canonicals --only non_indexable\n\nJSON: `{crawl_id, report, only, total, rows: [{url, canonical, canonical_status,\ncanonical_indexability, next_hop}]}`; next_hop — куда ведёт сам canonical.",
+            "options": [
+              {
+                "name": "--only",
+                "arguments": [
+                  {
+                    "name": "ONLY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    },
+                    "acceptedValues": [
+                      "all",
+                      "chains",
+                      "non_indexable"
+                    ]
+                  }
+                ],
+                "description": "chains — canonical ведёт на URL, который снова уводит; non_indexable — на неиндексируемый; all — все canonical на другой URL.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "choice"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "chains"
+                  }
+                ]
+              },
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "structure",
+            "description": "Site Structure: папки сайта с числом URL (индексируемых и нет) и URL по глубине обхода.\n\nГде сосредоточены страницы и неиндексируемые разделы. Папка — первые `--depth`\nсегментов пути (страница `/a/b/c` — в папке `/a/b/`).\n\nExample: spider report structure\nExample: spider --json report structure --depth 3\n\nJSON: `{crawl_id, folders: [{folder, urls, indexable, non_indexable}], depths: {глубина:\nчисло URL}}`.",
+            "options": [
+              {
+                "name": "--depth",
+                "arguments": [
+                  {
+                    "name": "DEPTH",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "До скольких уровней папок группировать URL.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 2
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "response-times",
+            "description": "Response Times: URL сайта по диапазонам времени ответа и самые медленные.\n\nВремя — от запроса до заголовков ответа, как его видел обход (при `concurrency`\nобхода, а не одиночным запросом).\n\nExample: spider report response-times\nExample: spider --json report response-times --slowest 100\n\nJSON: `{crawl_id, urls, average_ms, max_ms, bands: {\"<100\": n, …, \">=5000\": n},\nslowest: [{url, response_ms, status_code}]}`.",
+            "options": [
+              {
+                "name": "--slowest",
+                "arguments": [
+                  {
+                    "name": "SLOWEST",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько самых медленных URL показать.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 20
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "crawl-path",
+            "description": "Crawl Path: кратчайший путь, которым обход нашёл URL — от стартовой страницы по кликам.\n\nПочему страница так глубоко и через что до неё добраться. Каждый шаг — страница на\nклик ближе к старту, которая ссылается (или редиректит, canonical-ит…) на следующую.\n\nExample: spider report crawl-path https://example.com/deep/page\nExample: spider --json report crawl-path https://example.com/x --crawl 12\n\nJSON: `{crawl_id, url, path: [{url, depth, via}]}`, от стартовой страницы к URL; via — как\nна этот шаг пришли с предыдущего (hyperlink, redirect, canonical…), у стартовой null.\nURL нет в обходе — выход 2.",
+            "options": [
+              {
+                "name": "--crawl",
+                "arguments": [
+                  {
+                    "name": "CRAWL_ID",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Номер обхода; по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "url",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "URL из обхода.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "meta-keywords",
+            "description": "Meta Keywords: `<meta name=\"keywords\">` HTML-страниц — есть, нет, несколько, одинаковые.\n\nGoogle keywords не учитывает; Яндекс учитывает слабо. Полезно, чтобы найти мусор и\nдубли от шаблонов CMS.\n\nExample: spider report meta-keywords --only duplicate\nExample: spider --json report meta-keywords --only missing\n\nJSON: `{crawl_id, report, only, total, rows: [{url, keywords, tags}]}`.",
+            "options": [
+              {
+                "name": "--only",
+                "arguments": [
+                  {
+                    "name": "ONLY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    },
+                    "acceptedValues": [
+                      "all",
+                      "missing",
+                      "multiple",
+                      "duplicate"
+                    ]
+                  }
+                ],
+                "description": "all — с keywords; missing — без; multiple — несколько тегов; duplicate — одинаковые на нескольких страницах.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "choice"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "all"
+                  }
+                ]
+              },
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "forms",
+            "description": "Forms: формы сайта — на какой странице и куда отправляются, по HTTP или HTTPS.\n\nФормы хранятся со ссылками своего вида (`collect.internal_links.store` /\n`external_links.store`). Проблемы форм — `spider issues`, группа Security.\n\nExample: spider report forms\nExample: spider --json report forms --limit 1000\n\nJSON: `{crawl_id, report, total, rows: [{page, action, internal, insecure}]}`.",
+            "options": [
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "headers",
+            "description": "HTTP Header Summary / Cookie Summary: заголовки ответов (или cookies) и сколько URL их отдают.\n\nЗаголовки каждого URL — `spider url`, все построчно — `spider export headers` /\n`spider export cookies`.\n\nExample: spider report headers\nExample: spider --json report headers --cookies\n\nJSON: `{crawl_id, cookies, rows: [{name, urls, example, attributes?}]}`; attributes — у\ncookies: какие атрибуты встречались (path, domain, secure, httponly, samesite…).",
+            "options": [
+              {
+                "name": "--cookies",
+                "description": "Cookie Summary: cookies вместо заголовков.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "javascript",
+            "description": "Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при рендеринге.\n\nЕсть только у обхода с рендерингом (`--render always|auto`). Одинаковые сообщения\nсгруппированы: сколько страниц их выдали и пример страницы. Ресурсы, закрытые\nrobots.txt (kind blocked), браузер не загружал, как не загрузил бы Googlebot — это\nпроверка «JavaScript: Pages with Blocked Resources». Всё построчно — `spider export\njavascript`.\n\nExample: spider report javascript\nExample: spider report javascript --only resources\nExample: spider --json report javascript --url https://example.com/app\n\nJSON: `{crawl_id, report, only, total, rows}`; console — rows `[{kind, message, pages,\nexample}]`, resources — `[{resource, kind, reason, pages, example}]`, с `--url` —\n`[{kind, message, resource}]`. kind: error | warning | blocked | failed.",
+            "options": [
+              {
+                "name": "--only",
+                "arguments": [
+                  {
+                    "name": "ONLY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    },
+                    "acceptedValues": [
+                      "console",
+                      "resources"
+                    ]
+                  }
+                ],
+                "description": "console — ошибки и предупреждения консоли браузера; resources — ресурсы, которые браузер не загрузил (robots.txt, ошибка, 4xx / 5xx).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "choice"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "console"
+                  }
+                ]
+              },
+              {
+                "name": "--url",
+                "arguments": [
+                  {
+                    "name": "URL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Только эта страница, каждое сообщение отдельной строкой.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pagespeed",
+            "description": "PageSpeed Opportunities Summary и CSS / JavaScript Coverage Summary по замерам `spider lighthouse`.\n\nСводка по выборке страниц: что тормозит сайт чаще всего и какие файлы тянут\nнеиспользуемый код. Проблемы конкретной страницы — `spider url <url>` (поле\nlighthouse), все аудиты построчно — `spider export lighthouse`.\n\nExample: spider report pagespeed\nExample: spider report pagespeed --only coverage\nExample: spider --json report pagespeed --only pages\n\nJSON: `{crawl_id, report, only, total, rows}`; opportunities — `[{audit, pages, example}]`,\npages — `[{url, strategy, performance}]`, coverage — `[{kind, resource, pages,\nunused_bytes, total_bytes}]`. Замеров нет — пустой список.",
+            "options": [
+              {
+                "name": "--only",
+                "arguments": [
+                  {
+                    "name": "ONLY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    },
+                    "acceptedValues": [
+                      "opportunities",
+                      "pages",
+                      "coverage"
+                    ]
+                  }
+                ],
+                "description": "opportunities — какие аудиты не пройдены и на скольких страницах; pages — замеренные страницы и их оценка; coverage — неиспользуемые байты CSS и JS по файлам.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "choice"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "opportunities"
+                  }
+                ]
+              },
+              {
+                "name": "--limit",
+                "arguments": [
+                  {
+                    "name": "LIMIT",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Сколько строк показать (всего — в поле total).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int range"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": 100
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "crawl_id",
+                "required": false,
+                "arity": {
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "int"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "Настройки: проектный файл, итоговые значения по слоям, проверка и схема.",
+        "commands": [
+          {
+            "name": "list",
+            "description": "Показать проектный файл `.spider/config.toml` как он записан.\n\nТолько то, что задано в проекте. Итоговые значения со всеми слоями\n(профиль, флаги, переменные окружения) — `spider config show`.\n\nExample: spider config list\n\nJSON: содержимое файла (поля проекта и разделы настроек, например `crawl`).",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "Показать одно значение из проектного файла.\n\nExample: spider config get crawl.concurrency\n\nJSON: `{key, value}`; `value` — null, если в проекте ключ не задан (действует\nзначение из другого слоя — см. `spider config show`). Неизвестный ключ — выход 2.",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "key",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Ключ через точку: поле проекта (name) или настройка (crawl.max_urls).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "Записать одно значение в проектный файл. Не для секретов: пароли — `spider auth login`.\n\nЗначение разбирается как TOML (`500` — число, `false` — логическое), иначе\nсохраняется строкой. Весь файл проверяется до записи.\n\nExample: spider config set crawl.concurrency 10\nExample: spider config set crawl.robots report\nExample: spider config set name shop\n\nJSON: `{key, value}`. Неизвестный ключ или неверный тип — выход 2.",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "key",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Ключ через точку: поле проекта (name) или настройка (crawl.max_urls).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "value",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Значение: число, true/false, \"строка\" или [список] в синтаксисе TOML.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "Итоговые настройки обхода и слой, откуда пришло каждое значение.\n\nРовно то, с чем запустится `spider crawl` при тех же `--profile` / `--config`\n/ `--set`, — проверить профиль до обхода. Слои: default, global, project,\nprofile:<имя>, file:<путь>, env, flag, set.\n\nExample: spider config show\nExample: spider config show --profile googlebot --set crawl.max_urls=500\n\nJSON: `{settings: {раздел: {ключ: значение}}, sources: {\"раздел.ключ\": слой}}`.\nОшибка в любом слое — выход 2 с указанием ключа и слоя.",
+            "options": [
+              {
+                "name": "--profile",
+                "arguments": [
+                  {
+                    "name": "PROFILE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--config",
+                "arguments": [
+                  {
+                    "name": "CONFIG_FILE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "path"
+                  }
+                ]
+              },
+              {
+                "name": "--set",
+                "arguments": [
+                  {
+                    "name": "KEY=VALUE",
+                    "required": true
+                  }
+                ],
+                "description": "Переопределить любой ключ: `--set crawl.max_urls=500`; можно повторять.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-multiple",
+                    "value": true
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "validate",
+            "description": "Проверить файл профиля до использования: ключи, типы, цепочку `extends`.\n\nExample: spider config validate .spider/profiles/shop.toml\nExample: spider --json config validate my-settings.toml\n\nJSON: `{file, valid: true, extends}`. Ошибки — выход 2, в сообщении каждый\nневерный ключ и причина.",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "file",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "TOML-файл профиля или настроек.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "file"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "schema",
+            "description": "JSON Schema файла профиля: все ключи, типы, значения по умолчанию, описания.\n\nПо ней агент составляет корректный профиль без угадывания. Всегда печатает\nсаму схему (без конверта `{ok}`), чтобы её можно было сразу сохранить в файл.\n\nExample: spider config schema\nExample: spider config schema > spider-profile.schema.json",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "skill",
+        "description": "Инструкция spider для ИИ-агентов (SKILL.md).",
+        "commands": [
+          {
+            "name": "install",
+            "description": "Скопировать встроенные скиллы spider в каталог скиллов ИИ-инструмента.\n\nСкилл с соглашениями и каждый дополнительный скилл пакета — каждый в свой каталог.\n\nExample: spider skill install                  # ~/.claude/skills/spider/\nExample: spider skill install --tool agents --project\n\nJSON: `{tool, scope, path}`.",
+            "options": [
+              {
+                "name": "--tool",
+                "arguments": [
+                  {
+                    "name": "TOOL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Для какого ИИ-инструмента: claude-code, agents.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "claude-code"
+                  }
+                ]
+              },
+              {
+                "name": "--project",
+                "description": "Установить в текущий проект, а не в каталог пользователя.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--skill",
+                "arguments": [
+                  {
+                    "name": "SKILL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Установить только этот встроенный скилл (см. `skill list`); по умолчанию все.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "List the agent skills this CLI bundles: name and description.\n\nExample: spider skill list",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Печатать только основной результат, без пояснений.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
         "name": "db",
         "description": "База обходов: размер и состояние, миграции схемы, перенос в общую базу, сжатие файла.",
         "commands": [
@@ -5390,1250 +7035,6 @@
                   {
                     "name": "x-rb-default",
                     "value": false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "sitemaps",
-        "description": "XML sitemap: что прочитал обход (файлы, URL, сироты) и генерация sitemap по обходу.",
-        "commands": [
-          {
-            "name": "show",
-            "description": "Показать, что обход прочитал из XML sitemap, и сравнение с найденным по ссылкам.\n\nSitemap читается в начале обхода с `sitemaps.crawl = true` (extra\n`rb-spider[sitemaps]`): найденные через robots.txt и стандартные пути\n(`sitemaps.discover`) и заданные `sitemaps.urls`; их URL обходятся\n(`sitemaps.follow`). Проблемы — `spider issues`, группа Sitemaps; число URL\nв sitemap и вне — `spider overview`.\n\nExample: spider sitemaps show\nExample: spider sitemaps show --only orphans\nExample: spider --json sitemaps show 12 --only not_in_sitemap --limit 1000\n\nJSON: `{crawl_id, only, total, rows}`; files — `{url, kind, bytes, urls, sitemaps, error}`\n(kind null — файл не получен, см. error), urls — `{url, source, lastmod, status_code,\nindexability_status}`, orphans — `{url, source, status_code, indexability_status}`,\nnot_in_sitemap — `{url, depth, inlinks}`.",
-            "options": [
-              {
-                "name": "--only",
-                "arguments": [
-                  {
-                    "name": "ONLY",
-                    "required": true,
-                    "acceptedValues": [
-                      "files",
-                      "urls",
-                      "orphans",
-                      "not_in_sitemap"
-                    ]
-                  }
-                ],
-                "description": "files — файлы sitemap (размер, число URL, ошибка); urls — все URL из них; orphans — URL без ссылок на сайте (Orphan Pages); not_in_sitemap — индексируемые страницы, которых нет в sitemap.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "choice"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "files"
-                  }
-                ]
-              },
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "build",
-            "description": "Сгенерировать XML sitemap (или Image Sitemap) по обходу — через rb-sitemap-xml.\n\nВ sitemap идут индексируемые HTML-страницы сайта с кодом 200 (без страниц\nпагинации 2+); `--include` добавляет noindex, canonicalised, пагинацию, PDF. Больше\n49 999 URL — файлы sitemap-N.xml и индекс sitemap.xml. Нужен extra\n`rb-spider[sitemaps]`. Пишет только в каталог `--out`.\n\nExample: spider sitemaps build -o public/\nExample: spider sitemaps build 12 -o out/ --lastmod --include pdf\nExample: spider sitemaps build -o out/ --images\nExample: spider sitemaps build -o out/ --priority depth --changefreq weekly\n\nJSON: `{crawl_id, files: [путь…], urls}`; индекс — первым. Неизвестное значение\n`--include` / `--changefreq`, неверный `--priority` — выход 2; нет extra —\nSITEMAPS_UNAVAILABLE, выход 1.",
-            "options": [
-              {
-                "name": "--out",
-                "aliases": [
-                  "-o"
-                ],
-                "required": true,
-                "arguments": [
-                  {
-                    "name": "OUT_DIR",
-                    "required": true
-                  }
-                ],
-                "description": "Каталог, куда записать sitemap.xml (и sitemap-N.xml).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "path"
-                  }
-                ]
-              },
-              {
-                "name": "--base-url",
-                "arguments": [
-                  {
-                    "name": "BASE_URL",
-                    "required": true
-                  }
-                ],
-                "description": "Где файлы будут лежать на сайте (для индекса); по умолчанию — корень стартового URL.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--include",
-                "arguments": [
-                  {
-                    "name": "INCLUDE",
-                    "required": true
-                  }
-                ],
-                "description": "Добавить и такие страницы: noindex, canonicalised, paginated (2+), pdf. Можно несколько раз.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-multiple",
-                    "value": true
-                  }
-                ]
-              },
-              {
-                "name": "--lastmod",
-                "description": "Проставить lastmod из заголовка Last-Modified ответа.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--images",
-                "description": "Image Sitemap: страницы с картинками (картинки с кодом 200).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--changefreq",
-                "arguments": [
-                  {
-                    "name": "CHANGEFREQ",
-                    "required": true
-                  }
-                ],
-                "description": "changefreq всех URL: always, hourly, daily, weekly, monthly, yearly, never.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--priority",
-                "arguments": [
-                  {
-                    "name": "PRIORITY",
-                    "required": true
-                  }
-                ],
-                "description": "priority: число 0.0–1.0 для всех URL или depth — 1.0 у стартовой, на 0.1 меньше за клик.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "serp",
-        "description": "Выдача Google: ширина title и description в пикселях, сниппет по обходу и для своего текста.",
-        "commands": [
-          {
-            "name": "summary",
-            "description": "SERP Summary: title и description каждой HTML-страницы — в символах и пикселях.\n\nПиксели — ширина в выдаче Google (Arial: title — `thresholds.serp_title_font_px`,\ndescription — `serp_description_font_px`), считаются в `spider analyze`. Проблемы\n(шире / уже порогов) — `spider issues`, группы Page Titles и Meta Description;\nсниппет одной страницы — `spider url`.\n\nExample: spider serp summary\nExample: spider --json serp summary 12 --limit 1000\n\nJSON: `{crawl_id, total, pages: [{url, title, title_chars, title_px, description,\ndescription_chars, description_px}]}`.",
-            "options": [
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько страниц показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "preview",
-            "description": "Предпросмотр сниппета Google для своего title и description — без обхода.\n\nДля подбора текста до публикации: ширина в пикселях и как выдача обрежет\ntitle и description (по словам, с «…»). Пороги и кегли — `thresholds.title_max_px`,\n`description_max_px`, `serp_*_font_px` (из `--profile` / `--set`).\n\nExample: spider serp preview --title \"Купить диван в Москве — каталог\" --description \"Доставка за день…\"\nExample: spider --json serp preview --title \"…\" --set thresholds.title_max_px=600\n\nJSON: `{url, title, title_px, title_truncated, description, description_px,\ndescription_truncated}`; title / description — как их покажет выдача.",
-            "options": [
-              {
-                "name": "--title",
-                "arguments": [
-                  {
-                    "name": "TITLE",
-                    "required": true
-                  }
-                ],
-                "description": "Title, который проверить.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": ""
-                  }
-                ]
-              },
-              {
-                "name": "--description",
-                "arguments": [
-                  {
-                    "name": "DESCRIPTION",
-                    "required": true
-                  }
-                ],
-                "description": "Meta description, который проверить.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": ""
-                  }
-                ]
-              },
-              {
-                "name": "--url",
-                "arguments": [
-                  {
-                    "name": "URL",
-                    "required": true
-                  }
-                ],
-                "description": "URL страницы — строка адреса сниппета.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "https://example.com/"
-                  }
-                ]
-              },
-              {
-                "name": "--profile",
-                "arguments": [
-                  {
-                    "name": "PROFILE",
-                    "required": true
-                  }
-                ],
-                "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--config",
-                "arguments": [
-                  {
-                    "name": "CONFIG_FILE",
-                    "required": true
-                  }
-                ],
-                "description": "TOML-файл настроек поверх профиля (формат как у профиля).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "path"
-                  }
-                ]
-              },
-              {
-                "name": "--set",
-                "arguments": [
-                  {
-                    "name": "KEY=VALUE",
-                    "required": true
-                  }
-                ],
-                "description": "Переопределить любой ключ: `--set crawl.max_urls=500`; можно повторять.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  },
-                  {
-                    "name": "x-rb-multiple",
-                    "value": true
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "report",
-        "description": "Отчёты по обходу: canonical, структура, время ответа, путь обхода, meta keywords, формы, заголовки, консоль JavaScript, PageSpeed.",
-        "commands": [
-          {
-            "name": "canonicals",
-            "description": "Canonical Chains и Non-Indexable Canonicals: страницы с canonical на другой URL и что с этим URL.\n\nЦепочка — canonical ведёт на страницу, которая сама canonical-ит дальше или\nредиректит; поисковик может не дойти до конца. Цепочки вместе с редиректами —\n`spider redirects --canonicals`.\n\nExample: spider report canonicals\nExample: spider --json report canonicals --only non_indexable\n\nJSON: `{crawl_id, report, only, total, rows: [{url, canonical, canonical_status,\ncanonical_indexability, next_hop}]}`; next_hop — куда ведёт сам canonical.",
-            "options": [
-              {
-                "name": "--only",
-                "arguments": [
-                  {
-                    "name": "ONLY",
-                    "required": true,
-                    "acceptedValues": [
-                      "all",
-                      "chains",
-                      "non_indexable"
-                    ]
-                  }
-                ],
-                "description": "chains — canonical ведёт на URL, который снова уводит; non_indexable — на неиндексируемый; all — все canonical на другой URL.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "choice"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "chains"
-                  }
-                ]
-              },
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "structure",
-            "description": "Site Structure: папки сайта с числом URL (индексируемых и нет) и URL по глубине обхода.\n\nГде сосредоточены страницы и неиндексируемые разделы. Папка — первые `--depth`\nсегментов пути (страница `/a/b/c` — в папке `/a/b/`).\n\nExample: spider report structure\nExample: spider --json report structure --depth 3\n\nJSON: `{crawl_id, folders: [{folder, urls, indexable, non_indexable}], depths: {глубина:\nчисло URL}}`.",
-            "options": [
-              {
-                "name": "--depth",
-                "arguments": [
-                  {
-                    "name": "DEPTH",
-                    "required": true
-                  }
-                ],
-                "description": "До скольких уровней папок группировать URL.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 2
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "response-times",
-            "description": "Response Times: URL сайта по диапазонам времени ответа и самые медленные.\n\nВремя — от запроса до заголовков ответа, как его видел обход (при `concurrency`\nобхода, а не одиночным запросом).\n\nExample: spider report response-times\nExample: spider --json report response-times --slowest 100\n\nJSON: `{crawl_id, urls, average_ms, max_ms, bands: {\"<100\": n, …, \">=5000\": n},\nslowest: [{url, response_ms, status_code}]}`.",
-            "options": [
-              {
-                "name": "--slowest",
-                "arguments": [
-                  {
-                    "name": "SLOWEST",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько самых медленных URL показать.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 20
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "crawl-path",
-            "description": "Crawl Path: кратчайший путь, которым обход нашёл URL — от стартовой страницы по кликам.\n\nПочему страница так глубоко и через что до неё добраться. Каждый шаг — страница на\nклик ближе к старту, которая ссылается (или редиректит, canonical-ит…) на следующую.\n\nExample: spider report crawl-path https://example.com/deep/page\nExample: spider --json report crawl-path https://example.com/x --crawl 12\n\nJSON: `{crawl_id, url, path: [{url, depth, via}]}`, от стартовой страницы к URL; via — как\nна этот шаг пришли с предыдущего (hyperlink, redirect, canonical…), у стартовой null.\nURL нет в обходе — выход 2.",
-            "options": [
-              {
-                "name": "--crawl",
-                "arguments": [
-                  {
-                    "name": "CRAWL_ID",
-                    "required": true
-                  }
-                ],
-                "description": "Номер обхода; по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "url",
-                "required": true,
-                "arity": {
-                  "minimum": 1,
-                  "maximum": 1
-                },
-                "description": "URL из обхода.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "meta-keywords",
-            "description": "Meta Keywords: `<meta name=\"keywords\">` HTML-страниц — есть, нет, несколько, одинаковые.\n\nGoogle keywords не учитывает; Яндекс учитывает слабо. Полезно, чтобы найти мусор и\nдубли от шаблонов CMS.\n\nExample: spider report meta-keywords --only duplicate\nExample: spider --json report meta-keywords --only missing\n\nJSON: `{crawl_id, report, only, total, rows: [{url, keywords, tags}]}`.",
-            "options": [
-              {
-                "name": "--only",
-                "arguments": [
-                  {
-                    "name": "ONLY",
-                    "required": true,
-                    "acceptedValues": [
-                      "all",
-                      "missing",
-                      "multiple",
-                      "duplicate"
-                    ]
-                  }
-                ],
-                "description": "all — с keywords; missing — без; multiple — несколько тегов; duplicate — одинаковые на нескольких страницах.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "choice"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "all"
-                  }
-                ]
-              },
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "forms",
-            "description": "Forms: формы сайта — на какой странице и куда отправляются, по HTTP или HTTPS.\n\nФормы хранятся со ссылками своего вида (`collect.internal_links.store` /\n`external_links.store`). Проблемы форм — `spider issues`, группа Security.\n\nExample: spider report forms\nExample: spider --json report forms --limit 1000\n\nJSON: `{crawl_id, report, total, rows: [{page, action, internal, insecure}]}`.",
-            "options": [
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "headers",
-            "description": "HTTP Header Summary / Cookie Summary: заголовки ответов (или cookies) и сколько URL их отдают.\n\nЗаголовки каждого URL — `spider url`, все построчно — `spider export headers` /\n`spider export cookies`.\n\nExample: spider report headers\nExample: spider --json report headers --cookies\n\nJSON: `{crawl_id, cookies, rows: [{name, urls, example, attributes?}]}`; attributes — у\ncookies: какие атрибуты встречались (path, domain, secure, httponly, samesite…).",
-            "options": [
-              {
-                "name": "--cookies",
-                "description": "Cookie Summary: cookies вместо заголовков.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "javascript",
-            "description": "Chrome Console Log Summary: ошибки JavaScript и незагруженные ресурсы при рендеринге.\n\nЕсть только у обхода с рендерингом (`--render always|auto`). Одинаковые сообщения\nсгруппированы: сколько страниц их выдали и пример страницы. Ресурсы, закрытые\nrobots.txt (kind blocked), браузер не загружал, как не загрузил бы Googlebot — это\nпроверка «JavaScript: Pages with Blocked Resources». Всё построчно — `spider export\njavascript`.\n\nExample: spider report javascript\nExample: spider report javascript --only resources\nExample: spider --json report javascript --url https://example.com/app\n\nJSON: `{crawl_id, report, only, total, rows}`; console — rows `[{kind, message, pages,\nexample}]`, resources — `[{resource, kind, reason, pages, example}]`, с `--url` —\n`[{kind, message, resource}]`. kind: error | warning | blocked | failed.",
-            "options": [
-              {
-                "name": "--only",
-                "arguments": [
-                  {
-                    "name": "ONLY",
-                    "required": true,
-                    "acceptedValues": [
-                      "console",
-                      "resources"
-                    ]
-                  }
-                ],
-                "description": "console — ошибки и предупреждения консоли браузера; resources — ресурсы, которые браузер не загрузил (robots.txt, ошибка, 4xx / 5xx).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "choice"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "console"
-                  }
-                ]
-              },
-              {
-                "name": "--url",
-                "arguments": [
-                  {
-                    "name": "URL",
-                    "required": true
-                  }
-                ],
-                "description": "Только эта страница, каждое сообщение отдельной строкой.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "str"
-                  }
-                ]
-              },
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "pagespeed",
-            "description": "PageSpeed Opportunities Summary и CSS / JavaScript Coverage Summary по замерам `spider lighthouse`.\n\nСводка по выборке страниц: что тормозит сайт чаще всего и какие файлы тянут\nнеиспользуемый код. Проблемы конкретной страницы — `spider url <url>` (поле\nlighthouse), все аудиты построчно — `spider export lighthouse`.\n\nExample: spider report pagespeed\nExample: spider report pagespeed --only coverage\nExample: spider --json report pagespeed --only pages\n\nJSON: `{crawl_id, report, only, total, rows}`; opportunities — `[{audit, pages, example}]`,\npages — `[{url, strategy, performance}]`, coverage — `[{kind, resource, pages,\nunused_bytes, total_bytes}]`. Замеров нет — пустой список.",
-            "options": [
-              {
-                "name": "--only",
-                "arguments": [
-                  {
-                    "name": "ONLY",
-                    "required": true,
-                    "acceptedValues": [
-                      "opportunities",
-                      "pages",
-                      "coverage"
-                    ]
-                  }
-                ],
-                "description": "opportunities — какие аудиты не пройдены и на скольких страницах; pages — замеренные страницы и их оценка; coverage — неиспользуемые байты CSS и JS по файлам.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "choice"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": "opportunities"
-                  }
-                ]
-              },
-              {
-                "name": "--limit",
-                "arguments": [
-                  {
-                    "name": "LIMIT",
-                    "required": true
-                  }
-                ],
-                "description": "Сколько строк показать (всего — в поле total).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int range"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": 100
-                  }
-                ]
-              },
-              {
-                "name": "--json",
-                "description": "Вывод в JSON для агентов и скриптов (одна строка-конверт `{ok, ...}`).",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              },
-              {
-                "name": "--quiet",
-                "description": "Печатать только основной результат, без пояснений.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "boolean"
-                  },
-                  {
-                    "name": "x-rb-default",
-                    "value": false
-                  }
-                ]
-              }
-            ],
-            "arguments": [
-              {
-                "name": "crawl_id",
-                "required": false,
-                "arity": {
-                  "minimum": 0,
-                  "maximum": 1
-                },
-                "description": "Номер обхода (`spider crawls list`); по умолчанию — последний.",
-                "metadata": [
-                  {
-                    "name": "x-rb-type",
-                    "value": "int"
                   }
                 ]
               }
@@ -8208,6 +8609,15 @@
             "detect": false,
             "dist": null,
             "url": null
+          }
+        ]
+      },
+      {
+        "name": "x-rb-skills",
+        "value": [
+          {
+            "name": "spider",
+            "description": "Conventions for driving the spider SEO crawler from an agent — install, JSON output, choosing a crawl profile, the order of analysis commands (drill-down), exit codes, credentials, destructive-command gating. Invoke when a task involves crawling or auditing a website with spider."
           }
         ]
       }

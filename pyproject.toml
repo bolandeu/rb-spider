@@ -5,13 +5,13 @@ dynamic = ["version"]
 description = "SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO Spider"
 readme = "README.md"
 authors = [{ name = "Roman Bolandau" }]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "typer>=0.12",
-    "pydantic>=2.6",
     "rich>=13.7",
-    "platformdirs>=4.2",
+    "pydantic>=2.6",
     "tomli-w>=1.0",
+    "platformdirs>=4.2",
     "httpx>=0.27",
     "packaging>=24.0",
     "keyring>=25.0",
@@ -44,7 +44,7 @@ sitemaps = ["rb-sitemap-xml>=0.1.3,<0.2"]
 # kept for old install commands: psycopg is a core dependency now (`SPIDER_DATABASE_URL`)
 postgres = ["psycopg[binary]>=3.2"]
 # PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
-gsc = ["rb-google-search-console>=0.4,<0.5"]
+gsc = ["rb-google-search-console>=0.4,<0.5", "rb-google-oauth>=0.2,<0.3"]  # oauth: a source line only applies to a direct dependency
 
 [project.scripts]
 spider = "rb_spider.cli:main"
@@ -68,12 +68,19 @@ fallback-version = "0.0.0"
 # Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
-# Sibling packages by release tag (tools/docs/standard-release.md §5); against an unreleased one
-# locally: `uv pip install -e ../<package>`, uncommitted
+# Our packages come only from the Gitea registry: a version range in
+# `dependencies` and a source line per package, never a git tag. explicit = true:
+# only the packages named in [tool.uv.sources] are looked up there. Against an
+# unreleased package locally: `uv pip install -e ../<package>`, uncommitted.
 [tool.uv.sources]
-rb-sitemap-xml = { git = "https://github.com/bolandeu/sitemap-xml", tag = "v0.1.3" }
-rb-google-search-console = { git = "https://github.com/bolandeu/google-search-console", tag = "v0.4.0" }
-rb-keys = { git = "https://github.com/bolandeu/keys", tag = "v0.1.0" }
+rb-sitemap-xml = { index = "gitea" }
+rb-google-search-console = { index = "gitea" }
+rb-keys = { index = "gitea" }
+rb-google-oauth = { index = "gitea" }  # a dependency of rb-google-search-console
+[[tool.uv.index]]
+name = "gitea"
+url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rb_spider"]
@@ -91,58 +98,18 @@ dev = [
     "aiohttp>=3.10",
     "jsonschema>=4.23",
     "pytest>=8.0",
-    "pyyaml>=6.0",  # tests/contracts/*.yaml
+    "pyyaml>=6.0",  # .copier-answers.yml, the CI workflow, tests/contracts/*.yaml
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "syrupy>=4.8",
-    "towncrier>=24.8",
     "trustme>=1.2.1",
     "ty>=0.0.80",
 ]
 
-# Changelog from fragments: each change adds changelog.d/+<slug>.<type>.md
-# (`uv run towncrier create +<slug>.<type>.md -c "..."`); scripts/release.py assembles them.
-[tool.towncrier]
-filename = "CHANGELOG.md"
-directory = "changelog.d"
-start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}] - {project_date}"
-issue_format = "#{issue}"
-
-[[tool.towncrier.type]]
-directory = "added"
-name = "Added"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "changed"
-name = "Changed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "deprecated"
-name = "Deprecated"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "removed"
-name = "Removed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "fixed"
-name = "Fixed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "security"
-name = "Security"
-showcontent = true
-
 # External (non-Python) dependencies — every CLI this tool runs (require_cli,
 # shutil.which, subprocess with a literal program, npx). The gate checks this
 # list against the code both ways; doctor and require_cli read it at runtime;
-# the tools/ root builds docs/external-deps.md from it (standard §12).
+# the tools catalog reads it (the Standard, Technology).
 # [[tool.rb.external]]
 # name = "ffmpeg"
 # required = true               # false: the tool works without it (doctor stays healthy)
@@ -164,23 +131,28 @@ name = "npx"
 required = false
 detect = false  # only when lighthouse.command = "npx --yes lighthouse"
 why = "spider lighthouse without installing Lighthouse: --set lighthouse.command=\"npx --yes lighthouse\""
+# Where sysadmin's tool-updater installs this tool after its first tag. The
+# installation is sysadmin's; this section only says where. homeserver: users
+# to install for (empty = build and publish only); mac: install on the Mac.
+# extras (optional): the extras to install with, e.g. extras = ["browser"].
+[tool.rb.install]
+homeserver = ["rbtools"]
+mac = true
 
 [tool.cli-generator]
-# Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
+# Where scripts/check_command_docstrings.py (called by the project's checks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
 commands = ["src/rb_spider/commands/*.py"]
-# scripts/release.py: extras to install before ruff/ty/pytest in the gate, and
-# the release commit message (e.g. for Conventional Commits hooks).
+# rb-release check (the gate): extras to install before ruff/ty/pytest.
 # gate_extras = ["browser"]
 gate_extras = ["render", "curl", "near", "structured", "sitemaps", "xpath", "postgres", "gsc"]
-# release_commit = "chore(release): v{version}"
 
 [tool.pytest.ini_options]
 # Only tests/: mutmut leaves a copy of the tree in mutants/.
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing:skip-covered"
 # tests/test_help.py keeps help snapshots at tests/snapshots/help/<command>.txt
-# (standard §7), not in syrupy's own `__snapshots__/<test file>/` layout, so
+# (the Standard, Commands), not in syrupy's own `__snapshots__/<test file>/` layout, so
 # syrupy warns it "can not relate" each file to its test. It can — by name.
 filterwarnings = ["ignore:(?s).*Can not relate snapshot:UserWarning"]
 
@@ -209,14 +181,18 @@ error-on-warning = false
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S"]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S", "T20", "TID251"]
 # Help text and docstrings are in Russian: Cyrillic "с"/"а" next to Latin is intended, not a typo.
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]                # assert is the point of a test
-"scripts/*" = ["S603", "S607"]
-"bench/*" = ["S311"]              # seeded random for a reproducible fake site, not crypto      # subprocess with fixed argv lists (git, uv), no shell
+"tests/*" = ["S101", "T201", "TID251"]  # assert is the point of a test; print in code strings; httpx for mocks
+"scripts/*" = ["S603", "S607", "T201"]  # subprocess with fixed argv lists (git, uv), no shell; scripts print to the console
+"bench/*" = ["S311", "T201"]  # seeded random for a reproducible fake site, not crypto; bench prints
+"src/*/providers/*" = ["TID251"]    # external APIs live here
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"httpx".msg = "Call external APIs through providers/ (subclass providers.HttpProvider)."
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer's `param: T = typer.Option(...)` style is a call in a default on purpose.

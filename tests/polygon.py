@@ -1292,7 +1292,7 @@ class Proxy:
                 writer.write(chunk)
             await writer.drain()
             up_writer.close()
-        except (asyncio.IncompleteReadError, ConnectionError):
+        except asyncio.IncompleteReadError, ConnectionError:
             pass
         finally:
             writer.close()

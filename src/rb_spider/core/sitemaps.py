@@ -165,7 +165,7 @@ def _iso_date(http_date: str | None) -> str | None:
 
     try:
         return parsedate_to_datetime(http_date).date().isoformat() if http_date else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

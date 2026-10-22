@@ -1,6 +1,7 @@
+"""The `doctor` command: checks of this CLI's own setup, one line per check."""
+
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 
 import typer
@@ -9,40 +10,26 @@ from .. import output
 from ..core import crawl as crawl_service
 from ..core import deps, services, settings
 from ..core import proxy as proxy_service
-from ..core.errors import CliError, CliTooOld
+from ..core.errors import CliError
 from ..core.models import ProjectConfig
-from ..core.version import DEV_VERSION, cli_name, installed_version, module_exists
+from ..core.version import DEV_VERSION, cli_name, installed_version, optional_module
 from ..providers import secrets
 
 _PACKAGE_NAME = __name__.split(".")[0]
 
 
 def _auth_checks(needed: list[str]) -> list[dict]:
-    """The keychain, plus every credential the resolved settings need (the proxy password and change-IP key, the site's password)."""
-    # credentials/ is dropped at generation time when include_auth=false;
-    # detecting it at runtime keeps this file free of template logic.
-    if not module_exists(f"{_PACKAGE_NAME}.credentials.manager"):
-        return []
-    credentials = importlib.import_module(f"{_PACKAGE_NAME}.credentials.manager")
-
-    backend = credentials.store_backend()
-    checks: list[dict] = [
+    """Every credential the resolved settings need (the proxy password and change-IP key, the site's password)."""
+    return [
         {
-            "name": "credential_store",
-            "ok": backend is not None,
-            "detail": backend or "no usable OS keychain backend; credentials must come from environment variables",
+            "name": f"credential:{provider}",
+            "ok": secrets.password(provider) is not None,
+            "detail": ""
+            if secrets.password(provider) is not None
+            else f"run '{cli_name()} auth login --provider {provider}'",
         }
+        for provider in needed
     ]
-    for provider in needed:
-        available = secrets.password(provider) is not None
-        checks.append(
-            {
-                "name": f"credential:{provider}",
-                "ok": available,
-                "detail": "" if available else f"run '{cli_name()} auth login --provider {provider}'",
-            }
-        )
-    return checks
 
 
 def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[dict, list[str]]:
@@ -93,32 +80,25 @@ def doctor(
     checks: list[dict] = [{"name": "python", "ok": True}]
     checks.append({"name": "cli_version", "ok": True, "detail": installed_version() or DEV_VERSION})
 
-    start = Path(ctx.obj.get("project") or Path.cwd())
-    output.vecho(ctx, f"Searching for a project root starting at: {start}")
-    root = services.find_project_root(start)
-    checks.append({"name": "project", "ok": root is not None, "detail": str(root) if root else None})
+    if project := optional_module(f"{_PACKAGE_NAME}.commands.project"):  # include_project=false drops it
+        checks.extend(project.doctor_checks(ctx))
 
+    root = services.find_project_root(Path(ctx.obj.get("project") or Path.cwd()))
     config: ProjectConfig | None = None
     if root is not None:
         try:
             config = services.load_config(root, check_compat=False)
-            checks.append({"name": "config", "ok": True})
-        except Exception as exc:
-            checks.append({"name": "config", "ok": False, "detail": str(exc)})
-    if config is not None:
-        try:
-            services.check_cli_compat(config)
-            checks.append({"name": "cli_compat", "ok": True, "detail": f"project requires >= {config.cli.min_version}"})
-        except CliTooOld as exc:
-            checks.append({"name": "cli_compat", "ok": False, "detail": exc.message})
-
+        except Exception:  # reported by the project part's `config` check
+            config = None
     settings_check, needed = _settings_check(root, config)
     checks.append(settings_check)
+    if credentials := optional_module(f"{_PACKAGE_NAME}.credentials.health"):  # include_auth=false drops it
+        checks.extend(credentials.doctor_checks())
     checks.extend(_auth_checks(needed))
     checks.append(_lighthouse_check(root, config))
     checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
-    if module_exists(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time
-        checks.extend(importlib.import_module(f"{_PACKAGE_NAME}.core.db").doctor_checks())
+    if db := optional_module(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time
+        checks.extend(db.doctor_checks())
 
     all_ok = all(check["ok"] for check in checks)
     output.emit_success(

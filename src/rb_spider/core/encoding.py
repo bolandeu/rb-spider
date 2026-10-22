@@ -58,7 +58,7 @@ def to_utf8(body: bytes, content_type: str | None = None) -> bytes:
     if (charset := declared_charset(body, content_type)) is not None:
         try:
             return body.decode(charset).encode("utf-8")
-        except (UnicodeDecodeError, LookupError):
+        except UnicodeDecodeError, LookupError:
             pass  # the declaration lies: guess below
     from charset_normalizer import from_bytes
 

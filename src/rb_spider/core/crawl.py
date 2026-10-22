@@ -880,7 +880,7 @@ def run_crawl(
     try:
         proxy_down = asyncio.run(_run(row.start_url, writer, settings, on_progress, resume, respider, ask))
         status = "finished"
-    except (KeyboardInterrupt, ProxyUnavailable):
+    except KeyboardInterrupt, ProxyUnavailable:
         status = "interrupted"
         raise
     finally:
