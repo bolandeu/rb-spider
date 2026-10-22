@@ -1,6 +1,6 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
 _commit: v1.8.1
-_src_path: gh:bolandeu/cli-generator
+_src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git
 author_name: Roman Bolandau
 cli_name: spider
 description: SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO
@@ -14,4 +14,4 @@ include_http_provider: true
 package_name: rb_spider
 private_deps: false
 project_name: rb-spider
-repository_url: https://github.com/bolandeu/spider
+repository_url: https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider
