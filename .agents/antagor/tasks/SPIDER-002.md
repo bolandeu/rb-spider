@@ -27,7 +27,8 @@ epic: null
 spec_refs: []
 checks:
 - osv-scanner scan source --lockfile uv.lock
-- uv run pytest
+- uv run --extra render --extra curl --extra near --extra structured --extra sitemaps
+  --extra xpath --extra postgres --extra gsc pytest -q
 resident: null
 tool: null
 pr: null
