@@ -1825,7 +1825,7 @@ wheels = [
 
 [[package]]
 name = "rb-google-search-console"
-version = "0.4.0"
+version = "0.5.0"
 source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1838,12 +1838,12 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-google-search-console/0.4.0/rb_google_search_console-0.4.0-py3-none-any.whl", hash = "sha256:cf92c80ca43f0a1f34ea36f014d476a3e807262547b5880b4ccfc872b7717b0c" },
+    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-google-search-console/0.5.0/rb_google_search_console-0.5.0-py3-none-any.whl", hash = "sha256:fe783eb9e77c6f7d9cea879bc819a2c4bc34a4c2e3ad5954cfa4da02d082b79a" },
 ]
 
 [[package]]
 name = "rb-keys"
-version = "0.1.1"
+version = "0.2.0"
 source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
 dependencies = [
     { name = "packaging" },
@@ -1855,12 +1855,12 @@ dependencies = [
     { name = "w3lib" },
 ]
 wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-keys/0.1.1/rb_keys-0.1.1-py3-none-any.whl", hash = "sha256:8491c485c6501cdcce240f1871a1871bda10a561213d6f5e7ed05233a738559f" },
+    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-keys/0.2.0/rb_keys-0.2.0-py3-none-any.whl", hash = "sha256:f5570b1305f3a5f78bc48b47644cad4d6648631eb22d9c8fb553c12a16313cf4" },
 ]
 
 [[package]]
 name = "rb-sitemap-xml"
-version = "0.1.5"
+version = "0.2.0"
 source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
 dependencies = [
     { name = "defusedxml" },
@@ -1874,7 +1874,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-sitemap-xml/0.1.5/rb_sitemap_xml-0.1.5-py3-none-any.whl", hash = "sha256:3071d2d2d67a338118e7de915028910e9864c17692ab370a66002b0e4bde9071" },
+    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-sitemap-xml/0.2.0/rb_sitemap_xml-0.2.0-py3-none-any.whl", hash = "sha256:c785438443725708581ae711abfcc7c2986c121ebb1c9c3db9e32d648a4a7a11" },
 ]
 
 [[package]]
@@ -1964,9 +1964,9 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "rb-google-oauth", marker = "extra == 'gsc'", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-google-search-console", marker = "extra == 'gsc'", specifier = ">=0.4,<0.5", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-keys", specifier = ">=0.1,<0.2", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", specifier = ">=0.1.3,<0.2", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
+    { name = "rb-google-search-console", marker = "extra == 'gsc'", specifier = ">=0.5,<0.6", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
+    { name = "rb-keys", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
+    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
     { name = "rich", specifier = ">=13.7" },
     { name = "selectolax", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },
