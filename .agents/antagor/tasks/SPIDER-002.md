@@ -1,7 +1,7 @@
 ---
 id: SPIDER-002
 title: 'Deps: filelock for GHSA-v4x8-3wr5-3wq8 and two more'
-status: publish
+status: done
 attempts: 1
 blocked: false
 blocked_reason: null

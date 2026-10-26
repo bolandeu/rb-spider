@@ -6,6 +6,12 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.1 — 2026-10-26
+
+### Outside epics
+
+- Deps: filelock for GHSA-v4x8-3wr5-3wq8 and two more (SPIDER-002)
+
 ## v0.6.0 — 2026-10-22
 
 ### Outside epics
