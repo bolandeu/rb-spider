@@ -1,10 +1,10 @@
 ---
 id: SPIDER-002
 title: 'Deps: filelock for GHSA-v4x8-3wr5-3wq8 and two more'
-status: queue
+status: in_progress
 attempts: 1
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: no_progress
 phase: null
 tests_hash: null
 publish_stage: null
