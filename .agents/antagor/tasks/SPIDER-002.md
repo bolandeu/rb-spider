@@ -3,8 +3,8 @@ id: SPIDER-002
 title: 'Deps: filelock for GHSA-v4x8-3wr5-3wq8 and two more'
 status: in_progress
 attempts: 1
-blocked: true
-blocked_reason: no_progress
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -79,3 +79,7 @@ FAIL Required test coverage of 90.0% not reached. Total coverage: 83.96%
 FAILED tests/test_crawl_settings.py::test_ca_bundle_needs_curl - AssertionErr...
 ====== 1 failed, 997 passed, 76 skipped, 13 warnings in 97.01s (0:01:37) =======
 ```
+
+### Blocked: no_progress (head bb7112487f4b6a99debde6262442d3776718938c)
+
+Checks changed: pytest now runs with the extras of the gate (gate_extras).
