@@ -6,6 +6,16 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.2 — 2026-10-26
+
+### Main
+
+- Merge pull request #1: deps: Update rb packages (Renovate)
+- Merge pull request #2: Renovate
+- chore(template): Update dependency https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git to v1.27.3
+- deps: Update rb packages
+
+
 ## v0.6.1 — 2026-10-26
 
 ### Outside epics
