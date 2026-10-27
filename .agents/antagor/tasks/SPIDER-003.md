@@ -2,7 +2,7 @@
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
 status: queue
-attempts: 1
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: null
@@ -168,3 +168,14 @@ maintenance.py is in owns now; the pg_test check has --no-cov. Do the round-2 it
 ### Blocked: needs_scope (entries [{'n': 3, 'text': 'Round 2 asks for a fix in src/rb_spider/core/maintenance.py (_pg_tables without schema), which is not in Owns.\nQuestion: Do you add src/rb_spider/core/maintenance.py to the Owns of SPIDER-003?\nOptions'}])
 
 Owns: + src/rb_spider/core/maintenance.py. Check fixed: pg_test.sh --no-cov (attempt 1 failed only on my check). Round 2: fix finding #1 (_pg_tables schema=t.schema) with a PostgreSQL test; cleanup deletes cache-dir files without a row older than one day. Tests first.
+
+### Attempt 2: the project's full check failed after the merge
+
+The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
+
+- `the project's CI (https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/spider/commits/{commit}/status)`
+
+```
+CI status: failure
+ci / gate (push): failure — Failing after 41s https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider/actions/runs/664/jobs/852
+```
