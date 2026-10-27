@@ -1,10 +1,10 @@
 ---
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
-status: publish
-attempts: 3
-blocked: true
-blocked_reason: attempts
+status: queue
+attempts: 0
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -190,3 +190,7 @@ The project's full check fails with this task merged into main, and passes witho
 CI status: failure
 ci / gate (push): failure — Failing after 8m27s https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider/actions/runs/666/jobs/854
 ```
+
+### Blocked: attempts (max_attempts 3)
+
+CI pytest failed on 2 tests. (1) Yours: tests/test_fetch_store.py::test_human_output_marks_a_stored_page — CI sets FORCE_COLOR=1, rich puts ANSI codes between 'из' and 'хранилища'. Strip ANSI codes in the test (or force no colour in that runner call); the test must pass with FORCE_COLOR=1. (2) tests/test_proxy.py::test_with_fallback_direct_a_dying_proxy_is_dropped_and_its_urls_fetched_again failed once in CI; it is a crawl test outside your diff. Check that your change does not reach it (run it 5 times locally); if it is not yours, do not change it and say so. Run the failing test with FORCE_COLOR=1 before submit.
