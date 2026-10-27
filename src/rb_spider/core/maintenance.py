@@ -236,9 +236,7 @@ def migrate(engine: sa.Engine) -> list[str]:
 
 def _pg_tables(conn: sa.Connection) -> list[str]:
     """Spider's tables that exist, schema-qualified where they have a schema (the cache tables)."""
-    return [
-        t.fullname for t in storage.metadata.sorted_tables if sa.inspect(conn).has_table(t.name, schema=t.schema)
-    ]
+    return [t.fullname for t in storage.metadata.sorted_tables if sa.inspect(conn).has_table(t.name, schema=t.schema)]
 
 
 def _pg_size(conn: sa.Connection) -> int:
