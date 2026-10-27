@@ -1,7 +1,7 @@
 ---
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
-status: in_review
+status: publish
 attempts: 1
 blocked: false
 blocked_reason: null
