@@ -2,9 +2,9 @@
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
 status: publish
-attempts: 2
-blocked: false
-blocked_reason: null
+attempts: 3
+blocked: true
+blocked_reason: attempts
 phase: null
 tests_hash: null
 publish_stage: null
@@ -178,4 +178,15 @@ The project's full check fails with this task merged into main, and passes witho
 ```
 CI status: failure
 ci / gate (push): failure — Failing after 41s https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider/actions/runs/664/jobs/852
+```
+
+### Attempt 3: the project's full check failed after the merge
+
+The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
+
+- `the project's CI (https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/spider/commits/{commit}/status)`
+
+```
+CI status: failure
+ci / gate (push): failure — Failing after 8m27s https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider/actions/runs/666/jobs/854
 ```
