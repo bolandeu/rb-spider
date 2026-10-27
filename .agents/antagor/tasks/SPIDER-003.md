@@ -30,6 +30,7 @@ owns_paths:
 - src/rb_spider/core/storage.py
 - src/rb_spider/output/__init__.py
 - CODING_STANDARDS.md
+- src/rb_spider/core/maintenance.py
 test_paths:
 - tests/test_fetch_store.py
 - tests/test_fetch.py
@@ -53,7 +54,7 @@ checks:
 - python3 scripts/check_command_docstrings.py
 - uv run --extra render --extra curl --extra near --extra structured --extra sitemaps
   --extra xpath --extra postgres --extra gsc pytest -q
-- scripts/pg_test.sh -q tests/test_db.py tests/test_fetch_store.py
+- scripts/pg_test.sh -q --no-cov tests/test_db.py tests/test_fetch_store.py tests/test_data_management.py
 - uv run ruff check
 - uv run ty check
 resident: null
