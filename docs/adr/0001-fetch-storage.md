@@ -29,7 +29,8 @@ Status: accepted.
 - A hit makes no request: the HTTP client, the proxy check, the fingerprint and the browser are set up only at the
   first URL the storage does not answer.
 - spider cleans up itself, at most once a day, when a run opens the storage: expired rows and files, then the
-  oldest over `SPIDER_CACHE_MAX_GB`.
+  oldest over `SPIDER_CACHE_MAX_GB`, then files without a row older than one day (a run stopped between the file
+  and its row; a younger file may be a save in progress).
 - Production needs `spider db upgrade` (migration 0036) and schema `cache` with USAGE and CREATE for spider's role.
 - The library `rb_spider.fetch` has the storage off by default (`store=False`): its callers write no files unless
   they ask.

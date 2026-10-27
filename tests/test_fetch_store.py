@@ -243,3 +243,24 @@ def test_library_does_not_store_unless_asked(base_url: str) -> None:
     before = _requests()
     again = fetch(f"{base_url}/a", store=True)
     assert again.from_cache is True and _requests() == before
+
+
+def test_cleanup_deletes_files_without_a_row_older_than_a_day(base_url: str, clock) -> None:
+    start = fetch_store.now()
+    [stored] = _run(f"{base_url}/a")  # the day's cleanup runs here
+    orphans = {}
+    for name, age in (("old", timedelta(days=2)), ("young", timedelta(hours=1))):
+        # a run that stopped between the file and its row leaves such a file
+        path = _cache_dir() / name[:2] / f"{name}.zst"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"orphan")
+        moment = (start + timedelta(days=1, hours=1) - age).timestamp()
+        os.utime(path, (moment, moment))
+        orphans[name] = path
+    clock(days=1, hours=1)
+
+    _run(f"{base_url}/b")
+
+    assert not orphans["old"].exists()
+    assert orphans["young"].exists()  # it may be a save in progress
+    assert stored["cache_key"] in _files()

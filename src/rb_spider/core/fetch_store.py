@@ -8,7 +8,9 @@
   was parsed (raw HTML, or the rendered DOM).
 - Term and limit come from the environment: `SPIDER_CACHE_TTL_DAYS` (default 90), `SPIDER_CACHE_MAX_GB` (GB = 10**9
   bytes; default no limit). The cleanup runs when a run opens the storage, at most once a day (`CLEANUP_MARKER` holds
-  the time of the last one): expired rows and files go, then the oldest until the files fit the limit.
+  the time of the last one): expired rows and files go, then the oldest until the files fit the limit, then the
+  files without a row older than `ORPHAN_AGE` (a run stopped between the file and its row; a younger one may be a
+  save in progress).
 
 What is stored is the fetcher's decision (core/fetch.py); this module keeps it and gives it back.
 """
@@ -46,6 +48,7 @@ MAX_GB_ENV = f"{TOOL.upper()}_CACHE_MAX_GB"
 DEFAULT_TTL_DAYS = 90
 CLEANUP_EVERY = timedelta(days=1)
 CLEANUP_MARKER = ".last-cleanup"
+ORPHAN_AGE = timedelta(days=1)
 # what a stored file keeps of the response (besides its headers and the Markdown), as FetchResult names it
 RESPONSE_FIELDS = ("final_url", "status", "redirects", "content_type", "bytes", "refresh_url", "rendered")
 _BATCH = 1000  # rows deleted per statement in the cleanup
@@ -181,7 +184,8 @@ class FetchStore:
         result.cache_key, result.content_hash, result.fetched_at = cache_key, content_hash, fetched_at.isoformat()
 
     def cleanup(self) -> None:
-        """Once a day: delete expired fetches, then the oldest while the files are over SPIDER_CACHE_MAX_GB."""
+        """Once a day: delete expired fetches, then the oldest while the files are over SPIDER_CACHE_MAX_GB, then the
+        old files without a row."""
         current = now()
         marker = self.directory / CLEANUP_MARKER
         try:
@@ -198,6 +202,7 @@ class FetchStore:
         limit = max_bytes()
         if limit is not None:
             self._drop(self._oldest_over(limit))
+        self._delete_orphans(current)
 
     def _oldest_over(self, limit: float) -> list[int]:
         """Ids of the oldest fetches to delete so that the rest fit `limit` bytes."""
@@ -212,6 +217,17 @@ class FetchStore:
                 total -= size
             rows.close()
         return ids
+
+    def _delete_orphans(self, current: datetime) -> None:
+        with self.engine.connect() as conn:
+            known = set(conn.execute(sa.select(fetches.c.cache_key)).scalars())
+        for path in self.directory.glob("*/*.zst"):
+            try:
+                old = current - datetime.fromtimestamp(path.stat().st_mtime, UTC) > ORPHAN_AGE
+            except OSError:  # deleted by another run meanwhile
+                continue
+            if old and path.stem not in known:
+                path.unlink(missing_ok=True)
 
     def _drop(self, ids: list[int]) -> None:
         cache_keys: list[str] = []

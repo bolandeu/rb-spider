@@ -235,7 +235,10 @@ def migrate(engine: sa.Engine) -> list[str]:
 
 
 def _pg_tables(conn: sa.Connection) -> list[str]:
-    return [t.name for t in storage.metadata.sorted_tables if sa.inspect(conn).has_table(t.name)]
+    """Spider's tables that exist, schema-qualified where they have a schema (the cache tables)."""
+    return [
+        t.fullname for t in storage.metadata.sorted_tables if sa.inspect(conn).has_table(t.name, schema=t.schema)
+    ]
 
 
 def _pg_size(conn: sa.Connection) -> int:
@@ -244,7 +247,7 @@ def _pg_size(conn: sa.Connection) -> int:
     if not names:
         return 0
     query = sa.text(
-        "SELECT coalesce(sum(pg_total_relation_size(quote_ident(t))), 0) FROM unnest(CAST(:names AS text[])) AS t"
+        "SELECT coalesce(sum(pg_total_relation_size(CAST(t AS regclass))), 0) FROM unnest(CAST(:names AS text[])) AS t"
     )
     return int(conn.execute(query, {"names": names}).scalar_one())
 
