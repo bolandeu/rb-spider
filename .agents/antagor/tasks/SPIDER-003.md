@@ -24,6 +24,11 @@ owns_paths:
 - tests/
 - docs/
 - CONTEXT.md
+- src/rb_spider/cli.py
+- src/rb_spider/core/db.py
+- src/rb_spider/core/opencli.py
+- src/rb_spider/core/storage.py
+- src/rb_spider/output/__init__.py
 test_paths:
 - tests/test_fetch_store.py
 - tests/test_fetch.py
