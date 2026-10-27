@@ -1,10 +1,10 @@
 ---
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
-status: in_progress
+status: queue
 attempts: 1
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -164,3 +164,7 @@ ResourceWarning: Enable tracemalloc to get the object allocation traceback
 > Recommended: Add maintenance.py to Owns, I fix _pg_tables with a PostgreSQL test
 
 maintenance.py is in owns now; the pg_test check has --no-cov. Do the round-2 items: finding #1 fix with a PostgreSQL test, cleanup of orphan files (no row, older than one day). Test first.
+
+### Blocked: needs_scope (entries [{'n': 3, 'text': 'Round 2 asks for a fix in src/rb_spider/core/maintenance.py (_pg_tables without schema), which is not in Owns.\nQuestion: Do you add src/rb_spider/core/maintenance.py to the Owns of SPIDER-003?\nOptions'}])
+
+Owns: + src/rb_spider/core/maintenance.py. Check fixed: pg_test.sh --no-cov (attempt 1 failed only on my check). Round 2: fix finding #1 (_pg_tables schema=t.schema) with a PostgreSQL test; cleanup deletes cache-dir files without a row older than one day. Tests first.
