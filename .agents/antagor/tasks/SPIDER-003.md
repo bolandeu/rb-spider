@@ -153,3 +153,14 @@ FAIL Required test coverage of 90.0% not reached. Total coverage: 49.83%
   result = tuple_new(cls, iterable)
 ResourceWarning: Enable tracemalloc to get the object allocation traceback
 ```
+
+### Answer to question #3
+
+> Round 2 asks for a fix in src/rb_spider/core/maintenance.py (_pg_tables without schema), which is not in Owns.
+> Question: Do you add src/rb_spider/core/maintenance.py to the Owns of SPIDER-003?
+> Options:
+> 1. Add maintenance.py to Owns, I fix _pg_tables with a PostgreSQL test
+> 2. Keep it out, finding #1 goes to a new task
+> Recommended: Add maintenance.py to Owns, I fix _pg_tables with a PostgreSQL test
+
+maintenance.py is in owns now; the pg_test check has --no-cov. Do the round-2 items: finding #1 fix with a PostgreSQL test, cleanup of orphan files (no row, older than one day). Test first.
