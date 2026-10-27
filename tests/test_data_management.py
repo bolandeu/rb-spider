@@ -192,6 +192,9 @@ def test_prefix_migration_keeps_every_row(base_url: str, tmp_path) -> None:
             for (index,) in indexes:
                 conn.exec_driver_sql(f"DROP INDEX {index}")
             for table in storage.metadata.sorted_tables:
+                if table.name == "spider_fetches":  # 0036's table: a database at 0032 has none
+                    conn.exec_driver_sql("DROP TABLE spider_fetches")
+                    continue
                 old = table.name.removeprefix("spider_")
                 conn.exec_driver_sql(f"ALTER TABLE {table.name} RENAME TO {old}")
                 if "id" in table.c and old not in ("projects", "crawls", "urls"):  # 0033 adds these ids

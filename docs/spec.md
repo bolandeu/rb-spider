@@ -38,6 +38,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 | Что | Где | В git? |
 |---|---|---|
 | База обходов (все проекты) | `platformdirs.user_data_dir("spider")/spider.sqlite` — на macOS `~/Library/Application Support/spider/`; переопределяется `SPIDER_DB_PATH`; `SPIDER_DATABASE_URL` — общий PostgreSQL на сервере | нет |
+| Хранилище страниц `spider fetch` | индекс — таблица `spider_fetches` (кэш, схема `cache` на PostgreSQL); исходник страницы и Markdown — файлы zstd в `SPIDER_CACHE_DIR`, по умолчанию `platformdirs.user_cache_path("spider")/fetch` (на macOS `~/Library/Caches/spider/fetch`) | нет |
 | Сжатый HTML (`--store-html`) | рядом с базой: `spider-html.sqlite`, zstd (библиотека `zstandard`; встроенный `compression.zstd` есть только с Python 3.14) — на стенде сжатие ~5× | нет |
 | Конфиг проекта и профили | `.spider/` в каталоге проекта (`config.toml`, `profiles/*.toml`) | да |
 | Секреты (прокси, DSN) | системное хранилище ключей или `SPIDER_<PROVIDER>_<FIELD>` | никогда |
@@ -45,6 +46,7 @@ Python-библиотека `rb_spider` + CLI `spider`. Пользователь
 Не папка кэша (Caches): это история обходов, а кэш чистят ОС и программы-уборщики. Одна база на пользователя, а не файл на проект: сравнение обходов, `crawls list` и `prune` работают по всем проектам, репозиторий не засоряется. Проект в базе — по имени из `.spider/config.toml`.
 - Таблицы (всё с префиксом `spider_`, объявлены в `core/tables.py`): `spider_projects`, `spider_crawls` (статус, итоговый конфиг-снимок), `spider_pages`, `spider_issues`, `spider_frontier`, `spider_url_metrics` (для обогатителей), `spider_urls` + `spider_link_rows` (ссылки по числовым id URL, #23) и представление `spider_links` с URL текстом для проверок, отчётов и `spider query`; сжатый HTML — в отдельном файле. У каждой таблицы PRIMARY KEY (Directus): где естественного ключа нет — суррогатный `id` (в SQLite — псевдоним rowid). Другие инструменты читают только представления `spider_v1_*` (`crawls`, `pages`, `issues`, `links`); в v1 колонки только добавляются в конце, иная форма — `spider_v2_*`. Общие ключи (T50): `url_key` и `domain_key` в `spider_pages` и `spider_urls` (индекс по `url_key`) — `rb_keys.norm_url` / `norm_domain` из соседнего пакета rb-keys (контракт — `vectors/keys-v1.yaml` в его репозитории), считаются при записи; не веб-URL (mailto:, кривой адрес) — NULL, не пустая строка. `spider_v1_pages` публикует ключи страницы, `spider_v1_links` — ключи цели ссылки; по ним Directus связывает страницы конкурентов и клиентов.
 - **Ссылки по id URL (#23):** URL-строка хранится в `urls` один раз на обход, строка ссылки — два целых. Id присваивает сам SQLite при записи пачки (`INSERT OR IGNORE` + `JOIN`), словаря URL→id в памяти нет. Проверки и отчёты читают представление `links`; планировщику SQLite нужна статистика (`ANALYZE` с `analysis_limit` в начале `analyze`), иначе фильтр по URL превращается в перебор всех ссылок обхода. Тяжёлые группировки (счётчики ссылок, правила по цели ссылки) группируют `link_rows` по id и подставляют URL в конце. Отвергнуто: DuckDB для анализа — после #23 проверки идут ~34 с на 100k, это полные проходы по 3,3 млн ссылок по одному на правило; ускорение дало бы объединение правил в общий проход, а не смена СУБД.
+- **Хранилище страниц `spider fetch`** ([ADR 0001](adr/0001-fetch-storage.md)): повторный `spider fetch` того же URL в том же режиме (`--render` или без) в пределах срока берётся из хранилища и не запрашивает сайт — ни страницу, ни проверку прокси. Своя таблица `spider_fetches` (`info={"kind": "cache"}`, не `spider_pages`: у fetch нет обхода, есть срок), строка на (`url_key`, `rendered`); тела — файлы zstd, имя — случайный `cache_key`. Хранится HTML-ответ с кодом ниже 500, кроме 429. Срок — `SPIDER_CACHE_TTL_DAYS` (90), предел — `SPIDER_CACHE_MAX_GB`; чистку раз в день делает сам spider. `--fresh` — мимо хранилища, `--max-age <дней>` — свой срок; в библиотеке хранилище выключено (`store=False`).
 - Итоговый (resolved) конфиг каждого обхода сохраняется в `crawls` — чтобы объяснять разницу между обходами.
 - Проверки (issues): в основном **SQL-представления** поверх таблиц обхода; сложные — Python. Пороги (длина title и т.п.) — из конфига. Проверка, которой нужны невыключенные данные, получает статус «не проверялось», а не «ок».
 
@@ -104,7 +106,7 @@ spider compare <id1> <id2>                    # сравнение обходо�
 spider issues [crawl_id] [--severity high]
 spider urls [crawl_id] --issue <code>
 spider url <url>
-spider fetch <url>... | --list f [--render] [--include …] [--markdown]   # страницы без обхода и базы — для других инструментов (Python: rb_spider.fetch)
+spider fetch <url>... | --list f [--render] [--include …] [--markdown] [--fresh] [--max-age D]   # страницы без обхода, повтор — из хранилища страниц (Python: rb_spider.fetch)
 spider links <url> --in|--out
 spider export [crawl_id] --format csv|json
 spider query "SELECT ..."

@@ -16,7 +16,7 @@ from rb_spider.cli import app
 from rb_spider.core import db, storage, tables
 from rb_spider.core.errors import DatabaseNotMigrated, DatabaseTooNew, DatabaseUnavailable, InvalidArguments
 
-from .conftest import PG_ADMIN
+from .conftest import PG_ADMIN, create_cache_schema
 
 runner = CliRunner()
 V1_VIEWS = {"spider_v1_crawls", "spider_v1_pages", "spider_v1_issues", "spider_v1_links"}
@@ -239,6 +239,7 @@ def test_postgres_from_scratch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     url = _pg_url(name)
     engine = db.postgres_engine(url)
     try:
+        create_cache_schema(engine)
         with engine.begin() as conn:
             conn.exec_driver_sql("CREATE TABLE directus_users (id int PRIMARY KEY)")  # someone else's table
         monkeypatch.setenv(db.ENV_VAR, url)
@@ -248,9 +249,14 @@ def test_postgres_from_scratch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
         _assert_views_match(engine)
         with engine.connect() as conn:
             context = MigrationContext.configure(
-                conn, opts={"include_name": lambda n, type_, *_: type_ != "table" or n.startswith(db.PREFIX)}
+                conn,
+                opts={
+                    "include_name": lambda n, type_, *_: type_ != "table" or n.startswith(db.PREFIX),
+                    "include_schemas": True,  # the cache tables are in schema `cache`
+                },
             )
             assert compare_metadata(context, tables.metadata) == []
+            assert sa.inspect(conn).has_table("spider_fetches", schema=tables.CACHE_SCHEMA)
             relations = (
                 conn.exec_driver_sql(
                     "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
@@ -297,10 +303,13 @@ def test_postgres_db_upgrade_command_from_scratch(monkeypatch: pytest.MonkeyPatc
         conn.exec_driver_sql(f"CREATE DATABASE {name}")
     monkeypatch.setenv(db.ENV_VAR, _pg_url(name))
     try:
+        engine = db.postgres_engine(_pg_url(name))
+        create_cache_schema(engine)
+        engine.dispose()
         code, payload = invoke_json("db", "upgrade", "--dry-run")
-        assert code == 0 and payload["dry_run"] and payload["migrations"] == [db.BASELINE, "0034", "0035"]
+        assert code == 0 and payload["dry_run"] and payload["migrations"] == [db.BASELINE, "0034", "0035", "0036"]
         code, payload = invoke_json("db", "upgrade")
-        assert code == 0 and payload["migrations"] == [db.BASELINE, "0034", "0035"]
+        assert code == 0 and payload["migrations"] == [db.BASELINE, "0034", "0035", "0036"]
         engine = db.postgres_engine(_pg_url(name))
         try:
             names = set(sa.inspect(engine).get_table_names())
@@ -316,10 +325,24 @@ def test_postgres_db_upgrade_command_from_scratch(monkeypatch: pytest.MonkeyPatc
         admin.dispose()
 
 
-# --- kind="cache" tables live in PostgreSQL schema `cache` (template v1.6, T30); spider has none so far
+# --- kind="cache" tables live in PostgreSQL schema `cache` (template v1.6, T30): the page storage of `spider fetch`
 
 
 def test_cache_tables_and_only_they_are_in_the_cache_schema() -> None:
     for table in tables.metadata.sorted_tables:
         expected = tables.CACHE_SCHEMA if table.info.get("kind") == "cache" else None
         assert table.schema == expected, f"{table.name}: kind={table.info.get('kind')} needs schema={expected!r}"
+
+
+def test_fetch_storage_index_is_a_cache_table(tmp_path: Path) -> None:
+    """spider_fetches (ADR 0001): one row per URL and fetch mode, kind cache, in schema `cache` on PostgreSQL."""
+    assert tables.fetches.info["kind"] == "cache" and tables.fetches.schema == tables.CACHE_SCHEMA
+    inspector = sa.inspect(_local(tmp_path, "fetches.sqlite"))
+    columns = [column["name"] for column in inspector.get_columns("spider_fetches")]
+    assert columns == [
+        "id", "url", "url_key", "domain_key", "rendered", "final_url", "status", "content_hash", "cache_key",
+        "fetched_at", "expires_at", "bytes",
+    ]  # fmt: skip
+    unique = [sorted(c["column_names"]) for c in inspector.get_unique_constraints("spider_fetches")]
+    unique += [sorted(map(str, i["column_names"])) for i in inspector.get_indexes("spider_fetches") if i["unique"]]
+    assert sorted(unique) == [["cache_key"], ["rendered", "url_key"]]

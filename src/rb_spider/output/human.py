@@ -622,7 +622,8 @@ def fetched(data: dict) -> None:
     where = data.get("final_url") or data["url"]
     moved = f" ← {data['url']}" if data.get("redirects") else ""
     title = (data.get("seo") or {}).get("title") or data.get("error") or ""
-    console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]")
+    stored = "  [dim]из хранилища[/dim]" if data.get("from_cache") else ""
+    console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]{stored}")
 
 
 _OVERVIEW_LABELS = {

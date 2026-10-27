@@ -1,4 +1,4 @@
-"""Public API: fetch pages with spider's engine — no crawl, no database.
+"""Public API: fetch pages with spider's engine — no crawl.
 
     from rb_spider.fetch import fetch, fetch_many, CrawlSettings
 
@@ -8,7 +8,9 @@
     for page in fetch_many(urls, settings, concurrency=20):  # in input order, flat memory
         ...
 
-`include` adds `headers`, `links`, `resources`, `text`, `html` to the always-present SEO data.
+`include` adds `headers`, `links`, `resources`, `text`, `markdown`, `html` to the always-present SEO data.
+`store=True` uses the page storage of `spider fetch` (ADR 0001; off by default here, on in the CLI): a URL stored
+within `max_age` days comes from it with `from_cache` set, `fresh=True` fetches anyway and stores the new fetch.
 A URL that doesn't answer comes back with `error` set, not as an exception. The same from any
 language: `spider fetch --json` (JSON Lines).
 """

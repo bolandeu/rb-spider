@@ -52,6 +52,14 @@ def use_db(monkeypatch, engine=None, env: dict[str, str] | None = None) -> None:
         monkeypatch.setenv(name, value)
 
 
+def create_cache_schema(engine) -> None:
+    """Schema `cache` for the cache tables: on production the infrastructure creates it, here the test does."""
+    from rb_spider.core import tables
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql(f"CREATE SCHEMA IF NOT EXISTS {tables.CACHE_SCHEMA}")
+
+
 @pytest.fixture(scope="session")
 def _pg_template() -> Iterator[None]:
     from rb_spider.core import db
@@ -61,6 +69,7 @@ def _pg_template() -> Iterator[None]:
         conn.exec_driver_sql(f"DROP DATABASE IF EXISTS {_PG_TEMPLATE} WITH (FORCE)")
         conn.exec_driver_sql(f"CREATE DATABASE {_PG_TEMPLATE}")
     engine = db.postgres_engine(_pg_url(_PG_TEMPLATE))
+    create_cache_schema(engine)
     db.upgrade(engine)  # the schema, once
     engine.dispose()
     yield
@@ -88,6 +97,7 @@ def _isolated_session_db(tmp_path_factory, request) -> Iterator[None]:
     without this they would write to the user's real crawl database."""
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("SPIDER_DB_PATH", str(tmp_path_factory.mktemp("session-db") / "spider.sqlite"))
+        patch.setenv("SPIDER_CACHE_DIR", str(tmp_path_factory.mktemp("session-cache")))
         patch.delenv("SPIDER_DATABASE_URL", raising=False)
         patch.delenv("SPIDER_DB_URL", raising=False)  # the legacy name, from the developer's shell
         if PG_ADMIN:
@@ -145,8 +155,9 @@ def same_in_ci(request: pytest.FixtureRequest) -> Callable[[str], None]:
 
 @pytest.fixture(autouse=True)
 def _isolated_state(tmp_path_factory, monkeypatch) -> Iterator[None]:
-    """Every test gets its own crawl database and global config — never the user's real ones. With PostgreSQL the
-    local path stays the session's: stored HTML is a file per database name there (storage.html_db_path)."""
+    """Every test gets its own crawl database, page storage and global config — never the user's real ones. With
+    PostgreSQL the local path stays the session's: stored HTML is a file per database name there (storage.html_db_path)."""
+    monkeypatch.setenv("SPIDER_CACHE_DIR", str(tmp_path_factory.mktemp("cache")))
     if not PG_ADMIN:
         monkeypatch.setenv("SPIDER_DB_PATH", str(tmp_path_factory.mktemp("db") / "spider.sqlite"))
     global_config = tmp_path_factory.mktemp("config") / "config.toml"
