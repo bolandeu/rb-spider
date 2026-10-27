@@ -2,7 +2,7 @@
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
 status: queue
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
 phase: null
@@ -29,6 +29,8 @@ owns_paths:
 - src/rb_spider/core/opencli.py
 - src/rb_spider/core/storage.py
 - src/rb_spider/output/__init__.py
+- CODING_STANDARDS.md
+- src/rb_spider/core/maintenance.py
 test_paths:
 - tests/test_fetch_store.py
 - tests/test_fetch.py
@@ -52,7 +54,7 @@ checks:
 - python3 scripts/check_command_docstrings.py
 - uv run --extra render --extra curl --extra near --extra structured --extra sitemaps
   --extra xpath --extra postgres --extra gsc pytest -q
-- scripts/pg_test.sh -q tests/test_db.py tests/test_fetch_store.py
+- scripts/pg_test.sh -q --no-cov tests/test_db.py tests/test_fetch_store.py tests/test_data_management.py
 - uv run ruff check
 - uv run ty check
 resident: null
@@ -122,3 +124,47 @@ Reuse core/fetch.py Fetcher._read for extraction, storage.insert_or_replace, db.
 ## Out of scope
 
 - Jobs (jobs start), --urls-file JSONL, S3 storage, trafilatura, summaries, a v1 view for Directus, storing non-HTML bodies, changes to crawl storage.
+
+## Feedback
+
+### Attempt 1: checks failed
+
+- `scripts/pg_test.sh -q tests/test_db.py tests/test_fetch_store.py` (exit 1)
+
+```
+ERROR: Coverage failure: total of 50 is less than fail-under=90
+…
+            12      2    83%   40-41
+src/rb_spider/migrations/versions/0035_shared_keys.py               43     13    70%   48-51, 59-63, 79-86
+src/rb_spider/migrations/versions/0036_fetch_storage.py             14      1    93%   46
+src/rb_spider/output/__init__.py                                   123     43    65%   98-101, 135-136, 144, 149-154, 160-161, 173-184, 191-193, 217, 231-236, 260-265, 287
+src/rb_spider/output/human.py                                      479    406    15%   19, 24, 28-30, 34-37, 41-56, 60-73, 77-87, 91-99, 103-108, 112-118, 122-123, 127-135, 139-143, 147-155, 159-165, 169-180, 184-193, 197-205, 209-219, 223-235, 239-250, 254, 260-265, 269-280, 284-287, 291-306, 310-325, 329-336, 340-342, 346-356, 360-366, 370-374, 378-381, 385-391, 395-397, 401-414, 418-433, 441, 454-456, 460, 464-470, 474-483, 487-488, 492-495, 509-513, 517, 521-522, 526-589, 593-600, 604-609, 613-617, 639-645, 649-655, 660-665, 669, 673-675, 680-686, 690-691
+src/rb_spider/providers/__init__.py                                  9      1    89%   28
+src/rb_spider/providers/base.py                                     58      5    91%   84, 97-99, 119
+src/rb_spider/providers/http.py                                     63     63     0%   5-124
+src/rb_spider/providers/secrets.py                                  47     23    51%   34, 43, 52, 61-83
+----------------------------------------------------------------------------------------------
+TOTAL                                                             9367   4699    50%
+
+15 files skipped due to complete coverage.
+FAIL Required test coverage of 90.0% not reached. Total coverage: 49.83%
+33 passed, 6 warnings in 10.68s
+/Users/bolandau/.local/share/uv/python/cpython-3.14.8-macos-aarch64-none/lib/python3.14/collections/__init__.py:455: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x11341cc70>
+  result = tuple_new(cls, iterable)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+```
+
+### Answer to question #3
+
+> Round 2 asks for a fix in src/rb_spider/core/maintenance.py (_pg_tables without schema), which is not in Owns.
+> Question: Do you add src/rb_spider/core/maintenance.py to the Owns of SPIDER-003?
+> Options:
+> 1. Add maintenance.py to Owns, I fix _pg_tables with a PostgreSQL test
+> 2. Keep it out, finding #1 goes to a new task
+> Recommended: Add maintenance.py to Owns, I fix _pg_tables with a PostgreSQL test
+
+maintenance.py is in owns now; the pg_test check has --no-cov. Do the round-2 items: finding #1 fix with a PostgreSQL test, cleanup of orphan files (no row, older than one day). Test first.
+
+### Blocked: needs_scope (entries [{'n': 3, 'text': 'Round 2 asks for a fix in src/rb_spider/core/maintenance.py (_pg_tables without schema), which is not in Owns.\nQuestion: Do you add src/rb_spider/core/maintenance.py to the Owns of SPIDER-003?\nOptions'}])
+
+Owns: + src/rb_spider/core/maintenance.py. Check fixed: pg_test.sh --no-cov (attempt 1 failed only on my check). Round 2: fix finding #1 (_pg_tables schema=t.schema) with a PostgreSQL test; cleanup deletes cache-dir files without a row older than one day. Tests first.
