@@ -3,7 +3,7 @@ id: SPIDER-004
 title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP,
   breaker)'
 status: queue
-attempts: 1
+attempts: 2
 blocked: false
 blocked_reason: null
 phase: null
@@ -120,6 +120,11 @@ Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: ru
 Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: run_crawl raises ProxyUnavailable, crawl status interrupted (resumable), spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON. With fallback=direct: the crawl goes on and ends with proxy_down set. Test acceptance 3 that way: 3 requests with no answer -> one proxy-vs-direct check -> stop: exit 5 and status interrupted; direct: finished with proxy_down.
 
 ### Attempt 1: file docstring
+
+- src/rb_spider/core/crawl.py 964 lines > limit 800: split it by meaning (one capability, one module)
+- src/rb_spider/core/settings.py 1242 lines > limit 800: split it by meaning (one capability, one module)
+
+### Attempt 2: file docstring
 
 - src/rb_spider/core/crawl.py 964 lines > limit 800: split it by meaning (one capability, one module)
 - src/rb_spider/core/settings.py 1242 lines > limit 800: split it by meaning (one capability, one module)
