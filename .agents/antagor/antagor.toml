@@ -5,6 +5,10 @@ name = "spider"
 checks = ["python3 scripts/check_command_docstrings.py"]
 heavy = ["rb-release check"]
 
+[docstring]
+# longer than max_file_lines (800) before Antagor; split them, then drop this (IDEA-369)
+exclude = ["src/rb_spider/core/issues.py", "src/rb_spider/core/settings.py", "src/rb_spider/core/crawl.py"]
+
 [review]
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
