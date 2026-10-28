@@ -3,11 +3,11 @@ id: SPIDER-007
 title: 'Proxy: no change-IP call when the proxy is remembered dead'
 status: publish
 attempts: 0
-blocked: true
-blocked_reason: gate_no_answer
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: architect
 worker: claude-code
