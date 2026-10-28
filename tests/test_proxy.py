@@ -363,12 +363,13 @@ def test_crawl_checks_a_proxy_that_stops_answering_and_stops(proxy: polygon.Prox
     with storage.database() as engine:
         crawl_id = register_crawl(engine, f"{upstream}/", "polygon", Settings(crawl=crawl))
         proxy.hang_after = 6
-        with pytest.raises(ProxyUnavailable, match="in a row"):
+        with pytest.raises(ProxyUnavailable, match="in a row") as stopped_by:
             started = time.monotonic()
             run_crawl(engine, crawl_id)
         # three requests without an answer (each tried twice), one check: not every URL's timeouts
         assert time.monotonic() - started < 3 * 2 * 1 + 1 + 4
-        assert _status(engine, crawl_id) == "interrupted"
+        assert stopped_by.value.exit_code == 5  # spider crawl: PROXY_UNAVAILABLE, no result JSON
+        assert _status(engine, crawl_id) == "interrupted"  # resumable
         stopped = _pages(engine, crawl_id)
         assert not [url for url, (_, error) in stopped.items() if error and "Timeout" in error]
         proxy.hangs, proxy.hang_after = False, None  # the modem is back: the crawl goes on where it stopped
