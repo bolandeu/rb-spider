@@ -136,3 +136,12 @@ Attempt 2 was refused with the old config: that round started at 07:06:09, befor
 ### Blocked: no_progress (head f33dff34a9fc90144bc1ce2dec0fac572872f0b4)
 
 Same work is correct: attempts 1-2 were refused only by the file length check, now excluded in config (06188e4).
+
+
+### Attempt 2 (not counted): the Architect's notes came after your submit
+
+- Attempt 2 was refused with the old config: that round started at 07:06:09, before the exclude commit (07:06:56). The exclude is active now (checked). Submit the same work again; do not split files.
+
+### Blocked: no_progress (head e2a770458af2ef8934eead9e41c9ab5b895c9624)
+
+Same work, checks were green at 07:27 (e2a7704); only pending notes held it.
