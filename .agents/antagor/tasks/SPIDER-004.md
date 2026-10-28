@@ -3,9 +3,9 @@ id: SPIDER-004
 title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP,
   breaker)'
 status: publish
-attempts: 2
-blocked: false
-blocked_reason: null
+attempts: 3
+blocked: true
+blocked_reason: attempts
 phase: null
 tests_hash: null
 publish_stage: null
@@ -145,3 +145,14 @@ Same work is correct: attempts 1-2 were refused only by the file length check, n
 ### Blocked: no_progress (head e2a770458af2ef8934eead9e41c9ab5b895c9624)
 
 Same work, checks were green at 07:27 (e2a7704); only pending notes held it.
+
+### Attempt 3: the project's full check failed after the merge
+
+The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
+
+- `the project's CI (https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/spider/commits/{commit}/status)`
+
+```
+CI status: failure
+ci / gate (push): failure — Failing after 30s https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider/actions/runs/709/jobs/897
+```
