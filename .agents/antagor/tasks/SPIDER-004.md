@@ -101,3 +101,16 @@ Reuse core/proxy.py open_proxies, proxy_failure, IpChanger, ProxyUnavailable; cr
 ## Out of scope
 
 - Proxy state memory between runs, auth status --check and doctor (next task); proxy_concurrency and the via field (another task); a direct-first proxy mode.
+
+## Feedback
+
+### Answer to question #1
+
+> SPIDER-004: item 5 says outcomes stay unchanged in form (fallback=stop: run_crawl raises ProxyUnavailable, status interrupted, spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON, so no proxy_down field). Acceptance 3 says 'crawl ends with proxy_down set when fallback=stop'; today proxy_down is set only with fallback=direct.
+> Question: Which point wins for a crawl stopped by a dead proxy with fallback=stop?
+> Options:
+> 1. Item 5: keep the form; stop raises ProxyUnavailable (exit 5, status interrupted, resumable); the test checks that
+> 2. Acceptance 3: return a result with status interrupted and proxy_down set, exit 0 with JSON
+> Recommended: Item 5: keep the form; stop raises ProxyUnavailable (exit 5, status interrupted, resumable); the test checks that
+
+Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: run_crawl raises ProxyUnavailable, crawl status interrupted (resumable), spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON. With fallback=direct: the crawl goes on and ends with proxy_down set. Test acceptance 3 that way: 3 requests with no answer -> one proxy-vs-direct check -> stop: exit 5 and status interrupted; direct: finished with proxy_down.
