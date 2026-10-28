@@ -2,7 +2,7 @@
 id: SPIDER-004
 title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP,
   breaker)'
-status: in_progress
+status: queue
 attempts: 2
 blocked: false
 blocked_reason: null
@@ -136,3 +136,8 @@ Attempt 2 was refused with the old config: that round started at 07:06:09, befor
 ### Blocked: no_progress (head f33dff34a9fc90144bc1ce2dec0fac572872f0b4)
 
 Same work is correct: attempts 1-2 were refused only by the file length check, now excluded in config (06188e4).
+
+
+### Attempt 2 (not counted): the Architect's notes came after your submit
+
+- Attempt 2 was refused with the old config: that round started at 07:06:09, before the exclude commit (07:06:56). The exclude is active now (checked). Submit the same work again; do not split files.
