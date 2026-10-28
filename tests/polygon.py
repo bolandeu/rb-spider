@@ -1218,6 +1218,9 @@ class Proxy:
     current IP (`burn` — this one already did); a request to the proxy itself, `/changeip?proxy_key=KEY` (`change_url`), is the provider's
     change-IP link — a new IP (`changes` counts them), unless `change_helps` is off (the site blocks every IP);
     `change_asks` counts every call, a wrong key included (its refusal repeats the link, key and all).
+
+    `delay_s` — hold every proxied request this long before forwarding it; `peak` — the most requests in flight at
+    once (a modem that holds a few connections: crawl.proxy_concurrency).
     """
 
     KEY = "change-key"
@@ -1234,6 +1237,8 @@ class Proxy:
         self.hangs = False
         self.hang_after: int | None = None
         self.change_asks = 0
+        self.delay_s = 0.0
+        self.active = self.peak = 0
         self.blocks_after: int | None = None
         self.change_helps = True
         self.changes = 0
@@ -1253,6 +1258,7 @@ class Proxy:
         from urllib.parse import urlsplit
 
         self.connections += 1
+        counted = False
         try:
             head = (await reader.readuntil(b"\r\n\r\n")).decode("latin-1")
             first, *lines = head.split("\r\n")
@@ -1296,6 +1302,10 @@ class Proxy:
                     return
                 self._since_change += 1
             body = await reader.readexactly(int(fields.get("content-length", "0")))
+            counted = True
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            await asyncio.sleep(self.delay_s)
             kept = [line for line in headers if not line.lower().startswith(("proxy-", "connection:", "keep-alive:"))]
             up_reader, up_writer = await asyncio.open_connection("127.0.0.1", self.upstream_port)
             request = (
@@ -1310,6 +1320,7 @@ class Proxy:
         except asyncio.IncompleteReadError, ConnectionError:
             pass
         finally:
+            self.active -= counted
             writer.close()
 
 

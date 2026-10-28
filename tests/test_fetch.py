@@ -129,3 +129,35 @@ def test_legacy_charsets_are_read_as_text(base_url: str, path: str) -> None:
     assert page.text and "недружественных стран" in page.text
     assert page.markdown and page.markdown.startswith(f"# Недружественные страны {slug}")
     assert page.html and "Пошлины" in page.html and "�" not in page.html
+
+
+def test_via_says_whether_a_page_came_through_the_proxy_directly_or_from_the_storage(
+    base_url: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("SPIDER_PROXY_API_KEY", polygon.Proxy.PASSWORD)
+    with polygon.proxy(base_url) as proxy:
+        through = ["--set", f"crawl.proxy_urls=['{proxy.url}']"]
+        code, lines = _lines(f"{proxy.base()}/a", *through)
+        assert code == 0 and [line["via"] for line in lines] == ["proxy"]
+        code, lines = _lines(f"{proxy.base()}/a", *through)  # within the term: the storage answers
+        assert code == 0 and [(line["via"], line["from_cache"]) for line in lines] == [("cache", True)]
+        proxy.dead = True
+        code, lines = _lines(f"{base_url}/b", *through, "--set", "crawl.proxy_fallback='direct'",
+                              "--set", "crawl.proxy_state_ttl_s=0")  # fmt: skip
+        assert code == 0 and [line["via"] for line in lines] == ["direct"]
+
+
+def test_via_is_direct_without_proxies(base_url: str) -> None:
+    code, lines = _lines(f"{base_url}/b")
+    assert code == 0 and [line["via"] for line in lines] == ["direct"]
+
+
+def test_human_output_marks_direct_only_when_proxies_are_configured_but_off(base_url: str, monkeypatch) -> None:
+    monkeypatch.setenv("SPIDER_PROXY_API_KEY", polygon.Proxy.PASSWORD)
+    with polygon.proxy(base_url) as proxy:
+        proxy.dead = True
+        off = CliRunner().invoke(app, ["fetch", f"{base_url}/b", "--set", f"crawl.proxy_urls=['{proxy.url}']",
+                                       "--set", "crawl.proxy_fallback='direct'", "--set", "crawl.proxy_state_ttl_s=0"])  # fmt: skip
+    plain_run = CliRunner().invoke(app, ["fetch", f"{base_url}/c"])
+    assert "без прокси" in off.stdout
+    assert "без прокси" not in plain_run.stdout

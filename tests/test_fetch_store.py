@@ -93,7 +93,7 @@ def test_second_run_comes_from_the_storage_without_a_request(base_url: str, prox
         assert stored["cache_key"] == live["cache_key"] and stored["content_hash"] == live["content_hash"]
         assert stored["fetched_at"] == live["fetched_at"]  # the stored time
         # the same output as the live fetch of the same source
-        drop = ("from_cache", "elapsed_ms")
+        drop = ("from_cache", "elapsed_ms", "via")
         assert {k: v for k, v in stored.items() if k not in drop} == {k: v for k, v in live.items() if k not in drop}
     assert second[2]["final_url"] == f"{proxy.base()}/a" and second[2]["redirects"][0]["status"] == 301
 

@@ -271,7 +271,7 @@ def test_a_socks5_door_is_handed_out_as_is() -> None:
 
     from rb_spider.core.proxy import Proxies
 
-    proxies = Proxies(["http://u:p@a.example:8000", "socks5h://u:p%40x@b.example:1080"], "failover")
+    proxies = Proxies(["http://u:p@a.example:8000", "socks5h://u:p%40x@b.example:1080"], "failover", 5)
     proxies.current = 1  # Crawlee's own configuration would refuse this address: http(s) only
     info = asyncio.run(proxies.new_proxy_info(None, None, None))
     assert info and (info.scheme, info.hostname, info.port, info.password) == ("socks5h", "b.example", 1080, "p@x")
@@ -536,3 +536,79 @@ def test_doctor_shows_the_state_of_each_address_without_network(proxy: polygon.P
     assert first["checked_at"] and second["address"] == "socks5h://mobile@127.0.0.1:1"
     assert polygon.Proxy.PASSWORD not in json.dumps(payload) and "auth status --check" in check["detail"]
     assert proxy.connections == 0  # from the state file, no network
+
+
+# --- crawl.proxy_concurrency: a modem holds a few connections; one stderr line when the proxy goes off ----------
+
+
+def test_the_proxy_never_sees_more_than_proxy_concurrency_requests_at_once_in_fetch(
+    proxy: polygon.Proxy, upstream: str
+) -> None:
+    proxy.delay_s = 0.2
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_concurrency=2)
+    pages = list(fetch_many([f"{proxy.base()}/a?n={n}" for n in range(10)], settings, concurrency=10))
+    assert [page.status for page in pages] == [200] * 10
+    assert proxy.peak == 2
+
+
+def test_the_proxy_never_sees_more_than_proxy_concurrency_requests_at_once_in_crawl(proxy: polygon.Proxy) -> None:
+    proxy.delay_s = 0.2
+    settings = Settings(crawl=_crawl(proxy, max_urls=10, concurrency=10, proxy_concurrency=2, robots="ignore"))
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{proxy.base()}/", "polygon", settings)
+    assert result.status == "finished"
+    assert proxy.peak == 2
+
+
+def test_a_dropped_proxy_leaves_direct_requests_at_crawl_concurrency(proxy: polygon.Proxy, upstream: str) -> None:
+    proxy.dead = True
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_concurrency=1, proxy_fallback="direct", proxy_state_ttl_s=0)
+    started = time.monotonic()
+    slow = [f"{upstream}/slow?n={n}" for n in range(3)]
+    pages = list(fetch_many(slow, settings, concurrency=3))
+    assert [page.error for page in pages] == [None] * 3
+    assert time.monotonic() - started < 2 * polygon.SLOW_S  # three at once, not one after another
+
+
+def _fetch_json(*args: str):
+    from typer.testing import CliRunner
+
+    from rb_spider.cli import app
+
+    result = CliRunner().invoke(app, ["--json", "fetch", *args])
+    return result, [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+
+
+def _about_the_proxy(stderr: str) -> list[str]:
+    return [line for line in stderr.splitlines() if "proxy" in line.lower()]
+
+
+def test_a_dead_proxy_with_fallback_direct_says_so_once_on_stderr_for_five_urls(
+    proxy: polygon.Proxy, upstream: str
+) -> None:
+    proxy.dead = True
+    urls = [f"{upstream}/a?n={n}" for n in range(5)]
+    result, lines = _fetch_json(*urls, "--set", f"crawl.proxy_urls=['{proxy.url}']",
+                                "--set", "crawl.proxy_fallback='direct'")  # fmt: skip
+    assert result.exit_code == 0 and [line["status"] for line in lines] == [200] * 5
+    said = _about_the_proxy(result.stderr)
+    assert len(said) == 1 and "without it" in said[0]
+
+
+def test_a_dead_proxy_with_fallback_stop_says_so_once_on_stderr(proxy: polygon.Proxy) -> None:
+    proxy.dead = True
+    urls = [f"{proxy.base()}/a?n={n}" for n in range(5)]
+    result, _ = _fetch_json(*urls, "--set", f"crawl.proxy_urls=['{proxy.url}']")
+    assert result.exit_code == 5
+    said = _about_the_proxy(result.stderr)
+    assert len(said) == 1 and "stopping" in said[0]
+
+
+def test_a_proxy_dying_mid_run_says_so_once_on_stderr(proxy: polygon.Proxy, upstream: str) -> None:
+    proxy.hang_after = 2
+    urls = [f"{upstream}/a?n={n}" for n in range(12)]
+    result, lines = _fetch_json(*urls, "--concurrency", "1", "--set", f"crawl.proxy_urls=['{proxy.url}']",
+                                "--set", "crawl.proxy_fallback='direct'", "--set", "crawl.timeout_s=1",
+                                "--set", "crawl.proxy_connect_timeout_s=0.5")  # fmt: skip
+    assert result.exit_code == 0 and lines[-1]["status"] == 200
+    assert len(_about_the_proxy(result.stderr)) == 1
