@@ -4,8 +4,8 @@ title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change
   breaker)'
 status: in_progress
 attempts: 0
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: needs_scope
 phase: null
 tests_hash: null
 publish_stage: null
