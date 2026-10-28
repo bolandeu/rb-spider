@@ -1,7 +1,7 @@
 ---
 id: SPIDER-005
 title: 'Proxy: state remembered between runs, auth status --check and doctor'
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -32,6 +32,7 @@ owns_paths:
 - src/rb_spider/providers/secrets.py
 - src/rb_spider/commands/doctor.py
 - src/rb_spider/commands/auth.py
+- src/rb_spider/core/proxy_state.py
 test_paths:
 - tests/test_proxy.py
 - tests/test_auth.py
