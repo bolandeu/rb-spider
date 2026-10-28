@@ -6,6 +6,12 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.7.0 — 2026-10-28
+
+### Outside epics
+
+- spider fetch: page storage (from_cache, url_key, cache_key, term) (SPIDER-003)
+
 ## v0.6.2 — 2026-10-26
 
 ### Main
