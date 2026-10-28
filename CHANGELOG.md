@@ -6,6 +6,12 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.8.1 — 2026-10-28
+
+### Outside epics
+
+- Proxy: proxy_concurrency limit, via field and one stderr signal (SPIDER-006)
+
 ## v0.8.0 — 2026-10-28
 
 ### Outside epics
