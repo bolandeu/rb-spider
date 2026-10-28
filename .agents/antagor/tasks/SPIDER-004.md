@@ -2,10 +2,10 @@
 id: SPIDER-004
 title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP,
   breaker)'
-status: queue
+status: in_progress
 attempts: 2
-blocked: false
-blocked_reason: null
+blocked: true
+blocked_reason: no_progress
 phase: null
 tests_hash: null
 publish_stage: null
