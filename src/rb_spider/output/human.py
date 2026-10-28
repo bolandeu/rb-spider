@@ -617,13 +617,14 @@ def enriched(data: dict) -> None:
         console.print(f"{name}: сохранено метрик — {count} (обход #{data['crawl_id']})")
 
 
-def fetched(data: dict) -> None:
+def fetched(data: dict, proxies_set: bool = False) -> None:
     status = data["status"] if data["status"] is not None else "—"
     where = data.get("final_url") or data["url"]
     moved = f" ← {data['url']}" if data.get("redirects") else ""
     title = (data.get("seo") or {}).get("title") or data.get("error") or ""
     stored = "  [dim]из хранилища[/dim]" if data.get("from_cache") else ""
-    console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]{stored}")
+    direct = "  [yellow]без прокси[/yellow]" if proxies_set and data.get("via") == "direct" else ""
+    console.print(f"{status}  {where}{moved}  {escape(title)}  [dim]{data.get('elapsed_ms')} мс[/dim]{stored}{direct}")
 
 
 _OVERVIEW_LABELS = {

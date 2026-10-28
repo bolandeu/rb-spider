@@ -73,6 +73,7 @@ class FetchResult:
     cache_key: str | None = None  # the stored fetch (page storage); None — not stored
     fetched_at: str | None = None  # ISO 8601 UTC; from the storage — when it was stored
     from_cache: bool = False
+    via: str | None = None  # "proxy", "direct" (no proxy: none set, or off) or "cache" (the page storage)
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None or k in _ALWAYS}
@@ -151,6 +152,7 @@ def _from_storage(
         setattr(result, name, stored.response[name])
     _extract(result, stored.response["headers"], stored.source, include, content_exclude, stored.markdown)
     result.content_hash, result.cache_key, result.from_cache = stored.content_hash, stored.cache_key, True
+    result.via = "cache"
     result.fetched_at = stored.fetched_at.isoformat()
     result.elapsed_ms = round((time.monotonic() - started) * 1000)
     return result
@@ -215,7 +217,7 @@ class Fetcher:
         current = result.url
         try:
             for _ in range(MAX_REDIRECTS + 1):
-                response = await self._send(current)
+                response = await self._send(result, current)
                 headers = {k.lower(): v for k, v in dict(response.headers).items()}
                 body = await response.read()
                 page = parse_page(current, response.status_code, headers, b"")  # redirect target only
@@ -237,8 +239,8 @@ class Fetcher:
         result.elapsed_ms = round((time.monotonic() - started) * 1000)
         return result
 
-    async def _send(self, url: str):
-        """One request, through the proxy; a blocked answer (crawl.proxy_change_ip_on) gets a new IP and asks again,
+    async def _send(self, result: FetchResult, url: str):
+        """One request, through the proxy (`result.via` says whether it went); a blocked answer (crawl.proxy_change_ip_on) gets a new IP and asks again,
         and so does one without an answer after the proxy was found dead and replaced (`_proxy_missed`)."""
         from .proxy import check_proxy_answer, no_answer
 
@@ -249,10 +251,12 @@ class Fetcher:
                 await self.changer.idle()
             generation = self.changer.generation if self.changer else 0
             proxy = await self.proxies.new_proxy_info(None, None, None) if self.proxies else None
-            sent = time.monotonic()
+            result.via = "proxy" if proxy else "direct"
             try:
-                response = await self.client.send_request(url, headers=self.headers or None, proxy_info=proxy,
-                                                          timeout=self.timeout)  # fmt: skip
+                async with self.proxies.limited(proxy) if self.proxies else contextlib.nullcontext():
+                    sent = time.monotonic()
+                    response = await self.client.send_request(url, headers=self.headers or None, proxy_info=proxy,
+                                                              timeout=self.timeout)  # fmt: skip
                 if proxy:
                     check_proxy_answer(response.status_code)
             except Exception as exc:

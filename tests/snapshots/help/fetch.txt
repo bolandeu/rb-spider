@@ -40,10 +40,12 @@
  порядке ввода: `{url, final_url, status, redirects: [{url, status, location}],
  content_type, bytes, elapsed_ms, rendered, seo, refresh_url, headers?, links?,
  resources?, text?, markdown?, html?, error, url_key, domain_key, content_hash,
- cache_key, fetched_at, from_cache}`; `status` null и `error` — URL не ответил
+ cache_key, fetched_at, from_cache, via}`; `status` null и `error` — URL не ответил
  (это данные, код выхода 0). `url_key`, `domain_key` — общие ключи rb-keys (null —
  не веб-адрес); `content_hash` — SHA-256 сохранённого исходника, `cache_key` —
- сохранённая версия (оба null — не сохранено); `fetched_at` — когда скачано (ISO
+ сохранённая версия (оба null — не сохранено); `via` — как пришла страница: `proxy` (через
+ прокси), `direct` (напрямую: прокси не задан или отключён по `crawl.proxy_fallback`), `cache` (из
+ хранилища); `fetched_at` — когда скачано (ISO
  8601 UTC; из хранилища — когда сохранено); `from_cache` — ответ из хранилища.
  `--markdown` — Markdown-документы, разделённые строкой `===`. Нет URL,
  неверный `--include` — выход 2; `--render` без Playwright — выход 1; прокси не

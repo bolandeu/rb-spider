@@ -342,7 +342,11 @@ async def _run(
         return Request.from_url(url, headers={**headers, **extra} or None, user_data={"check": check})
 
     queue = MemoryQueue(request)
+    # crawl.proxy_concurrency: Crawlee's pool can't change its limit mid-run, so a proxy that goes off later leaves
+    # the crawl on this lower one (said in `proxy_down`)
     concurrency = settings.concurrency
+    if proxies and not proxies.off:
+        concurrency = min(concurrency, settings.proxy_concurrency)
     renderer = (
         Renderer(tabs=settings.render_tabs, wait_ms=settings.render_wait_ms, timeout_s=settings.timeout_s,
                  user_agent=user_agent, headers=settings.headers, browser=settings.render_browser,
@@ -664,7 +668,10 @@ async def _run(
             proxy_stopped = dead
             crawler.stop(f"the proxy doesn't work: {dead}")
         else:
-            proxy_down = dead if proxies.off else proxy_down
+            if proxies.off:
+                proxy_down = dead
+                if concurrency < settings.concurrency:
+                    proxy_down += f"; the crawl stays at {concurrency} requests at once (crawl.proxy_concurrency)"
             for page, _, check in held:
                 queue.push(page.url, check)
             if renderer:

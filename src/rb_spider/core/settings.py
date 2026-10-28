@@ -366,6 +366,17 @@ class CrawlSettings(BaseModel):
             "сайт увидит ваш IP. В терминале при stop перед стартом spider спросит, продолжить ли без прокси."
         ),
     )
+    proxy_concurrency: int = Field(
+        5,
+        ge=1,
+        description=(
+            "Сколько запросов одновременно идёт через прокси (`spider crawl` и `spider fetch`): мобильный прокси — один "
+            "модем, 20 соединений он не держит, перегруженный выглядит мёртвым. Запросы без прокси (после "
+            "crawl.proxy_fallback = direct) и страницы из хранилища идут по crawl.concurrency / --concurrency. "
+            "Прокси отключился посреди обхода — предел crawl.concurrency не возвращается, обход остаётся на нижнем "
+            "(Crawlee не меняет предел на ходу); об этом сказано в отчёте."
+        ),
+    )
     proxy_max_failures: int = Field(
         3,
         ge=1,

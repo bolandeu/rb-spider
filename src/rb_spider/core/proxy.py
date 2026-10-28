@@ -100,10 +100,22 @@ class Proxies(ProxyConfiguration):
     mobile proxy's second door is often SOCKS5 (impit and httpx go through it).
     """
 
-    def __init__(self, urls: list[str], mode: str = "rotate") -> None:
+    def __init__(self, urls: list[str], mode: str, concurrency: int) -> None:
         super().__init__(new_url_function=_unused)  # never called: new_proxy_info is ours
         self.urls, self.mode, self.current, self.off = list(urls), mode, 0, False
         self._next = 0
+        self._slots = asyncio.Semaphore(concurrency)
+        self._said = False
+
+    def limited(self, info: ProxyInfo | None) -> contextlib.AbstractAsyncContextManager:
+        """A request through a proxy (`info`) waits for a free slot (crawl.proxy_concurrency); one without — never."""
+        return self._slots if info else contextlib.nullcontext()
+
+    def say(self, problem: str, action: str) -> None:
+        """The one line of the run on stderr (logging, so --json keeps stdout clean): what failed, what spider does."""
+        if not self._said:
+            self._said = True
+            log.warning("the proxy doesn't work (%s): %s", problem, action)
 
     async def new_proxy_info(
         self, session_id: str | None, request: Request | None, proxy_tier: int | None
@@ -144,7 +156,7 @@ class Proxies(ProxyConfiguration):
         return self.off or (self.mode == "failover" and url != self.active)
 
     def go_direct(self, problem: str) -> None:
-        log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", problem)
+        self.say(problem, "going on without it, the site sees this IP")
         self.off = True
 
     def drop(self, problem: str, fallback: str) -> bool:
@@ -156,6 +168,7 @@ class Proxies(ProxyConfiguration):
         if fallback == "direct":
             self.go_direct(problem)
             return True
+        self.say(problem, "stopping")
         return False
 
 
@@ -315,7 +328,7 @@ async def open_proxies(
     urls = proxy_urls(settings)
     if not urls:
         return None, None
-    proxies = Proxies(urls, settings.proxy_mode)
+    proxies = Proxies(urls, settings.proxy_mode, settings.proxy_concurrency)
     problems = await _dead_addresses(settings, client, proxies, url)
     if problems and settings.proxy_change_ip_urls:
         refused = await IpChanger(settings, client, proxies, url).renew()
@@ -328,6 +341,7 @@ async def open_proxies(
     if settings.proxy_fallback == "direct" or (ask is not None and ask(problem)):
         proxies.go_direct(problem)
         return proxies, problem
+    proxies.say(problem, "stopping")
     raise ProxyUnavailable(problem)
 
 
