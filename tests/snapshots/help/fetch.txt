@@ -9,9 +9,10 @@
  ссылки, ресурсы, текст, Markdown и HTML. Тот же движок, что у обхода:
  браузерный отпечаток, User-Agent, прокси с паролем из хранилища ключей
  (`--set crawl.proxy_urls=…`, `--profile`), `--render` — через браузер (нужен
- `rb-spider[render]`, тоже через прокси). Прокси проверяется перед первым скачиваемым URL; не
- работает — по `crawl.proxy_fallback`, как у `spider crawl` (в терминале — вопрос). robots.txt не
- читается: URL названы вами, как у curl.
+ `rb-spider[render]`, тоже через прокси). Прокси проверяется перед первым скачиваемым URL
+ и снова после `crawl.proxy_max_failures` URL подряд без ответа через него; не
+ работает — по `crawl.proxy_fallback`, как у `spider crawl` (перед первым URL в терминале —
+ вопрос). robots.txt не читается: URL названы вами, как у curl.
  `--list` — URL построчно, CSV с колонкой url / address / loc или XML sitemap.
  Обойти сайт целиком — `spider crawl`. Из Python — `rb_spider.fetch`.
 

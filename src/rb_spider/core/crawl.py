@@ -41,7 +41,7 @@ from crawlee import ConcurrencySettings, Request
 from crawlee._utils.robots import RobotsTxtFile
 from crawlee.configuration import Configuration
 from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
-from crawlee.errors import ProxyError
+from crawlee.errors import SessionError
 from crawlee.events import LocalEventManager
 from crawlee.http_clients import HttpClient, ImpitHttpClient
 from crawlee.sessions import Session
@@ -61,11 +61,13 @@ from .errors import (
 )
 from .extract import Page, normalize_url
 from .proxy import (
-    PROXY_AUTH_REQUIRED,
+    Breaker,
     Proxies,
     change_ip_urls,
+    check_proxy_answer,
     check_render_proxy,
     ip_changer,
+    no_answer,
     open_proxies,
     proxy_failure,
     proxy_urls,
@@ -369,7 +371,7 @@ async def _run(
         max_requests_per_crawl=settings.max_urls,
         max_request_retries=1,
         # a proxy error is retried through another proxy of the list, and only that: the same one won't come back
-        # to life in a second, a dead one is for proxy_failed_on to spot (Crawlee's default is 10 rotations)
+        # to life in a second, a dead one is for the Breaker to spot (Crawlee's default is 10 rotations)
         max_session_rotations=len(proxies.urls) if proxies else 10,
         navigation_timeout=timedelta(seconds=settings.timeout_s),
         request_handler_timeout=timedelta(seconds=settings.timeout_s + 60 + (render_wait_s if renderer else 0)),
@@ -394,16 +396,15 @@ async def _run(
     # picked from Crawlee's session, rotation stays as it was); "none" — no session, no cookies.
     cookie_jar = Session() if settings.cookies == "session" else None
 
-    # Proxy failures (proxy_failure) of pages, held back until it's clear whose they were: any response means the
-    # proxy works — they were the sites' and are stored; `proxy_max_failures` of them in a row — the proxy's: they
-    # stay in the queue, fetched again without the proxy or after `crawls resume`.
-    proxy_failed: list[tuple[Page, int, bool]] = []
+    # Requests through the proxy with no answer, every attempt (crawl.proxy_max_failures in a row: the Breaker's
+    # check). Pages of proxy failures are held back until it's clear whose they were: the proxy works — they were the
+    # sites' and are stored; it is dead — they stay in the queue, fetched again the new way or after `crawls resume`.
+    breaker = Breaker(settings, client)
     proxy_stopped: str | None = None
 
-    def proxy_answered() -> None:
-        for page, depth, _ in proxy_failed:
+    def store_held(held: list[tuple[Page, int, bool]]) -> None:
+        for page, depth, _ in held:
             writer.add(page, depth=depth)
-        proxy_failed.clear()
 
     # crawl.proxy_change_ip_urls: a blocked answer (403, 429…) gets the proxy a new IP and is asked again
     changer = ip_changer(settings, client, proxies, start_url)
@@ -435,11 +436,9 @@ async def _run(
             result = await client_crawl(request, *args, **kwargs)
             response_ms[request.url] = round((time.monotonic() - sent) * 1000)
             status = result.http_response.status_code
-            if kwargs.get("proxy_info") and status == PROXY_AUTH_REQUIRED:
-                # an http:// URL goes through the proxy as a plain request: its refusal comes back as a response
-                raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
-            if proxy_failed:
-                proxy_answered()
+            if kwargs.get("proxy_info"):
+                check_proxy_answer(status)
+                store_held(breaker.answered(sent))
             if not (changer and kwargs.get("proxy_info") and changer.blocked(status)):
                 if changer:
                     changer.answered(generation)
@@ -611,6 +610,13 @@ async def _run(
         await admit(reading.check, depth + 1, resources=True)
         progress()
 
+    @crawler.error_handler
+    async def attempt_failed(ctx, error: Exception) -> None:
+        # An attempt Crawlee asks again — at the end of the queue: the Breaker counts it now, not after the last one.
+        # The proxy's own refusal (a SessionError) Crawlee hands to `failed` as well, and that one counts it.
+        if proxies and ctx.proxy_info and no_answer(error) and not isinstance(error, SessionError):
+            await proxy_missed(proxies, ctx.request.url, ctx.proxy_info.url)
+
     @crawler.failed_request_handler
     async def failed(ctx, error: Exception) -> None:
         # No usable response even after the retry: timeout, refused/reset connection, bad TLS...
@@ -622,49 +628,47 @@ async def _run(
         detail = error if str(error) or error.__cause__ is None else error.__cause__  # Crawlee's ProxyError is empty
         page = Page.no_response(url, f"{type(error).__name__}: {detail}"[:500])
         page.onpage = {"external": not scope.internal(url), "parsed": False}
-        if proxies and ctx.proxy_info and proxy_failure(error):  # went through the proxy, and the proxy failed
-            check = ctx.request.user_data.get("check", False)
-            replaced = proxies.off or (proxies.mode == "failover" and ctx.proxy_info.url != proxies.active)
-            if replaced and not proxy_stopped:  # sent before that proxy was dropped: again, the new way
+        check = ctx.request.user_data.get("check", False)
+        if proxies and ctx.proxy_info and no_answer(error):  # went through the proxy and got no answer
+            await proxy_missed(proxies, url, ctx.proxy_info.url)
+            if proxy_stopped:
+                return  # stopping: it stays in the queue
+            if proxies.replaced(ctx.proxy_info.url):  # sent before that proxy was dropped: again, the new way
                 queue.push(url, check)
-            else:
-                await proxy_failed_on(proxies, page, depth_of.get(url, 0), check, error)
-            return
+                return
+            if proxy_failure(error):
+                breaker.hold((page, depth_of.get(url, 0), check))
+                return
+            # a timeout, and the proxy isn't found dead: the site's, as without a proxy
         attempt = unanswered.get(url, 0) + 1
         if attempt <= settings.retries_no_response and not proxy_stopped:
             # A network hiccup (a lost packet, a server that came up a second late) would otherwise end a crawl at
             # its start page; the queue holds the crawl open until the URL is due again.
             unanswered[url] = attempt
             log.info("no response from %s (%s): again in %g s", url, why(error), settings.retry_pause_s * attempt)
-            queue.push_later(url, ctx.request.user_data.get("check", False), settings.retry_pause_s * attempt)
+            queue.push_later(url, check, settings.retry_pause_s * attempt)
             return
         unanswered.pop(url, None)
         writer.add(page, depth=depth_of.get(url, 0))
         progress()
 
-    async def proxy_failed_on(proxies: Proxies, page: Page, depth: int, check: bool, error: Exception) -> None:
+    async def proxy_missed(proxies: Proxies, url: str, proxy: str) -> None:
+        """An attempt at `url` through `proxy` got no answer: one more for the Breaker, and its verdict."""
         nonlocal proxy_stopped, proxy_down
-        if proxy_stopped:
-            return  # stopping: it stays in the queue
-        proxy_failed.append((page, depth, check))
-        if len(proxy_failed) < settings.proxy_max_failures:
+        if proxy_stopped or proxies.replaced(proxy):
             return
-        reason = f"{proxies.address}: {len(proxy_failed)} proxy errors in a row, the last: {why(error)}"
-        if proxies.advance():  # failover: the next address
-            log.warning("the proxy doesn't work (%s): going through %s", reason, proxies.address)
-        elif settings.proxy_fallback == "direct":
-            log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", reason)
-            proxies.off, proxy_down = True, reason
+        dead, held = await breaker.missed(url, proxy)
+        if dead is None:
+            store_held(held)
+        elif not proxies.drop(dead, settings.proxy_fallback):
+            proxy_stopped = dead
+            crawler.stop(f"the proxy doesn't work: {dead}")
         else:
-            proxy_stopped = reason
-            proxy_failed.clear()
-            crawler.stop(f"the proxy doesn't work: {reason}")
-            return
-        for failed_page, _, failed_check in proxy_failed:
-            queue.push(failed_page.url, failed_check)
-        proxy_failed.clear()
-        if renderer:
-            await renderer.use_proxy(proxies.active)
+            proxy_down = dead if proxies.off else proxy_down
+            for page, _, check in held:
+                queue.push(page.url, check)
+            if renderer:
+                await renderer.use_proxy(proxies.active)
 
     try:
         if resume and resume.seen:  # continue (or a list crawl's first run): the queue is whatever isn't done
@@ -689,7 +693,7 @@ async def _run(
             raise writer.failed
         if proxy_stopped:
             raise ProxyUnavailable(proxy_stopped)
-        proxy_answered()  # the last ones before the queue ran out: not enough in a row to blame the proxy
+        store_held(breaker.release())  # the last ones before the queue ran out: not enough in a row to blame the proxy
         return proxy_down
     finally:
         parser.close()
