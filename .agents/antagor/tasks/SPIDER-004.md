@@ -4,8 +4,8 @@ title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change
   breaker)'
 status: in_progress
 attempts: 2
-blocked: true
-blocked_reason: no_progress
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -128,3 +128,11 @@ Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: ru
 
 - src/rb_spider/core/crawl.py 964 lines > limit 800: split it by meaning (one capability, one module)
 - src/rb_spider/core/settings.py 1242 lines > limit 800: split it by meaning (one capability, one module)
+
+### Architect's note
+
+Attempt 2 was refused with the old config: that round started at 07:06:09, before the exclude commit (07:06:56). The exclude is active now (checked). Submit the same work again; do not split files.
+
+### Blocked: no_progress (head f33dff34a9fc90144bc1ce2dec0fac572872f0b4)
+
+Same work is correct: attempts 1-2 were refused only by the file length check, now excluded in config (06188e4).
