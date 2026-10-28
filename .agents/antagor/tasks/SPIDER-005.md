@@ -1,7 +1,7 @@
 ---
 id: SPIDER-005
 title: 'Proxy: state remembered between runs, auth status --check and doctor'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: architect
 worker: claude-code
 type: feature
 owns_paths:
