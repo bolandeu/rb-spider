@@ -101,6 +101,10 @@ crawling again.
   first); `db status --json` shows the revision. Tables are `spider_*`
   (`spider query` reads them); other tools and reports read only the
   `spider_v1_*` views.
+- **Page storage** of `spider fetch` is a cache: `from_cache` true means no
+  request to the site. Files are zstd in `SPIDER_CACHE_DIR` (default: the user
+  cache dir); term `SPIDER_CACHE_TTL_DAYS` (90), limit `SPIDER_CACHE_MAX_GB`
+  (none). `--fresh` fetches again, `--max-age <days>` sets the age.
 - **`doctor --json`** first when something looks off — it reports
   what the CLI needs to run: its version, the project, its config,
   credential readiness, the database and the external programs.

@@ -46,6 +46,8 @@ uv tool install "rb-spider[render]" --index https://homeserver.tailee01ab.ts.net
 
 Браузер отдельно ставить не нужно, если уже есть любой Chromium в кэше Playwright (`ms-playwright`) или Google Chrome — spider найдёт его сам; другой — `--set crawl.render_browser=<путь>`. Если нет ничего: `playwright install --only-shell chromium`.
 
+Хранилище страниц `spider fetch` (кэш, ADR 0001): индекс — таблица `cache.spider_fetches`, тела — файлы zstd в `SPIDER_CACHE_DIR` (по умолчанию кэш пользователя, на Mac `~/Library/Caches/spider/fetch`; прод — `/data/cache/spider`). Срок — `SPIDER_CACHE_TTL_DAYS` (дней, по умолчанию 90), предел файлов — `SPIDER_CACHE_MAX_GB` (по умолчанию без предела); чистит сам spider раз в сутки. Удалить каталог можно: страницы скачаются снова.
+
 Запасной HTTP-клиент на curl (`--set crawl.http_client=curl`) — extra `curl`: `uv tool install "rb-spider[curl]" --index …`; оба extra вместе — `rb-spider[render,curl]`.
 
 У каждой команды `--help` — это и есть документация. `--json` — вывод для агентов; `spider --ai` печатает инструкцию для ИИ-агентов, `spider skill install` ставит её в Claude Code.
