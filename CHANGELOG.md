@@ -6,6 +6,13 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.8.0 — 2026-10-28
+
+### Outside epics
+
+- Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP, breaker) (SPIDER-004)
+- Proxy: state remembered between runs, auth status --check and doctor (SPIDER-005)
+
 ## v0.7.0 — 2026-10-28
 
 ### Outside epics
