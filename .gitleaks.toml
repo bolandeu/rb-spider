@@ -9,4 +9,5 @@ description = "fake test values (tests/test_auth.py; templates up to v1.20.1 com
 regexes = [
     '''^good-secret-123$''',
     '''^bad-secret-456$''',
+    '''^wrong-key-7f3a$''',  # tests/test_proxy.py, SPIDER-004
 ]
