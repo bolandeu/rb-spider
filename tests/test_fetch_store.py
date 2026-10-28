@@ -22,6 +22,7 @@ from rb_spider.cli import app
 from rb_spider.core import fetch_store, storage, tables
 
 from . import polygon
+from .test_cli import plain
 
 PAGES = ("/a", "/b", "/old")  # /old: a 301 to /a
 
@@ -100,7 +101,7 @@ def test_second_run_comes_from_the_storage_without_a_request(base_url: str, prox
 def test_human_output_marks_a_stored_page(base_url: str) -> None:
     _run(f"{base_url}/a")
     result = CliRunner().invoke(app, ["fetch", f"{base_url}/a"])
-    assert result.exit_code == 0 and "из хранилища" in " ".join(result.stdout.split())  # rich wraps long lines
+    assert result.exit_code == 0 and "из хранилища" in " ".join(plain(result.stdout).split())  # rich wraps long lines
 
 
 def test_fresh_fetches_again_and_replaces_the_stored_file(base_url: str) -> None:
