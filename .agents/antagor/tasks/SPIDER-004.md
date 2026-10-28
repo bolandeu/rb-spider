@@ -2,10 +2,10 @@
 id: SPIDER-004
 title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change IP,
   breaker)'
-status: in_progress
+status: queue
 attempts: 0
-blocked: true
-blocked_reason: needs_scope
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -112,5 +112,9 @@ Reuse core/proxy.py open_proxies, proxy_failure, IpChanger, ProxyUnavailable; cr
 > 1. Item 5: keep the form; stop raises ProxyUnavailable (exit 5, status interrupted, resumable); the test checks that
 > 2. Acceptance 3: return a result with status interrupted and proxy_down set, exit 0 with JSON
 > Recommended: Item 5: keep the form; stop raises ProxyUnavailable (exit 5, status interrupted, resumable); the test checks that
+
+Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: run_crawl raises ProxyUnavailable, crawl status interrupted (resumable), spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON. With fallback=direct: the crawl goes on and ends with proxy_down set. Test acceptance 3 that way: 3 requests with no answer -> one proxy-vs-direct check -> stop: exit 5 and status interrupted; direct: finished with proxy_down.
+
+### Blocked: needs_scope (entries [{'n': 1, 'text': 'SPIDER-004: item 5 says outcomes stay unchanged in form (fallback=stop: run_crawl raises ProxyUnavailable, status interrupted, spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON, so no proxy_down '}])
 
 Item 5 wins; acceptance 3 was my error. With fallback=stop keep today's form: run_crawl raises ProxyUnavailable, crawl status interrupted (resumable), spider crawl exits 5 PROXY_UNAVAILABLE, no result JSON. With fallback=direct: the crawl goes on and ends with proxy_down set. Test acceptance 3 that way: 3 requests with no answer -> one proxy-vs-direct check -> stop: exit 5 and status interrupted; direct: finished with proxy_down.
