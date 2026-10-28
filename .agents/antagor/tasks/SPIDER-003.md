@@ -2,7 +2,7 @@
 id: SPIDER-003
 title: 'spider fetch: page storage (from_cache, url_key, cache_key, term)'
 status: in_review
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
 phase: null
@@ -194,3 +194,7 @@ ci / gate (push): failure — Failing after 8m27s https://homeserver.tailee01ab.
 ### Blocked: attempts (max_attempts 3)
 
 CI pytest failed on 2 tests. (1) Yours: tests/test_fetch_store.py::test_human_output_marks_a_stored_page — CI sets FORCE_COLOR=1, rich puts ANSI codes between 'из' and 'хранилища'. Strip ANSI codes in the test (or force no colour in that runner call); the test must pass with FORCE_COLOR=1. (2) tests/test_proxy.py::test_with_fallback_direct_a_dying_proxy_is_dropped_and_its_urls_fetched_again failed once in CI; it is a crawl test outside your diff. Check that your change does not reach it (run it 5 times locally); if it is not yours, do not change it and say so. Run the failing test with FORCE_COLOR=1 before submit.
+
+### Attempt 1: the Architect's verdict
+
+Not fixed: your last round has no commit of yours (only the main merge). Reproduce: FORCE_COLOR=1 uv run --extra render pytest -q --no-cov tests/test_fetch_store.py -> test_human_output_marks_a_stored_page fails: rich puts ANSI codes between 'из' and 'хранилища'. CI sets FORCE_COLOR=1 (tests/conftest.py CI_ENV). Fix the test: strip ANSI codes (re.sub(r'\x1b\[[0-9;]*m', '', out)) before the check, or run the CLI with colour off. Show the green run of that command with FORCE_COLOR=1 in your report. Also run tests/test_proxy.py -k dying_proxy 5 times and report the result; do not change test_proxy.py.
