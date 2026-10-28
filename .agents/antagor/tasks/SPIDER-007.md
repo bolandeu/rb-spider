@@ -1,7 +1,7 @@
 ---
 id: SPIDER-007
 title: 'Proxy: no change-IP call when the proxy is remembered dead'
-status: publish
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null

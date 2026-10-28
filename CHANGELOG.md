@@ -6,6 +6,12 @@
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.8.2 — 2026-10-28
+
+### Outside epics
+
+- Proxy: no change-IP call when the proxy is remembered dead (SPIDER-007)
+
 ## v0.8.1 — 2026-10-28
 
 ### Outside epics
