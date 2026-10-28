@@ -10,7 +10,13 @@
  `database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);
  `database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —
  настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
- если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
+ если `crawl.proxy_urls` его требует (`{password}`); `proxy` — если задан `crawl.proxy_urls`:
+ каждый адрес
+ (без пароля) с запомненным состоянием (`alive`, `dead` или `unknown`), временем проверки, причиной
+ и числом смен
+ IP за 24 ч, в `addresses[]`; читается из файла состояния, без сети, мёртвый адрес — не ok;
+ проверить сейчас —
+ `spider auth status --check`; `credential:proxy_key` — ключ смены
  IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта
  при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
  (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при

@@ -1210,7 +1210,7 @@ class Proxy:
     """A forward HTTP proxy with a password in front of the polygon, for crawl.proxy_urls tests.
 
     Every host it is asked for is the polygon: crawl `http://polygon.test:<port>/…` through it, and a request that
-    goes around the proxy fails (the name resolves nowhere). `seen` — (User-Agent, path) of every proxied request;
+    goes around the proxy fails (the name resolves nowhere). `seen` — (User-Agent, path) of every proxied request; `connections` — every connection taken;
     `dead` — answer 407 to everything, like a proxy nobody paid for; `die_after` — go dead after so many requests;
     `hangs` — take the connection and never answer (a modem that lost its network); `hang_after` — so after so many.
 
@@ -1228,6 +1228,7 @@ class Proxy:
     def __init__(self, upstream: str) -> None:
         self.upstream_port = int(upstream.rsplit(":", 1)[1])
         self.seen: list[tuple[str, str]] = []
+        self.connections = 0  # every connection taken, a hung or refused one too
         self.dead = False
         self.die_after: int | None = None
         self.hangs = False
@@ -1251,6 +1252,7 @@ class Proxy:
         import base64
         from urllib.parse import urlsplit
 
+        self.connections += 1
         try:
             head = (await reader.readuntil(b"\r\n\r\n")).decode("latin-1")
             first, *lines = head.split("\r\n")

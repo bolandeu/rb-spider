@@ -695,7 +695,7 @@
       },
       {
         "name": "doctor",
-        "description": "Проверить окружение: Python, версию CLI, проект, конфиг и настройки, базу обходов, секреты.\n\nПервое, что стоит запустить, если команда ведёт себя странно. Код выхода\nвсегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.\n`database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с\n`SPIDER_DATABASE_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль;\n`database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);\n`database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —\nнастройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,\nесли `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены\nIP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта\nпри `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse\n(`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при\n`lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;\n`external:<программа>` — внешние программы из `[[tool.rb.external]]` (`lighthouse`, `npx`):\nверсия или «не установлена»; все необязательные, на healthy не влияют. Пароли ищутся и в\nkeychain `rb_spider:<провайдер>`, где их хранил spider до 0.2.0.\n\nExample: spider doctor\nExample: spider --json doctor\n\nJSON: `{healthy, checks: [{name, ok, detail}]}`.",
+        "description": "Проверить окружение: Python, версию CLI, проект, конфиг и настройки, базу обходов, секреты.\n\nПервое, что стоит запустить, если команда ведёт себя странно. Код выхода\nвсегда 0 — результат это сам отчёт; `healthy` говорит, прошли ли все проверки.\n`database` — путь к базе обходов (`SPIDER_DB_PATH` переопределяет) или, с\n`SPIDER_DATABASE_URL`, сервер PostgreSQL — отвечает ли он и есть ли пароль;\n`database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);\n`database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —\nнастройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,\nесли `crawl.proxy_urls` его требует (`{password}`); `proxy` — если задан `crawl.proxy_urls`: каждый адрес\n(без пароля) с запомненным состоянием (`alive`, `dead` или `unknown`), временем проверки, причиной и числом смен\nIP за 24 ч, в `addresses[]`; читается из файла состояния, без сети, мёртвый адрес — не ok; проверить сейчас —\n`spider auth status --check`; `credential:proxy_key` — ключ смены\nIP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта\nпри `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse\n(`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при\n`lighthouse.source = psi` — установлен ли gsc и есть ли у него ключ PageSpeed Insights;\n`external:<программа>` — внешние программы из `[[tool.rb.external]]` (`lighthouse`, `npx`):\nверсия или «не установлена»; все необязательные, на healthy не влияют. Пароли ищутся и в\nkeychain `rb_spider:<провайдер>`, где их хранил spider до 0.2.0.\n\nExample: spider doctor\nExample: spider --json doctor\n\nJSON: `{healthy, checks: [{name, ok, detail}]}`.",
         "options": [
           {
             "name": "--json",
@@ -3590,7 +3590,7 @@
         "commands": [
           {
             "name": "status",
-            "description": "Показать секреты всех провайдеров: откуда берутся и работают ли. Значения не печатаются.\n\nПровайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `proxy_key`\n(ключ `{key}` в `crawl.proxy_change_ip_urls`), `site` (пароль сайта при\n`crawl.auth = basic`) и `database` (пароль `SPIDER_DATABASE_URL`); все необязательные:\nнужны только при этих настройках. Без `--check` — только наличие (статус\n`unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DATABASE_URL`,\nесли он задан; у `proxy`, `proxy_key` и `site` спросить некого (их проверяет только\nобход), найденный секрет — `ok`.\n\nКоды выхода: 0 — все обязательные провайдеры в порядке (необязательный может\nотсутствовать); 3 — у обязательного проблема или какой-то секрет `invalid` /\n`expired`; 2 — неизвестный `--provider`.\n\nJSON — общий для всех наших инструментов контракт: `tool`, `version`, `checked_at`,\n`credentials[]` с `provider`, `required`, `fields`, `source`, `source_ref`, `status`,\n`expires_at`, `quota`, `message`.\n\nExample: spider auth status --check --json\nExample: spider auth status --provider proxy",
+            "description": "Показать секреты всех провайдеров: откуда берутся и работают ли. Значения не печатаются.\n\nПровайдеры spider — `proxy` (пароль `{password}` в `crawl.proxy_urls`), `proxy_key`\n(ключ `{key}` в `crawl.proxy_change_ip_urls`), `site` (пароль сайта при\n`crawl.auth = basic`) и `database` (пароль `SPIDER_DATABASE_URL`); все необязательные:\nнужны только при этих настройках. Без `--check` — только наличие (статус\n`unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DATABASE_URL`,\nесли он задан; `proxy` — по одному TCP-соединению и одному запросу через каждый адрес\n`crawl.proxy_urls` (настройки проекта и `--profile`, как у `crawl`), все сразу и не\nдольше 10 с: `ok`, если хоть один адрес ответил, иначе `invalid` с причиной; результат\nзапоминается (`crawl.proxy_state_ttl_s`), его показывает `spider doctor`; у `proxy_key`\nи `site` спросить некого (их проверяет только обход), найденный секрет — `ok`.\n\nКоды выхода: 0 — все обязательные провайдеры в порядке (необязательный может\nотсутствовать); 3 — у обязательного проблема или какой-то секрет `invalid` /\n`expired`; 2 — неизвестный `--provider`.\n\nJSON — общий для всех наших инструментов контракт: `tool`, `version`, `checked_at`,\n`credentials[]` с `provider`, `required`, `fields`, `source`, `source_ref`, `status`,\n`expires_at`, `quota`, `message`.\n\nExample: spider auth status --check --json\nExample: spider auth status --provider proxy",
             "options": [
               {
                 "name": "--check",
@@ -3618,6 +3618,25 @@
                   }
                 ],
                 "description": "Только этот провайдер: proxy, proxy_key, site или database (по умолчанию — все).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--profile",
+                "arguments": [
+                  {
+                    "name": "PROFILE",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Профиль настроек: встроенный, свой для всех проектов или из `.spider/profiles/` (`spider profiles list`).",
                 "metadata": [
                   {
                     "name": "x-rb-type",

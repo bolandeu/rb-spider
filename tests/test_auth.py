@@ -442,3 +442,56 @@ def test_doctor_fails_for_a_missing_required_credential(demo_providers) -> None:
 def test_doctor_never_names_a_provider_the_package_does_not_register(demo_providers) -> None:
     result = invoke("doctor", "--json", env=env(demo=BAD))
     assert "default" not in result.stdout
+
+
+# --- auth status --check for the proxy: one TCP check and one request through each address ----------------------
+
+
+def _proxy_status(*urls: str, extra: str = "") -> tuple[int, dict, float]:
+    import time
+
+    from rb_spider.core import settings
+
+    from . import polygon
+
+    addresses = ", ".join(f'"{url}"' for url in urls)
+    settings.global_config_path().write_text(
+        f"[crawl]\nproxy_urls = [{addresses}]\nproxy_connect_timeout_s = 0.5\n{extra}"
+    )
+    started = time.monotonic()
+    result = invoke("auth", "status", "--check", "--provider", "proxy", "--json",
+                    env={"SPIDER_PROXY_API_KEY": polygon.Proxy.PASSWORD})  # fmt: skip
+    return result.exit_code, json.loads(result.stdout), time.monotonic() - started
+
+
+def test_check_of_a_dead_proxy_is_invalid_with_the_reason_within_10_s() -> None:
+    from . import polygon
+
+    with polygon.unreachable_proxy() as url:
+        code, payload, elapsed = _proxy_status(url)
+    entry = by_provider(payload)["proxy"]
+    assert (code, entry["status"], payload["ok"]) == (3, "invalid", False)
+    assert "TCP connection" in entry["message"] and polygon.Proxy.PASSWORD not in entry["message"]
+    assert elapsed < 10
+    assert list(entry) == ENTRY_KEYS and [k for k in payload if k != "error"] == TOP_KEYS
+
+
+def test_check_of_a_working_proxy_is_ok_and_remembered() -> None:
+    from rb_spider.core import proxy_state
+
+    from . import polygon
+
+    with polygon.serve() as upstream, polygon.proxy(upstream) as proxy:
+        code, payload, _ = _proxy_status(proxy.url)
+        filled = proxy.url.replace("{password}", polygon.Proxy.PASSWORD)
+        found = proxy_state.fresh(filled, 600)
+        assert found is not None and found["status"] == "alive"
+    assert (code, by_provider(payload)["proxy"]["status"]) == (0, "ok")
+
+
+def test_check_is_ok_when_one_address_answers() -> None:
+    from . import polygon
+
+    with polygon.serve() as upstream, polygon.proxy(upstream) as proxy:
+        code, payload, _ = _proxy_status(polygon.refusing_proxy(), proxy.url, extra='proxy_mode = "failover"\n')
+    assert (code, by_provider(payload)["proxy"]["status"]) == (0, "ok")
