@@ -253,15 +253,17 @@ async def proxy_fails(settings: CrawlSettings, client: HttpClient, url: str, pro
         else why(through)  # fmt: skip
 
 
-async def _verdict(settings: CrawlSettings, client: HttpClient, url: str, proxy: str) -> str | None:
-    """Why `proxy` is dead, None — it works: from the remembered check when it is younger than
-    crawl.proxy_state_ttl_s (no connection), else a new one (`proxy_fails`), remembered."""
+async def _verdict(settings: CrawlSettings, client: HttpClient, url: str, proxy: str) -> tuple[str | None, bool]:
+    """(why `proxy` is dead | None — it works, whether this check is new): from the remembered check when it is
+    younger than crawl.proxy_state_ttl_s (no connection, not new), else a new one (`proxy_fails`), remembered."""
     known = proxy_state.fresh(proxy, settings.proxy_state_ttl_s)
     if known is not None:
-        return None if known["status"] == "alive" else f"{known['reason']} (remembered from {known['checked_at']})"
+        return (
+            None if known["status"] == "alive" else f"{known['reason']} (remembered from {known['checked_at']})"
+        ), False
     problem = await proxy_fails(settings, client, url, proxy)
     proxy_state.record(proxy, problem)
-    return problem
+    return problem, True
 
 
 async def _answers(settings: CrawlSettings, client: HttpClient, proxy: str) -> str | None:
@@ -295,25 +297,30 @@ async def check_now(settings: CrawlSettings) -> list[tuple[str, str | None]]:
     return list(await asyncio.gather(*(one(proxy) for proxy in proxy_urls(settings))))
 
 
-async def _dead_addresses(settings: CrawlSettings, client: HttpClient, proxies: Proxies, url: str) -> list[str]:
-    """Each address checked (`proxy_fails`); the problems that leave the proxies dead, [] — they work.
+async def _dead_addresses(
+    settings: CrawlSettings, client: HttpClient, proxies: Proxies, url: str
+) -> tuple[list[str], bool]:
+    """Each address checked (`proxy_fails`); (the problems that leave the proxies dead, [] — they work; whether
+    a new check made any of them — not only the remembered state).
 
     rotate: every address must work. failover: the first that works becomes the active one.
     """
     problems: list[str] = []
+    found_now = False
     for index, proxy in enumerate(proxies.urls):
-        problem = await _verdict(settings, client, url, proxy)
+        problem, new = await _verdict(settings, client, url, proxy)
         if problem:
+            found_now = found_now or new
             problems.append(f"{_address(proxy)} — {problem}")
             if settings.proxy_mode == "rotate":
-                return problems  # every address is used: one dead is enough
+                return problems, found_now  # every address is used: one dead is enough
             continue  # failover: the next one
         if settings.proxy_mode == "failover":
             proxies.current = index
             if problems:
                 log.warning("the proxy doesn't work (%s): going through %s", "; ".join(problems), proxies.address)
-            return []
-    return problems
+            return [], False
+    return problems, found_now
 
 
 async def open_proxies(
@@ -322,17 +329,18 @@ async def open_proxies(
     """The proxies after the check of each address on `url`'s site (`proxy_fails`); (proxies, why they're off).
 
     rotate: every address must work. failover: the first that works is used. All dead and
-    crawl.proxy_change_ip_urls set: one new IP, then the check again. Still dead: crawl.proxy_fallback = direct, or
+    crawl.proxy_change_ip_urls set and a check of this run found them dead (not only the remembered state): one new
+    IP, then the check again. Still dead: crawl.proxy_fallback = direct, or
     `ask` (a person in a terminal) says yes — go without it; otherwise ProxyUnavailable.
     """
     urls = proxy_urls(settings)
     if not urls:
         return None, None
     proxies = Proxies(urls, settings.proxy_mode, settings.proxy_concurrency)
-    problems = await _dead_addresses(settings, client, proxies, url)
-    if problems and settings.proxy_change_ip_urls:
+    problems, found_now = await _dead_addresses(settings, client, proxies, url)
+    if problems and found_now and settings.proxy_change_ip_urls:
         refused = await IpChanger(settings, client, proxies, url).renew()
-        problems = await _dead_addresses(settings, client, proxies, url)
+        problems, _ = await _dead_addresses(settings, client, proxies, url)
         if problems and refused:
             problems.append(f"change IP — {refused}")
     if not problems:

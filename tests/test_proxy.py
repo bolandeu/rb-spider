@@ -458,6 +458,22 @@ def test_a_proxy_known_dead_is_not_connected_to_again_and_the_fallback_decides(
     assert proxy.connections == first
 
 
+def test_a_proxy_remembered_dead_gets_no_ip_change_until_a_new_check_finds_it_dead(
+    proxy: polygon.Proxy, upstream: str, monkeypatch
+) -> None:
+    monkeypatch.setenv("SPIDER_PROXY_KEY_API_KEY", polygon.Proxy.KEY)
+    proxy.dead = True
+    settings = _changing(proxy, proxy_fallback="direct", proxy_state_ttl_s=600, **FAST)
+    assert fetch(f"{upstream}/a", settings).status == 200
+    assert proxy.change_asks == 1  # the first run: a new check found it dead, one IP change
+    connections = proxy.connections
+    assert fetch(f"{upstream}/a", settings).status == 200
+    assert proxy.change_asks == 1 and proxy.connections == connections  # the second run: the memory decides
+    _age_state(601)
+    assert fetch(f"{upstream}/a", settings).status == 200
+    assert proxy.change_asks == 2 and proxy.connections > connections  # older than the ttl: checked, changed
+
+
 def test_a_proxy_known_alive_is_not_checked_again(proxy: polygon.Proxy, upstream: str) -> None:
     settings = CrawlSettings(proxy_urls=[proxy.url], proxy_state_ttl_s=600, **FAST)
     assert fetch(f"{upstream}/a", settings).status == 200
