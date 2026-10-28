@@ -1,7 +1,7 @@
 ---
 id: SPIDER-005
 title: 'Proxy: state remembered between runs, auth status --check and doctor'
-status: in_review
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null
