@@ -97,7 +97,9 @@ def test_the_browser_refuses_a_socks_proxy_with_a_password(monkeypatch) -> None:
 def test_a_dead_proxy_stops_the_crawl_before_it_starts(proxy: polygon.Proxy) -> None:
     proxy.dead = True
     with storage.database() as engine:
-        crawl_id = register_crawl(engine, f"{proxy.base()}/a", "polygon", Settings(crawl=_crawl(proxy)))
+        crawl_id = register_crawl(
+            engine, f"{proxy.base()}/a", "polygon", Settings(crawl=_crawl(proxy, proxy_state_ttl_s=0))
+        )  # it is paid again at once
         with pytest.raises(ProxyUnavailable, match="407"):
             run_crawl(engine, crawl_id)
         assert _status(engine, crawl_id) == "interrupted" and _pages(engine, crawl_id) == {}
@@ -124,7 +126,7 @@ def test_asked_in_a_terminal_the_crawl_goes_on_without_the_proxy(proxy: polygon.
 
 
 def test_proxy_dying_mid_crawl_stops_it_and_resume_loses_nothing(proxy: polygon.Proxy) -> None:
-    settings = Settings(crawl=_crawl(proxy, max_urls=40, concurrency=2, proxy_max_failures=3))
+    settings = Settings(crawl=_crawl(proxy, max_urls=40, concurrency=2, proxy_max_failures=3, proxy_state_ttl_s=0))
     with storage.database() as engine:
         crawl_id = register_crawl(engine, f"{proxy.base()}/", "polygon", settings)
         proxy.die_after = 10
@@ -359,7 +361,7 @@ def test_fetch_drops_a_proxy_that_stops_answering_mid_run(proxy: polygon.Proxy, 
 
 
 def test_crawl_checks_a_proxy_that_stops_answering_and_stops(proxy: polygon.Proxy, upstream: str) -> None:
-    crawl = _crawl(proxy, max_urls=30, concurrency=2, **FAST)
+    crawl = _crawl(proxy, max_urls=30, concurrency=2, proxy_state_ttl_s=0, **FAST)  # the modem is back at once
     with storage.database() as engine:
         crawl_id = register_crawl(engine, f"{upstream}/", "polygon", Settings(crawl=crawl))
         proxy.hang_after = 6
@@ -415,3 +417,122 @@ def test_an_answer_sent_before_a_miss_does_not_clear_the_proxy() -> None:
     breaker.hold("page a")
     assert breaker.answered(sent_before) == []  # on its way before the miss: says nothing of the proxy now
     assert breaker.answered(time.monotonic()) == ["page a"]  # sent after it: the proxy works, the page is the site's
+
+
+# --- the proxy state remembered between runs (crawl.proxy_state_ttl_s) ---------------------------------------
+
+
+def _state_file():
+    from rb_spider.core import proxy_state
+
+    return proxy_state.state_path()
+
+
+def _state() -> dict:
+    return json.loads(_state_file().read_text())
+
+
+def _age_state(seconds: int) -> None:
+    """Make every remembered check `seconds` older: the clock of a later run."""
+    from datetime import datetime, timedelta
+
+    state = _state()
+    for entry in state.values():
+        entry["checked_at"] = (datetime.fromisoformat(entry["checked_at"]) - timedelta(seconds=seconds)).isoformat()
+    _state_file().write_text(json.dumps(state))
+
+
+def test_a_proxy_known_dead_is_not_connected_to_again_and_the_fallback_decides(
+    proxy: polygon.Proxy, upstream: str
+) -> None:
+    proxy.hangs = True
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_fallback="direct", proxy_state_ttl_s=600, **FAST)
+    assert fetch(f"{upstream}/a", settings).status == 200  # the check finds it dead, the fallback goes direct
+    first = proxy.connections
+    assert first > 0
+    assert fetch(f"{upstream}/a", settings).status == 200
+    assert proxy.connections == first  # the second run made no connection to the proxy
+    stop = settings.model_copy(update={"proxy_fallback": "stop"})
+    with pytest.raises(ProxyUnavailable):
+        fetch(f"{upstream}/a", stop)
+    assert proxy.connections == first
+
+
+def test_a_proxy_known_alive_is_not_checked_again(proxy: polygon.Proxy, upstream: str) -> None:
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_state_ttl_s=600, **FAST)
+    assert fetch(f"{upstream}/a", settings).status == 200
+    checks = [path for _, path in proxy.seen if path == "/robots.txt"]
+    assert len(checks) == 1
+    assert fetch(f"{upstream}/b", settings).status == 200
+    assert [path for _, path in proxy.seen if path == "/robots.txt"] == checks  # no second start check
+    assert ("", "/b") in [("", path) for _, path in proxy.seen]  # the page itself came through the proxy
+
+
+def test_an_entry_older_than_the_ttl_is_checked_again_and_updated(proxy: polygon.Proxy, upstream: str) -> None:
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_state_ttl_s=600, **FAST)
+    fetch(f"{upstream}/a", settings)
+    (key,) = _state()
+    before = _state()[key]["checked_at"]
+    _age_state(601)
+    aged = _state()[key]["checked_at"]
+    assert aged < before
+    fetch(f"{upstream}/a", settings)
+    assert len([path for _, path in proxy.seen if path == "/robots.txt"]) == 2  # checked again
+    assert _state()[key]["checked_at"] > aged and _state()[key]["status"] == "alive"
+
+
+def test_ttl_zero_turns_the_memory_off(proxy: polygon.Proxy, upstream: str) -> None:
+    settings = CrawlSettings(proxy_urls=[proxy.url], proxy_state_ttl_s=0, **FAST)
+    fetch(f"{upstream}/a", settings)
+    fetch(f"{upstream}/a", settings)
+    assert len([path for _, path in proxy.seen if path == "/robots.txt"]) == 2
+
+
+def test_failover_skips_an_address_known_dead(proxy: polygon.Proxy, backup: polygon.Proxy, upstream: str) -> None:
+    proxy.hangs = True
+    crawl = CrawlSettings(proxy_urls=[proxy.url, backup.url], proxy_mode="failover", proxy_state_ttl_s=600, **FAST)
+    assert fetch(f"{upstream}/a", crawl).status == 200
+    first = proxy.connections
+    assert fetch(f"{upstream}/b", crawl).status == 200
+    assert proxy.connections == first  # the next address that is not known dead, no connection to the dead one
+    assert ("", "/b") in [("", path) for _, path in backup.seen]
+
+
+def test_the_state_file_keeps_no_password_and_the_ip_changes(changing: polygon.Proxy, upstream: str) -> None:
+    changing.dead = True
+    with pytest.raises(ProxyUnavailable):
+        fetch(f"{upstream}/a", _changing(changing, **FAST))
+    (entry,) = _state().values()
+    assert entry["status"] == "dead" and entry["reason"] and len(entry["ip_changes"]) == 1
+    assert polygon.Proxy.PASSWORD not in _state_file().read_text()
+
+
+def test_two_runs_at_once_leave_a_whole_file(proxy: polygon.Proxy) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from rb_spider.core import proxy_state
+
+    urls = [f"http://u:secret@127.0.0.1:{port}" for port in range(9000, 9008)]
+    with ThreadPoolExecutor(8) as pool:
+        list(pool.map(lambda url: [proxy_state.record(url, None) for _ in range(20)], urls))
+    assert isinstance(_state(), dict) and not list(_state_file().parent.glob("*.tmp"))
+
+
+def test_doctor_shows_the_state_of_each_address_without_network(proxy: polygon.Proxy, upstream: str) -> None:
+    from rb_spider.core import proxy_state, settings
+
+    from .test_cli import invoke_json
+
+    other = "socks5h://mobile:{password}@127.0.0.1:1"
+    settings.global_config_path().write_text(f'[crawl]\nproxy_urls = ["{proxy.url}", "{other}"]\n')
+    proxy_state.record_ip_change([proxy.url.replace("{password}", polygon.Proxy.PASSWORD)])
+    proxy_state.record(proxy.url.replace("{password}", polygon.Proxy.PASSWORD), None)
+    proxy_state.record(other.replace("{password}", "pw"), "no TCP connection: refused")
+    _, payload = invoke_json("doctor")
+    check = next(c for c in payload["checks"] if c["name"] == "proxy")
+    first, second = check["addresses"]
+    assert (first["state"], first["reason"], first["ip_changes_24h"]) == ("alive", None, 1)
+    assert (second["state"], second["reason"]) == ("dead", "no TCP connection: refused")
+    assert first["checked_at"] and second["address"] == "socks5h://mobile@127.0.0.1:1"
+    assert polygon.Proxy.PASSWORD not in json.dumps(payload) and "auth status --check" in check["detail"]
+    assert proxy.connections == 0  # from the state file, no network

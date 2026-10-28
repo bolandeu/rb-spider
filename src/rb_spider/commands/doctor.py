@@ -8,7 +8,7 @@ import typer
 
 from .. import output
 from ..core import crawl as crawl_service
-from ..core import deps, services, settings
+from ..core import deps, proxy_state, services, settings
 from ..core import proxy as proxy_service
 from ..core.errors import CliError
 from ..core.models import ProjectConfig
@@ -32,19 +32,38 @@ def _auth_checks(needed: list[str]) -> list[dict]:
     ]
 
 
-def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[dict, list[str]]:
-    """Resolve the crawl settings like `spider crawl` would; returns the check and the credentials they need."""
+def _proxy_check(crawl: settings.CrawlSettings) -> list[dict]:
+    """The remembered state of each `crawl.proxy_urls` address (core/proxy_state.py), no network: dead → not ok."""
+    if not crawl.proxy_urls:
+        return []
+    addresses = []
+    for url in crawl.proxy_urls:
+        found = proxy_state.entry(url) or {}
+        addresses.append({"address": proxy_state.display_address(url), "state": found.get("status") or "unknown",
+                          "checked_at": found.get("checked_at"), "reason": found.get("reason"),
+                          "ip_changes_24h": len(found.get("ip_changes", []))})  # fmt: skip
+    lines = [f"{a['address']}: {a['state']}" + (f", {a['checked_at']}" if a["checked_at"] else "")
+             + (f", {a['reason']}" if a["reason"] else "") + f", IP changes in 24 h: {a['ip_changes_24h']}"
+             for a in addresses]  # fmt: skip
+    detail = f"{'; '.join(lines)}. Check now: {cli_name()} auth status --check"
+    return [{"name": "proxy", "ok": all(a["state"] != "dead" for a in addresses), "detail": detail,
+             "addresses": addresses}]  # fmt: skip
+
+
+def _settings_check(root: Path | None, config: ProjectConfig | None) -> tuple[dict, list[str], list[dict]]:
+    """Resolve the crawl settings like `spider crawl` would; returns the check, the credentials they need and the
+    proxy checks."""
     try:
         data = services.read_project_data(root) if root and config else None
         crawl = settings.resolve(root, project_data=data).settings.crawl
     except CliError as exc:
-        return {"name": "settings", "ok": False, "detail": exc.message}, []
+        return {"name": "settings", "ok": False, "detail": exc.message}, [], []
     needed = [proxy_service.PROXY_CREDENTIAL] if any("{password}" in u for u in crawl.proxy_urls) else []
     if any("{key}" in u for u in crawl.proxy_change_ip_urls):
         needed.append(proxy_service.KEY_CREDENTIAL)
     if crawl.auth == "basic":
         needed.append(crawl_service.SITE_CREDENTIAL)
-    return {"name": "settings", "ok": True}, needed
+    return {"name": "settings", "ok": True}, needed, _proxy_check(crawl)
 
 
 @output.guard
@@ -63,7 +82,10 @@ def doctor(
     `database_schema` — схема базы на версии этого spider (иначе — `spider db upgrade`);
     `database_env` — задано устаревшее `SPIDER_DB_URL` (переименовать); `settings` —
     настройки обхода собираются без ошибок; `credential:proxy` — есть пароль прокси,
-    если `crawl.proxy_urls` его требует (`{password}`); `credential:proxy_key` — ключ смены
+    если `crawl.proxy_urls` его требует (`{password}`); `proxy` — если задан `crawl.proxy_urls`: каждый адрес
+    (без пароля) с запомненным состоянием (`alive`, `dead` или `unknown`), временем проверки, причиной и числом смен
+    IP за 24 ч, в `addresses[]`; читается из файла состояния, без сети, мёртвый адрес — не ok; проверить сейчас —
+    `spider auth status --check`; `credential:proxy_key` — ключ смены
     IP, если его требует `crawl.proxy_change_ip_urls` (`{key}`); `credential:site` — пароль сайта
     при `crawl.auth = basic`; `lighthouse` — найдена ли команда Lighthouse
     (`lighthouse.command`; нужна только для `spider lighthouse`, на healthy не влияет), а при
@@ -90,11 +112,12 @@ def doctor(
             config = services.load_config(root, check_compat=False)
         except Exception:  # reported by the project part's `config` check
             config = None
-    settings_check, needed = _settings_check(root, config)
+    settings_check, needed, proxy_checks = _settings_check(root, config)
     checks.append(settings_check)
     if credentials := optional_module(f"{_PACKAGE_NAME}.credentials.health"):  # include_auth=false drops it
         checks.extend(credentials.doctor_checks())
     checks.extend(_auth_checks(needed))
+    checks.extend(proxy_checks)
     checks.append(_lighthouse_check(root, config))
     checks.extend(deps.doctor_checks())  # [[tool.rb.external]] in pyproject.toml
     if db := optional_module(f"{_PACKAGE_NAME}.core.db"):  # include_db=false drops it at generation time

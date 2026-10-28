@@ -12,6 +12,8 @@ import typer
 from .. import output
 from ..core.errors import InvalidArguments
 from ..core.version import DEV_VERSION, cli_name, installed_version, module_exists, optional_module
+from ..providers import secrets
+from . import options
 
 # `auth status` exists in every CLI (the Standard, Health); a CLI
 # generated without credentials (no credentials/ package, no commands/login.py)
@@ -35,6 +37,7 @@ def auth_status(
     provider: str | None = typer.Option(
         None, "--provider", help="Только этот провайдер: proxy, proxy_key, site или database (по умолчанию — все)."
     ),
+    profile: str | None = options.ProfileOption,
     json_output: bool = output.JsonOption,
     quiet: bool = output.QuietOption,
 ) -> None:
@@ -45,8 +48,11 @@ def auth_status(
     `crawl.auth = basic`) и `database` (пароль `SPIDER_DATABASE_URL`); все необязательные:
     нужны только при этих настройках. Без `--check` — только наличие (статус
     `unchecked` или `missing`). С `--check`: `database` — подключение к `SPIDER_DATABASE_URL`,
-    если он задан; у `proxy`, `proxy_key` и `site` спросить некого (их проверяет только
-    обход), найденный секрет — `ok`.
+    если он задан; `proxy` — по одному TCP-соединению и одному запросу через каждый адрес
+    `crawl.proxy_urls` (настройки проекта и `--profile`, как у `crawl`), все сразу и не
+    дольше 10 с: `ok`, если хоть один адрес ответил, иначе `invalid` с причиной; результат
+    запоминается (`crawl.proxy_state_ttl_s`), его показывает `spider doctor`; у `proxy_key`
+    и `site` спросить некого (их проверяет только обход), найденный секрет — `ok`.
 
     Коды выхода: 0 — все обязательные провайдеры в порядке (необязательный может
     отсутствовать); 3 — у обязательного проблема или какой-то секрет `invalid` /
@@ -60,6 +66,7 @@ def auth_status(
     Example: {cli} auth status --provider proxy
     """
     tool, version = cli_name(), installed_version() or DEV_VERSION
+    secrets.use_crawl_settings(lambda: options.resolve(ctx, profile, None, None).settings.crawl)
     if not _HAS_CREDENTIALS:
         if provider is not None:
             raise InvalidArguments(f"Unknown provider '{provider}' ({tool} stores no credentials).")

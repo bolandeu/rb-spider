@@ -6,7 +6,8 @@
 - `open_proxies` — the check before a crawl or `spider fetch`: a dead proxy is never bypassed silently. Each address:
   a TCP connection to the proxy itself (crawl.proxy_connect_timeout_s), then `proxy_fails` — the same request
   through the proxy and straight to the site at once: only a proxy that fails where the site answers is blamed.
-  All addresses dead and change-IP links set: one new IP, then the check again.
+  All addresses dead and change-IP links set: one new IP, then the check again. The result is remembered between
+  runs (`proxy_state`, crawl.proxy_state_ttl_s): an address checked lately is not checked again.
 - `Breaker` — crawl.proxy_max_failures requests through the proxy in a row with no answer (a proxy failure or a
   timeout) during a run: one `proxy_fails` check says whose they were.
 - `IpChanger` — crawl.proxy_change_ip_urls: when the site blocks (crawl.proxy_change_ip_on: 403, 429…), one
@@ -35,6 +36,7 @@ from crawlee.http_clients import HttpClient
 from crawlee.proxy_configuration import ProxyConfiguration, ProxyInfo
 
 from ..providers import secrets
+from . import proxy_state
 from .errors import AuthRequired, InvalidArguments, ProxyUnavailable
 from .settings import CrawlSettings
 
@@ -45,6 +47,7 @@ KEY_CREDENTIAL = "proxy_key"
 PROXY_AUTH_REQUIRED = 407
 UNPRODUCTIVE_CHANGES = 3  # IP changes in a row the site answered only with blocks: it blocks every IP, stop changing
 _ONLINE_POLL_S = 2.0
+CHECK_URL = "http://ipinfo.io/json"  # `check_now` asks it through each address: plain http, a proxy forwards it as is
 CHECK_TIMEOUT_S = 10.0  # the check's requests wait at most this long, or crawl.timeout_s when it is shorter
 
 
@@ -237,6 +240,48 @@ async def proxy_fails(settings: CrawlSettings, client: HttpClient, url: str, pro
         else why(through)  # fmt: skip
 
 
+async def _verdict(settings: CrawlSettings, client: HttpClient, url: str, proxy: str) -> str | None:
+    """Why `proxy` is dead, None — it works: from the remembered check when it is younger than
+    crawl.proxy_state_ttl_s (no connection), else a new one (`proxy_fails`), remembered."""
+    known = proxy_state.fresh(proxy, settings.proxy_state_ttl_s)
+    if known is not None:
+        return None if known["status"] == "alive" else f"{known['reason']} (remembered from {known['checked_at']})"
+    problem = await proxy_fails(settings, client, url, proxy)
+    proxy_state.record(proxy, problem)
+    return problem
+
+
+async def _answers(settings: CrawlSettings, client: HttpClient, proxy: str) -> str | None:
+    """One TCP connection to `proxy` and one request through it, to `CHECK_URL`; why it fails, None — it
+    answers. The site is not known here, so there is no straight request: the address alone is judged."""
+    problem = await _connects(proxy, settings.proxy_connect_timeout_s)
+    if problem:
+        return problem
+    try:
+        await _probe(settings, client, CHECK_URL, proxy_info(proxy), min(settings.timeout_s, CHECK_TIMEOUT_S))
+    except Exception as exc:
+        return why(exc)
+    return None
+
+
+async def check_now(settings: CrawlSettings) -> list[tuple[str, str | None]]:
+    """`spider auth status --check`: every address of the settings checked at once (`_answers`), each within
+    CHECK_TIMEOUT_S and so the whole within it too; the results are remembered. [(address, why it fails | None)]."""
+    from .crawl import http_client
+
+    client = http_client(settings)
+
+    async def one(proxy: str) -> tuple[str, str | None]:
+        try:
+            problem = await asyncio.wait_for(_answers(settings, client, proxy), CHECK_TIMEOUT_S)
+        except TimeoutError:
+            problem = f"no answer in {CHECK_TIMEOUT_S:g} s"
+        proxy_state.record(proxy, problem)
+        return proxy, problem
+
+    return list(await asyncio.gather(*(one(proxy) for proxy in proxy_urls(settings))))
+
+
 async def _dead_addresses(settings: CrawlSettings, client: HttpClient, proxies: Proxies, url: str) -> list[str]:
     """Each address checked (`proxy_fails`); the problems that leave the proxies dead, [] — they work.
 
@@ -244,7 +289,7 @@ async def _dead_addresses(settings: CrawlSettings, client: HttpClient, proxies: 
     """
     problems: list[str] = []
     for index, proxy in enumerate(proxies.urls):
-        problem = await proxy_fails(settings, client, url, proxy)
+        problem = await _verdict(settings, client, url, proxy)
         if problem:
             problems.append(f"{_address(proxy)} — {problem}")
             if settings.proxy_mode == "rotate":
@@ -328,6 +373,7 @@ class Breaker:
         self._checking = True
         try:
             problem = await proxy_fails(self.settings, self.client, url, proxy)
+            proxy_state.record(proxy, problem)
         finally:
             self._checking = False
         misses, self.misses = self.misses, 0
@@ -413,6 +459,7 @@ class IpChanger:
                 await self._wait_online()
             finally:
                 self._idle.set()
+            proxy_state.record_ip_change(self.proxies.urls)
             self.generation += 1
             self.changes += 1
             self.last_ip = new_ip or self.last_ip
@@ -425,6 +472,7 @@ class IpChanger:
         refusals: list[str] = []
         if await self._ask_provider(refusals) is None:
             return "; ".join(refusals)
+        proxy_state.record_ip_change(self.proxies.urls)
         await self.client.cleanup()
         await self._wait_online()
         return None
