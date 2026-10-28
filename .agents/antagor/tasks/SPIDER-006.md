@@ -1,7 +1,7 @@
 ---
 id: SPIDER-006
 title: 'Proxy: proxy_concurrency limit, via field and one stderr signal'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: architect
 worker: claude-code
 type: feature
 owns_paths:
