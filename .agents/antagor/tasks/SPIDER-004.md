@@ -4,8 +4,8 @@ title: 'Proxy: a dead proxy found in seconds (TCP check, proxy vs direct, change
   breaker)'
 status: in_progress
 attempts: 2
-blocked: true
-blocked_reason: no_progress
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
 publish_stage: null
@@ -141,3 +141,7 @@ Same work is correct: attempts 1-2 were refused only by the file length check, n
 ### Attempt 2 (not counted): the Architect's notes came after your submit
 
 - Attempt 2 was refused with the old config: that round started at 07:06:09, before the exclude commit (07:06:56). The exclude is active now (checked). Submit the same work again; do not split files.
+
+### Blocked: no_progress (head e2a770458af2ef8934eead9e41c9ab5b895c9624)
+
+Same work, checks were green at 07:27 (e2a7704); only pending notes held it.
