@@ -1,7 +1,7 @@
 
  Usage: spider fetch [OPTIONS] [urls]...
 
- Скачать страницы и вернуть их данные — без обхода и без записи в базу.
+ Скачать страницы и вернуть их данные — без обхода, повтор в пределах срока — из хранилища страниц.
 
  Общий сборщик для других инструментов и агентов: отдаёте URL — получаете
  финальный URL, код ответа, шаги редиректов, время и SEO-данные (title,
@@ -9,11 +9,21 @@
  ссылки, ресурсы, текст, Markdown и HTML. Тот же движок, что у обхода:
  браузерный отпечаток, User-Agent, прокси с паролем из хранилища ключей
  (`--set crawl.proxy_urls=…`, `--profile`), `--render` — через браузер (нужен
- `rb-spider[render]`, тоже через прокси). Прокси проверяется перед первым URL; не
+ `rb-spider[render]`, тоже через прокси). Прокси проверяется перед первым скачиваемым URL; не
  работает — по `crawl.proxy_fallback`, как у `spider crawl` (в терминале — вопрос). robots.txt не
  читается: URL названы вами, как у curl.
  `--list` — URL построчно, CSV с колонкой url / address / loc или XML sitemap.
  Обойти сайт целиком — `spider crawl`. Из Python — `rb_spider.fetch`.
+
+ Хранилище страниц: HTML-ответ с кодом ниже 500 (кроме 429) сохраняется —
+ индекс в таблице spider_fetches базы spider, исходник страницы и Markdown —
+ файлом zstd в каталоге SPIDER_CACHE_DIR (по умолчанию кэш пользователя,
+ на Mac ~/Library/Caches/spider/fetch). Повторный запрос того же URL в том же
+ режиме (`--render` или без) в пределах срока берётся из хранилища: сайт не
+ запрашивается, даже прокси не проверяется. Не сохраняются: URL без ответа,
+ 5xx, 429, не HTML. Срок — SPIDER_CACHE_TTL_DAYS (дней, по умолчанию 90),
+ предел размера файлов — SPIDER_CACHE_MAX_GB (по умолчанию без предела); раз в
+ день spider сам удаляет просроченное, затем самое старое сверх предела.
 
  Example: spider fetch https://example.com/old-page
  Example: spider --json fetch https://a.ru/ https://b.ru/ --include links,text
@@ -21,39 +31,51 @@
  Example: cat urls.txt | spider --json fetch --list - --concurrency 20 --profile googlebot
  Example: spider fetch https://example.com/ --profile mobile-proxy   # свой профиль с
  crawl.proxy_urls
+ Example: spider --json fetch https://example.com/price --max-age 7  # не старше недели
+ Example: spider fetch https://example.com/ --fresh                 # мимо хранилища
 
- Выход: человеку — строка на URL (код, финальный URL, title, время). `--json` —
- JSON Lines, объект на URL в порядке ввода: `{url, final_url, status, redirects:
- [{url, status, location}], content_type, bytes, elapsed_ms, rendered, seo,
- refresh_url, headers?, links?, resources?, text?, markdown?, html?, error}`;
- `status` null и `error` — URL не ответил (это данные, код выхода 0).
+ Выход: человеку — строка на URL (код, финальный URL, title, время; «из
+ хранилища» — страница из хранилища). `--json` — JSON Lines, объект на URL в
+ порядке ввода: `{url, final_url, status, redirects: [{url, status, location}],
+ content_type, bytes, elapsed_ms, rendered, seo, refresh_url, headers?, links?,
+ resources?, text?, markdown?, html?, error, url_key, domain_key, content_hash,
+ cache_key, fetched_at, from_cache}`; `status` null и `error` — URL не ответил
+ (это данные, код выхода 0). `url_key`, `domain_key` — общие ключи rb-keys (null —
+ не веб-адрес); `content_hash` — SHA-256 сохранённого исходника, `cache_key` —
+ сохранённая версия (оба null — не сохранено); `fetched_at` — когда скачано (ISO
+ 8601 UTC; из хранилища — когда сохранено); `from_cache` — ответ из хранилища.
  `--markdown` — Markdown-документы, разделённые строкой `===`. Нет URL,
  неверный `--include` — выход 2; `--render` без Playwright — выход 1; прокси не
- работает — выход 5, `PROXY_UNAVAILABLE`.
+ работает — выход 5, `PROXY_UNAVAILABLE`; база недоступна — выход 5.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │   urls      <str>  URL страниц, например https://example.com/page.                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --list               <str>               Файл с URL (по одному в строке, # — комментарий; CSV с  │
-│                                          колонкой url; XML sitemap) или - для stdin.             │
-│ --render                                 Открыть HTML-страницы в браузере (JS), как              │
-│                                          crawl.render.                                           │
-│ --include            <str>               Что добавить к SEO-данным, через запятую: headers,      │
-│                                          links, resources, text, markdown, html.                 │
-│ --markdown                               Вывести каждую страницу Markdown-документом для LLM     │
-│                                          (основной контент).                                     │
-│ --concurrency        <int range> [x>=1]  Сколько страниц скачивать одновременно (ключ            │
-│                                          crawl.concurrency).                                     │
-│ --profile            <str>               Профиль настроек: встроенный, свой для всех проектов    │
-│                                          или из `.spider/profiles/` (`spider profiles list`).    │
-│ --config             <path>              TOML-файл настроек поверх профиля (формат как у         │
-│                                          профиля).                                               │
-│ --set                KEY=VALUE           Переопределить любой ключ: `--set crawl.max_urls=500`;  │
-│                                          можно повторять.                                        │
-│ --json                                   Вывод в JSON для агентов и скриптов (одна               │
-│                                          строка-конверт `{ok, ...}`).                            │
-│ --quiet                                  Печатать только основной результат, без пояснений.      │
-│ --help                                   Show this message and exit.                             │
+│ --list               <str>                 Файл с URL (по одному в строке, # — комментарий; CSV  │
+│                                            с колонкой url; XML sitemap) или - для stdin.         │
+│ --render                                   Открыть HTML-страницы в браузере (JS), как            │
+│                                            crawl.render.                                         │
+│ --include            <str>                 Что добавить к SEO-данным, через запятую: headers,    │
+│                                            links, resources, text, markdown, html.               │
+│ --markdown                                 Вывести каждую страницу Markdown-документом для LLM   │
+│                                            (основной контент).                                   │
+│ --concurrency        <int range> [x>=1]    Сколько страниц скачивать одновременно (ключ          │
+│                                            crawl.concurrency).                                   │
+│ --fresh                                    Не брать страницы из хранилища: скачать каждый URL    │
+│                                            заново и сохранить новую версию.                      │
+│ --max-age            <float range> [x>=0]  Сохранённая страница старше стольких дней скачивается │
+│                                            заново (по умолчанию — срок SPIDER_CACHE_TTL_DAYS,    │
+│                                            90).                                                  │
+│ --profile            <str>                 Профиль настроек: встроенный, свой для всех проектов  │
+│                                            или из `.spider/profiles/` (`spider profiles list`).  │
+│ --config             <path>                TOML-файл настроек поверх профиля (формат как у       │
+│                                            профиля).                                             │
+│ --set                KEY=VALUE             Переопределить любой ключ: `--set                     │
+│                                            crawl.max_urls=500`; можно повторять.                 │
+│ --json                                     Вывод в JSON для агентов и скриптов (одна             │
+│                                            строка-конверт `{ok, ...}`).                          │
+│ --quiet                                    Печатать только основной результат, без пояснений.    │
+│ --help                                     Show this message and exit.                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

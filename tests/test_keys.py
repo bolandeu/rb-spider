@@ -304,5 +304,5 @@ def test_old_cli_on_a_migrated_database_refuses_and_writes_nothing(
         storage.open_db()
     with engine.connect() as conn:
         assert conn.execute(sa.select(sa.func.count()).select_from(tables.crawls)).scalar_one() == before
-        assert db.current_revision(conn) == "0035"  # not moved back
+        assert db.current_revision(conn) == "0036"  # not moved back
     engine.dispose()

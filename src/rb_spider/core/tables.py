@@ -440,6 +440,30 @@ issues = sa.Table(
     sa.Index("spider_issues_by_code", "crawl_id", "code"),
     info={"kind": "data"},
 )
+# The page storage of `spider fetch` (core/fetch_store.py, ADR 0001): one row per URL and fetch mode, the body in a
+# zstd file named by cache_key. No crawl: it lives by its term (expires_at), not by a crawl's cascade.
+fetches = sa.Table(
+    "spider_fetches",
+    metadata,
+    sa.Column("id", ID, primary_key=True),
+    sa.Column("url", sa.String, nullable=False),  # as asked, normalized
+    sa.Column("url_key", sa.String, nullable=False),  # rb-keys norm_url / norm_domain of `url`
+    sa.Column("domain_key", sa.String),
+    sa.Column("rendered", sa.Boolean, nullable=False),  # the fetch mode: --render or not
+    sa.Column("final_url", sa.String, nullable=False),
+    sa.Column("status", sa.Integer, nullable=False),
+    sa.Column("content_hash", sa.String, nullable=False),  # SHA-256 hex of the stored page source
+    sa.Column("cache_key", sa.String, nullable=False),  # random per stored fetch: the file's name
+    sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("bytes", sa.Integer, nullable=False),  # size of the stored file
+    sa.UniqueConstraint("url_key", "rendered"),
+    # an index, not a second UNIQUE constraint: storage.insert_or_replace replaces by the table's one constraint
+    sa.Index("spider_fetches_by_cache_key", "cache_key", unique=True),
+    sa.Index("spider_fetches_by_fetched_at", "fetched_at"),
+    schema=CACHE_SCHEMA,
+    info={"kind": "cache"},
+)
 
 # The `spider_v1_*` views other tools, Directus and the platform read instead of the tables (migration 0034) — the
 # tool's data contract, published by `describe --json` (x-rb-data.views). tests/test_db.py fails when a view below is

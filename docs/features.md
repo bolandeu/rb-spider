@@ -803,6 +803,7 @@
 ### CLI и работа с данными
 
 - [x] `MVP` **`spider fetch` / `rb_spider.fetch`** (#24) — сборщик страниц для других инструментов без обхода и базы: редиректы, SEO-данные, ссылки, текст, Markdown для LLM, HTML; прокси и `--render`
+- [x] `MVP` **Хранилище страниц `spider fetch`** (SPIDER-003, [ADR 0001](adr/0001-fetch-storage.md)) — повтор того же URL в пределах срока (`SPIDER_CACHE_TTL_DAYS`, 90 дней) из хранилища без запроса к сайту; индекс `spider_fetches`, тела — zstd-файлы в `SPIDER_CACHE_DIR`; `--fresh`, `--max-age`; в `--json` — `url_key`, `domain_key`, `content_hash`, `cache_key`, `fetched_at`, `from_cache`; ежедневная чистка по сроку, `SPIDER_CACHE_MAX_GB` и файлов без строки старше суток; размер `spider_fetches` входит в `db info` и `db vacuum` на PostgreSQL
 - [x] `MVP` **Drill-down для агентов** — `spider issues` → `spider urls --issue` → `spider url` / `spider links`; у каждой команды таблица для человека и `--json`
 - [x] `MVP` **`spider status`** — прогресс и итоги обхода из БД (в т.ч. для фонового)
 - [x] `MVP` **`spider query "SELECT …"`** — произвольный SQL по данным обхода

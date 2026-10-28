@@ -17,6 +17,7 @@ from rb_spider.core.errors import InvalidArguments
 from rb_spider.core.settings import CrawlSettings, Settings
 
 from . import polygon
+from .conftest import PG_ADMIN
 
 
 @pytest.fixture(scope="module")
@@ -152,6 +153,30 @@ def test_db_info_migrate_vacuum(base_url: str, engine) -> None:
     assert code == 0 and data["after_bytes"] <= data["before_bytes"]
 
 
+@pytest.mark.skipif(not PG_ADMIN, reason="TEST_DATABASE_URL not set (scripts/pg_test.sh)")
+def test_postgres_db_info_and_vacuum_count_the_page_storage(engine) -> None:
+    """spider_fetches lives in schema `cache`: its size counts, and VACUUM FULL reaches it."""
+    from rb_spider.core.tables import fetches
+
+    _, empty = _invoke("db", "info")
+    now = datetime.now(UTC)
+    rows = [
+        {"url": f"https://example.com/{n}", "url_key": f"example.com/{n}", "domain_key": "example.com",
+         "rendered": False, "final_url": f"https://example.com/{n}", "status": 200, "content_hash": "0" * 64,
+         "cache_key": f"{n:032x}", "fetched_at": now, "expires_at": now + timedelta(days=90), "bytes": 1}
+        for n in range(5000)
+    ]  # fmt: skip
+    with engine.begin() as conn:
+        conn.execute(sa.insert(fetches), rows)
+    _, full = _invoke("db", "info")
+    assert full["size_bytes"] > empty["size_bytes"] + 500_000  # 5000 rows of about 200 bytes with their indexes
+
+    with engine.begin() as conn:
+        conn.execute(sa.delete(fetches))
+    code, data = _invoke("db", "vacuum")
+    assert code == 0 and data["before_bytes"] > data["after_bytes"] + 500_000
+
+
 def test_db_migrate_brings_an_old_schema_up(tmp_path) -> None:
     from alembic import command
 
@@ -192,6 +217,9 @@ def test_prefix_migration_keeps_every_row(base_url: str, tmp_path) -> None:
             for (index,) in indexes:
                 conn.exec_driver_sql(f"DROP INDEX {index}")
             for table in storage.metadata.sorted_tables:
+                if table.name == "spider_fetches":  # 0036's table: a database at 0032 has none
+                    conn.exec_driver_sql("DROP TABLE spider_fetches")
+                    continue
                 old = table.name.removeprefix("spider_")
                 conn.exec_driver_sql(f"ALTER TABLE {table.name} RENAME TO {old}")
                 if "id" in table.c and old not in ("projects", "crawls", "urls"):  # 0033 adds these ids
