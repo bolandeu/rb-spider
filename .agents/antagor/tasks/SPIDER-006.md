@@ -1,7 +1,7 @@
 ---
 id: SPIDER-006
 title: 'Proxy: proxy_concurrency limit, via field and one stderr signal'
-status: in_review
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null
