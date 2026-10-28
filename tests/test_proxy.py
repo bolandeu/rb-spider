@@ -8,6 +8,10 @@ goes around the proxy fails.
 from __future__ import annotations
 
 import importlib.util
+import json
+import time
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -16,7 +20,7 @@ from rb_spider.core import storage
 from rb_spider.core.crawl import crawl_site, register_crawl, run_crawl
 from rb_spider.core.errors import ProxyUnavailable
 from rb_spider.core.settings import CrawlSettings, Settings, SitemapSettings
-from rb_spider.fetch import fetch
+from rb_spider.fetch import fetch, fetch_many
 
 from . import polygon
 
@@ -269,3 +273,145 @@ def test_a_socks5_door_is_handed_out_as_is() -> None:
     proxies.current = 1  # Crawlee's own configuration would refuse this address: http(s) only
     info = asyncio.run(proxies.new_proxy_info(None, None, None))
     assert info and (info.scheme, info.hostname, info.port, info.password) == ("socks5h", "b.example", 1080, "p@x")
+
+
+# --- a dead proxy found in seconds: a TCP check, the proxy against a direct request, the breaker -------------
+
+FAST: dict[str, Any] = {
+    "timeout_s": 1,
+    "proxy_connect_timeout_s": 0.5,
+}  # the bounds below: seconds of these, not minutes
+
+
+def _timed(run):
+    started = time.monotonic()
+    result = run()
+    return result, time.monotonic() - started
+
+
+@pytest.fixture
+def unreachable(monkeypatch) -> Iterator[str]:
+    monkeypatch.setenv("SPIDER_PROXY_API_KEY", polygon.Proxy.PASSWORD)
+    with polygon.unreachable_proxy() as url:
+        yield url
+
+
+def test_cli_a_proxy_that_hangs_on_connect_exits_5_within_the_connect_timeout(unreachable: str, upstream: str) -> None:
+    from typer.testing import CliRunner
+
+    from rb_spider.cli import app
+
+    urls = [f"{upstream}/a", f"{upstream}/b", f"{upstream}/c"]
+    keys = [f"crawl.proxy_urls=['{unreachable}']", "crawl.proxy_connect_timeout_s=0.5", "crawl.timeout_s=5"]
+    command = ["--json", "fetch", *urls, *[arg for key in keys for arg in ("--set", key)]]
+    result, elapsed = _timed(lambda: CliRunner().invoke(app, command))
+    assert result.exit_code == 5  # no terminal: crawl.proxy_fallback = stop
+    assert json.loads(result.stdout)["error"]["code"] == "PROXY_UNAVAILABLE"
+    assert elapsed < 0.5 + 2.5  # the connect timeout and a margin, not 3 x crawl.timeout_s = 15 s
+
+
+def test_with_fallback_direct_a_proxy_that_hangs_on_connect_costs_one_check(unreachable: str, upstream: str) -> None:
+    settings = CrawlSettings(proxy_urls=[unreachable], proxy_fallback="direct", proxy_connect_timeout_s=0.5,
+                             timeout_s=5)  # fmt: skip
+    urls = [f"{upstream}/a", f"{upstream}/b", f"{upstream}/c"]
+    pages, elapsed = _timed(lambda: list(fetch_many(urls, settings)))
+    assert [page.status for page in pages] == [200, 200, 200]
+    assert elapsed < 0.5 + 2.5
+
+
+@pytest.mark.parametrize("failure", ["hangs", "refuses", "407"])
+def test_a_dead_proxy_is_found_before_the_first_url_in_seconds(proxy: polygon.Proxy, upstream: str, failure) -> None:
+    url = polygon.refusing_proxy() if failure == "refuses" else proxy.url
+    proxy.hangs, proxy.dead = failure == "hangs", failure == "407"
+    settings = CrawlSettings(proxy_urls=[url], **FAST)
+    with pytest.raises(ProxyUnavailable) as stopped:
+        started = time.monotonic()
+        fetch(f"{upstream}/a", settings)
+    assert time.monotonic() - started < 1 + 2  # one check: at most min(crawl.timeout_s, 10), and a margin
+    assert "127.0.0.1" in str(stopped.value)
+    page = fetch(f"{upstream}/a", settings.model_copy(update={"proxy_fallback": "direct"}))
+    assert page.status == 200 and page.error is None
+
+
+def test_a_site_down_for_everyone_does_not_blame_a_working_proxy(monkeypatch) -> None:
+    monkeypatch.setenv("SPIDER_PROXY_API_KEY", polygon.Proxy.PASSWORD)
+    with polygon.silent_site() as down, polygon.proxy(down) as proxy:
+        urls = [f"{proxy.base()}/a", f"{proxy.base()}/b", f"{proxy.base()}/c", f"{proxy.base()}/d"]
+        pages = list(fetch_many(urls, CrawlSettings(proxy_urls=[proxy.url], **FAST), concurrency=1))
+    assert [page.status for page in pages] == [None] * 4  # each URL has its own error, the run went on
+    assert all(page.error and "Timeout" in page.error for page in pages)
+
+
+def test_fetch_drops_a_proxy_that_stops_answering_mid_run(proxy: polygon.Proxy, upstream: str) -> None:
+    proxy.hang_after = 2  # robots.txt of the check and the first page come through, then nothing
+    urls = [f"{upstream}/a?n={n}" for n in range(12)]
+    settings = CrawlSettings(proxy_urls=[proxy.url], **FAST)
+    with pytest.raises(ProxyUnavailable, match="in a row") as stopped:
+        started = time.monotonic()
+        list(fetch_many(urls, settings, concurrency=1))
+    # three URLs without an answer, then one check: not 11 x crawl.timeout_s
+    assert time.monotonic() - started < 3 * 1 + 1 + 3
+    assert "127.0.0.1" in str(stopped.value)
+    proxy.hangs, proxy.hang_after = False, 2
+    proxy.seen.clear()
+    pages = list(fetch_many(urls, settings.model_copy(update={"proxy_fallback": "direct"}), concurrency=1))
+    assert pages[-1].status == 200 and pages[-1].error is None  # on without the proxy, the site sees this IP
+
+
+def test_crawl_checks_a_proxy_that_stops_answering_and_stops(proxy: polygon.Proxy, upstream: str) -> None:
+    crawl = _crawl(proxy, max_urls=30, concurrency=2, **FAST)
+    with storage.database() as engine:
+        crawl_id = register_crawl(engine, f"{upstream}/", "polygon", Settings(crawl=crawl))
+        proxy.hang_after = 6
+        with pytest.raises(ProxyUnavailable, match="in a row") as stopped_by:
+            started = time.monotonic()
+            run_crawl(engine, crawl_id)
+        # three requests without an answer (each tried twice), one check: not every URL's timeouts
+        assert time.monotonic() - started < 3 * 2 * 1 + 1 + 4
+        assert stopped_by.value.exit_code == 5  # spider crawl: PROXY_UNAVAILABLE, no result JSON
+        assert _status(engine, crawl_id) == "interrupted"  # resumable
+        stopped = _pages(engine, crawl_id)
+        assert not [url for url, (_, error) in stopped.items() if error and "Timeout" in error]
+        proxy.hangs, proxy.hang_after = False, None  # the modem is back: the crawl goes on where it stopped
+        assert run_crawl(engine, crawl_id).status == "finished"
+        pages = _pages(engine, crawl_id)
+    assert len(pages) > len(stopped)
+    assert not [url for url, (_, error) in pages.items() if error and "Timeout" in error]
+
+
+def test_crawl_with_fallback_direct_goes_on_without_a_proxy_that_stops_answering(
+    proxy: polygon.Proxy, upstream: str
+) -> None:
+    crawl = _crawl(proxy, max_urls=30, concurrency=2, proxy_fallback="direct", **FAST)
+    proxy.hang_after = 6
+    with storage.database() as engine:
+        result = crawl_site(engine, f"{upstream}/", "polygon", Settings(crawl=crawl))
+        pages = _pages(engine, result.crawl_id)
+    assert result.status == "finished" and result.proxy_down and "in a row" in result.proxy_down
+    assert not [url for url, (_, error) in pages.items() if url.startswith(upstream) and error and "Timeout" in error]
+
+
+def test_a_dead_proxy_gets_one_ip_change_and_the_providers_refusal_is_in_the_error(
+    proxy: polygon.Proxy, monkeypatch
+) -> None:
+    monkeypatch.setenv("SPIDER_PROXY_KEY_API_KEY", "wrong-key-7f3a")
+    proxy.dead = True
+    with pytest.raises(ProxyUnavailable) as stopped:
+        fetch(f"{proxy.base()}/a", _changing(proxy, **FAST))
+    assert proxy.change_asks == 1  # one call to the provider, then the check again
+    assert "bad key" in str(stopped.value) and "407" in str(stopped.value)
+    assert "wrong-key-7f3a" not in str(stopped.value)
+
+
+def test_an_answer_sent_before_a_miss_does_not_clear_the_proxy() -> None:
+    """IDEA-365: a slow answer that left before the proxy died stored the pages it failed meanwhile as errors."""
+    import asyncio
+
+    from rb_spider.core.proxy import Breaker
+
+    breaker = Breaker(CrawlSettings(proxy_max_failures=3), client=None)  # ty: ignore[invalid-argument-type]
+    sent_before = time.monotonic()
+    assert asyncio.run(breaker.missed("http://site.test/a", "http://127.0.0.1:1")) == (None, [])
+    breaker.hold("page a")
+    assert breaker.answered(sent_before) == []  # on its way before the miss: says nothing of the proxy now
+    assert breaker.answered(time.monotonic()) == ["page a"]  # sent after it: the proxy works, the page is the site's

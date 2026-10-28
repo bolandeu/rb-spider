@@ -9,6 +9,8 @@ own thread and event loop, because the crawler under test calls `asyncio.run` it
 from __future__ import annotations
 
 import asyncio
+import select
+import socket
 import ssl
 import threading
 from collections.abc import Iterator
@@ -1209,11 +1211,13 @@ class Proxy:
 
     Every host it is asked for is the polygon: crawl `http://polygon.test:<port>/…` through it, and a request that
     goes around the proxy fails (the name resolves nowhere). `seen` — (User-Agent, path) of every proxied request;
-    `dead` — answer 407 to everything, like a proxy nobody paid for; `die_after` — go dead after so many requests.
+    `dead` — answer 407 to everything, like a proxy nobody paid for; `die_after` — go dead after so many requests;
+    `hangs` — take the connection and never answer (a modem that lost its network); `hang_after` — so after so many.
 
     A mobile proxy's IP change: `blocks_after` — the site blocks its pages (403) once that many came from the
     current IP (`burn` — this one already did); a request to the proxy itself, `/changeip?proxy_key=KEY` (`change_url`), is the provider's
-    change-IP link — a new IP (`changes` counts them), unless `change_helps` is off (the site blocks every IP).
+    change-IP link — a new IP (`changes` counts them), unless `change_helps` is off (the site blocks every IP);
+    `change_asks` counts every call, a wrong key included (its refusal repeats the link, key and all).
     """
 
     KEY = "change-key"
@@ -1226,6 +1230,9 @@ class Proxy:
         self.seen: list[tuple[str, str]] = []
         self.dead = False
         self.die_after: int | None = None
+        self.hangs = False
+        self.hang_after: int | None = None
+        self.change_asks = 0
         self.blocks_after: int | None = None
         self.change_helps = True
         self.changes = 0
@@ -1251,19 +1258,25 @@ class Proxy:
             headers = [line for line in lines if line]
             fields = {line.split(":", 1)[0].strip().lower(): line.split(":", 1)[1].strip() for line in headers}
             if target.startswith("/"):  # to the proxy itself: the change-IP link
+                self.change_asks += 1
                 ok = f"proxy_key={self.KEY}" in target
                 if ok:
                     self.changes += 1
                     if self.change_helps:
                         self._since_change = 0
                 body = (f'{{"status": "ok", "new_ip": "10.0.0.{self.changes}"}}' if ok
-                        else '{"status": "err", "message": "bad key"}').encode()  # fmt: skip
+                        else f'{{"status": "err", "message": "bad key: {target}"}}').encode()  # fmt: skip
                 writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n"
                              + f"Content-Length: {len(body)}\r\n\r\n".encode() + body)  # fmt: skip
                 await writer.drain()
                 return
             if self.die_after is not None and len(self.seen) >= self.die_after:
                 self.dead = True
+            if self.hang_after is not None and len(self.seen) >= self.hang_after:
+                self.hangs = True
+            if self.hangs:
+                await reader.read()  # until the client gives up and closes the connection
+                return
             token = base64.b64encode(f"{self.USER}:{self.PASSWORD}".encode()).decode()
             if self.dead or fields.get("proxy-authorization") != f"Basic {token}":
                 writer.write(b'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="p"\r\n'
@@ -1309,10 +1322,72 @@ def proxy(upstream: str) -> Iterator[Proxy]:
     found.change_url = f"http://127.0.0.1:{port}/changeip?proxy_key={{key}}&format=json"
     thread = threading.Thread(target=loop.run_forever, daemon=True)
     thread.start()
+
+    async def shut() -> None:  # connections still open (a hung upstream, a client that never gave up) end here too
+        server.close()
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task():
+                task.cancel()
+
     try:
         yield found
     finally:
-        loop.call_soon_threadsafe(server.close)
+        asyncio.run_coroutine_threadsafe(shut(), loop).result()
         loop.call_soon_threadsafe(loop.stop)
         thread.join()
         loop.close()
+
+
+@contextmanager
+def unreachable_proxy() -> Iterator[str]:
+    """A proxy address that hangs on TCP connect, like a modem's port behind a dead network: its listen queue is
+    full, so the system drops new connections without an answer. Yields the address with the login."""
+    server = socket.create_server(("127.0.0.1", 0), backlog=0)
+    queued: list[socket.socket] = []
+    try:
+        while len(queued) < 2000:  # fill the queue until a connection no longer opens
+            client = socket.socket()
+            client.setblocking(False)
+            queued.append(client)
+            client.connect_ex(server.getsockname())
+            if not select.select([], [client], [], 0.1)[1]:
+                break
+        yield f"http://{Proxy.USER}:{{password}}@127.0.0.1:{server.getsockname()[1]}"
+    finally:
+        for client in queued:
+            client.close()
+        server.close()
+
+
+def refusing_proxy() -> str:
+    """A proxy address where nothing listens: every connection is refused at once."""
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        port = server.getsockname()[1]
+    return f"http://{Proxy.USER}:{{password}}@127.0.0.1:{port}"
+
+
+@contextmanager
+def silent_site() -> Iterator[str]:
+    """A site that takes every connection and never answers: down for everyone. Yields its base URL."""
+    server = socket.create_server(("127.0.0.1", 0))
+    server.settimeout(0.1)
+    held: list[socket.socket] = []
+    done = threading.Event()
+
+    def take() -> None:
+        while not done.is_set():
+            try:
+                held.append(server.accept()[0])
+            except TimeoutError:
+                continue
+
+    thread = threading.Thread(target=take, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.getsockname()[1]}"
+    finally:
+        done.set()
+        thread.join()
+        for connection in held:
+            connection.close()
+        server.close()

@@ -3,7 +3,12 @@
 - `Proxies` — the addresses as Crawlee's proxy configuration: `rotate` (the next one for every request) or
   `failover` (the first that works; the next one when it dies — a mobile proxy's HTTP and SOCKS5 doors).
   `off` — straight to the sites, only when crawl.proxy_fallback = direct (or a person said so).
-- `open_proxies` — the check before a crawl or `spider fetch`: a dead proxy is never bypassed silently.
+- `open_proxies` — the check before a crawl or `spider fetch`: a dead proxy is never bypassed silently. Each address:
+  a TCP connection to the proxy itself (crawl.proxy_connect_timeout_s), then `proxy_fails` — the same request
+  through the proxy and straight to the site at once: only a proxy that fails where the site answers is blamed.
+  All addresses dead and change-IP links set: one new IP, then the check again.
+- `Breaker` — crawl.proxy_max_failures requests through the proxy in a row with no answer (a proxy failure or a
+  timeout) during a run: one `proxy_fails` check says whose they were.
 - `IpChanger` — crawl.proxy_change_ip_urls: when the site blocks (crawl.proxy_change_ip_on: 403, 429…), one
   request to the provider's links (tried in turn) gets the modem a new IP, and the blocked requests ask again.
 
@@ -15,11 +20,13 @@ SPIDER_PROXY_API_KEY / SPIDER_PROXY_KEY_API_KEY on a server without a keychain).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from collections.abc import Callable
 from datetime import timedelta
+from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from crawlee import Request
@@ -38,15 +45,22 @@ KEY_CREDENTIAL = "proxy_key"
 PROXY_AUTH_REQUIRED = 407
 UNPRODUCTIVE_CHANGES = 3  # IP changes in a row the site answered only with blocks: it blocks every IP, stop changing
 _ONLINE_POLL_S = 2.0
+CHECK_TIMEOUT_S = 10.0  # the check's requests wait at most this long, or crawl.timeout_s when it is shorter
 
 
-def _filled(urls: list[str], placeholder: str, credential: str) -> list[str]:
+def _secret(urls: list[str], placeholder: str, credential: str) -> str | None:
+    """The secret `placeholder` stands for in `urls`; None — they have no placeholder."""
     if not any(placeholder in url for url in urls):
-        return list(urls)
+        return None
     secret = secrets.password(credential)
     if secret is None:
         raise AuthRequired(credential)
-    return [url.replace(placeholder, secret) for url in urls]
+    return secret
+
+
+def _filled(urls: list[str], placeholder: str, credential: str) -> list[str]:
+    secret = _secret(urls, placeholder, credential)
+    return [url.replace(placeholder, secret) for url in urls] if secret else list(urls)
 
 
 def proxy_urls(settings: CrawlSettings) -> list[str]:
@@ -122,11 +136,42 @@ class Proxies(ProxyConfiguration):
         self.current += 1
         return True
 
+    def replaced(self, url: str) -> bool:
+        """A request sent through `url` before that proxy was dropped: ask it again, the new way."""
+        return self.off or (self.mode == "failover" and url != self.active)
+
+    def go_direct(self, problem: str) -> None:
+        log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", problem)
+        self.off = True
+
+    def drop(self, problem: str, fallback: str) -> bool:
+        """The active address is dead: True — going on (failover: the next address; none left and
+        crawl.proxy_fallback = direct: without the proxy); False — stop."""
+        if self.advance():
+            log.warning("the proxy doesn't work (%s): going through %s", problem, self.address)
+            return True
+        if fallback == "direct":
+            self.go_direct(problem)
+            return True
+        return False
+
 
 def proxy_failure(error: BaseException) -> bool:
     """The proxy failed, not the site: through a proxy every connection goes to the proxy, so a refused or
     unresolved one is its, as is its own refusal (Crawlee's ProxyError: 407, a failed tunnel)."""
     return isinstance(error, ProxyError) or type(error).__name__ == "ConnectError" or "proxy" in str(error).lower()
+
+
+def no_answer(error: BaseException) -> bool:
+    """A request through a proxy that got no answer: the proxy's failure, or a timeout (the proxy or the site — the
+    `Breaker` finds out whose)."""
+    return proxy_failure(error) or isinstance(error, TimeoutError)
+
+
+def check_proxy_answer(status: int) -> None:
+    """An http:// URL goes through the proxy as a plain request: the proxy's refusal comes back as a response."""
+    if status == PROXY_AUTH_REQUIRED:
+        raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
 
 
 def why(error: BaseException) -> str:
@@ -145,52 +190,155 @@ def _robots_url(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}/robots.txt"
 
 
-async def _probe(settings: CrawlSettings, client: HttpClient, target: str, info: ProxyInfo | None) -> None:
-    """One request through a proxy; raises what a proxy failure raises (a 407 answer included)."""
+async def _probe(settings: CrawlSettings, client: HttpClient, target: str, info: ProxyInfo | None,
+                 timeout_s: float | None = None) -> None:  # fmt: skip
+    """One request (through a proxy with `info`); raises what a proxy failure raises (a 407 answer included)."""
     response = await client.send_request(target, headers=_headers(settings) or None, proxy_info=info,
-                                         timeout=timedelta(seconds=settings.timeout_s))  # fmt: skip
-    if response.status_code == PROXY_AUTH_REQUIRED:
-        raise ProxyError(f"the proxy answered {PROXY_AUTH_REQUIRED}: its password is wrong or it isn't paid")
+                                         timeout=timedelta(seconds=timeout_s or settings.timeout_s))  # fmt: skip
+    if info is not None:
+        check_proxy_answer(response.status_code)
+
+
+async def _connects(proxy: str, timeout_s: float) -> str | None:
+    """A TCP connection to the proxy itself (host:port), as impit has no connect timeout; None — it opened."""
+    info = proxy_info(proxy)
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(info.hostname, info.port), timeout_s)
+    except TimeoutError:
+        return f"no TCP connection in {timeout_s:g} s"
+    except OSError as exc:
+        return f"no TCP connection: {exc.strerror or exc}"
+    writer.close()
+    with contextlib.suppress(OSError):
+        await writer.wait_closed()
+    return None
+
+
+async def proxy_fails(settings: CrawlSettings, client: HttpClient, url: str, proxy: str) -> str | None:
+    """The check of one proxy address on `url`'s site; why it failed, None — it works.
+
+    A TCP connection to the proxy first (crawl.proxy_connect_timeout_s). Then robots.txt of the site through the
+    proxy and straight, at once: no answer through the proxy while the site answers straight — the proxy failed;
+    its 407 (wrong password, not paid) — too. No answer either way (a refused tunnel included: a proxy can't reach
+    a site that is down) — the site's failure, not the proxy's. The straight answer only checks: it is no page data.
+    """
+    problem = await _connects(proxy, settings.proxy_connect_timeout_s)
+    if problem:
+        return problem
+    target, timeout_s = _robots_url(url), min(settings.timeout_s, CHECK_TIMEOUT_S)
+    through, straight = await asyncio.gather(
+        _probe(settings, client, target, proxy_info(proxy), timeout_s),
+        _probe(settings, client, target, None, timeout_s),
+        return_exceptions=True,
+    )
+    if through is None or not (straight is None or str(PROXY_AUTH_REQUIRED) in why(through)):
+        return None
+    return f"no answer in {timeout_s:g} s, the site answers straight" if isinstance(through, TimeoutError) \
+        else why(through)  # fmt: skip
+
+
+async def _dead_addresses(settings: CrawlSettings, client: HttpClient, proxies: Proxies, url: str) -> list[str]:
+    """Each address checked (`proxy_fails`); the problems that leave the proxies dead, [] — they work.
+
+    rotate: every address must work. failover: the first that works becomes the active one.
+    """
+    problems: list[str] = []
+    for index, proxy in enumerate(proxies.urls):
+        problem = await proxy_fails(settings, client, url, proxy)
+        if problem:
+            problems.append(f"{_address(proxy)} — {problem}")
+            if settings.proxy_mode == "rotate":
+                return problems  # every address is used: one dead is enough
+            continue  # failover: the next one
+        if settings.proxy_mode == "failover":
+            proxies.current = index
+            if problems:
+                log.warning("the proxy doesn't work (%s): going through %s", "; ".join(problems), proxies.address)
+            return []
+    return problems
 
 
 async def open_proxies(
     settings: CrawlSettings, client: HttpClient, url: str, ask: Callable[[str], bool] | None = None
 ) -> tuple[Proxies | None, str | None]:
-    """The proxies after a check request through each (robots.txt of `url`'s site); (proxies, why they're off).
+    """The proxies after the check of each address on `url`'s site (`proxy_fails`); (proxies, why they're off).
 
-    rotate: every address must work. failover: the first that works is used. A dead proxy:
-    crawl.proxy_fallback = direct, or `ask` (a person in a terminal) says yes — go without it; otherwise
-    ProxyUnavailable. Other failures (a timeout, the site's TLS) are the site's: the crawl records them.
+    rotate: every address must work. failover: the first that works is used. All dead and
+    crawl.proxy_change_ip_urls set: one new IP, then the check again. Still dead: crawl.proxy_fallback = direct, or
+    `ask` (a person in a terminal) says yes — go without it; otherwise ProxyUnavailable.
     """
     urls = proxy_urls(settings)
     if not urls:
         return None, None
     proxies = Proxies(urls, settings.proxy_mode)
-    target = _robots_url(url)
-    problems: list[str] = []
-    for index, proxy in enumerate(urls):
-        try:
-            await _probe(settings, client, target, await proxies.info(proxy))
-        except Exception as exc:
-            if proxy_failure(exc):
-                problems.append(f"{_address(proxy)} — {why(exc)}")
-                if settings.proxy_mode == "rotate":
-                    break  # every address is used: one dead is enough
-                continue  # failover: the next one
-            # any other failure is the site's: this proxy works
-        if settings.proxy_mode == "failover":
-            proxies.current = index
-            if problems:
-                log.warning("the proxy doesn't work (%s): going through %s", "; ".join(problems), proxies.address)
-            return proxies, None
+    problems = await _dead_addresses(settings, client, proxies, url)
+    if problems and settings.proxy_change_ip_urls:
+        refused = await IpChanger(settings, client, proxies, url).renew()
+        problems = await _dead_addresses(settings, client, proxies, url)
+        if problems and refused:
+            problems.append(f"change IP — {refused}")
     if not problems:
         return proxies, None
     problem = "; ".join(problems)
     if settings.proxy_fallback == "direct" or (ask is not None and ask(problem)):
-        log.warning("the proxy doesn't work (%s): going on without it, the site sees this IP", problem)
-        proxies.off = True
+        proxies.go_direct(problem)
         return proxies, problem
     raise ProxyUnavailable(problem)
+
+
+class Breaker:
+    """crawl.proxy_max_failures requests through the proxy in a row with no answer (`no_answer`), then one check
+    (`proxy_fails` on the last one's site) says whose they were. An answer through the proxy resets the count —
+    only one sent after the last miss: an answer that was on its way before says nothing of the proxy now.
+
+    The caller may `hold` items (pages it doesn't store yet): they come back with the verdict — to store when the
+    proxy works, to ask again when it is dead.
+    """
+
+    def __init__(self, settings: CrawlSettings, client: HttpClient) -> None:
+        self.settings, self.client = settings, client
+        self.misses = 0
+        self.held: list[Any] = []
+        self._last_miss = float("-inf")
+        self._checking = False
+
+    def hold(self, item: Any) -> None:
+        self.held.append(item)
+
+    def answered(self, sent: float) -> list[Any]:
+        """An answer through the proxy to a request sent at `sent` (time.monotonic): the held items to store."""
+        if sent <= self._last_miss:
+            return []
+        self.misses = 0
+        return self._release()
+
+    def release(self) -> list[Any]:
+        """The run's end: what is held, to store — not enough misses in a row to blame the proxy."""
+        return self._release()
+
+    async def missed(self, url: str, proxy: str) -> tuple[str | None, list[Any]]:
+        """A request to `url` through `proxy` got no answer.
+
+        (why the proxy is dead, the held items to ask again) or (None, the held items to store — maybe none yet).
+        """
+        self.misses += 1
+        self._last_miss = time.monotonic()
+        if self.misses < self.settings.proxy_max_failures or self._checking:
+            return None, []
+        self._checking = True
+        try:
+            problem = await proxy_fails(self.settings, self.client, url, proxy)
+        finally:
+            self._checking = False
+        misses, self.misses = self.misses, 0
+        if problem is None:
+            log.info("%d requests through the proxy without an answer, but the site fails straight too", misses)
+            return None, self._release()
+        return f"{_address(proxy)}: {misses} proxy errors in a row, then the check: {problem}", self._release()
+
+    def _release(self) -> list[Any]:
+        items, self.held = self.held, []
+        return items
 
 
 def check_render_proxy(settings: CrawlSettings) -> None:
@@ -217,6 +365,7 @@ class IpChanger:
     def __init__(self, settings: CrawlSettings, client: HttpClient, proxies: Proxies, site_url: str) -> None:
         self.settings, self.client, self.proxies = settings, client, proxies
         self.links = change_ip_urls(settings)
+        self._key = _secret(settings.proxy_change_ip_urls, "{key}", KEY_CREDENTIAL)
         self.block = set(settings.proxy_change_ip_on)
         self.target = _robots_url(site_url)
         self.generation = self.changes = 0
@@ -255,7 +404,7 @@ class IpChanger:
                 await asyncio.sleep(
                     max(0.0, self._last + self.settings.proxy_change_ip_min_interval_s - time.monotonic())
                 )
-                new_ip = await self._ask_provider()
+                new_ip = await self._ask_provider([])
                 self._last = time.monotonic()
                 if new_ip is None:
                     return False  # no link agreed: this answer stays, the next block tries again
@@ -270,35 +419,51 @@ class IpChanger:
             log.warning("the site blocks: new proxy IP %s (change %d)", new_ip or "?", self.changes)
             return True
 
+    async def renew(self) -> str | None:
+        """One new IP for a dead proxy, outside the site's blocks, and the wait until it answers; None — the provider
+        agreed, else its refusals (the key scrubbed)."""
+        refusals: list[str] = []
+        if await self._ask_provider(refusals) is None:
+            return "; ".join(refusals)
+        await self.client.cleanup()
+        await self._wait_online()
+        return None
+
     def _give_up(self, reason: str) -> bool:
         self.gave_up = reason
         log.warning("stopped changing the proxy IP (%s): blocked answers are stored as they are", reason)
         return False
 
-    async def _ask_provider(self) -> str | None:
+    async def _ask_provider(self, refusals: list[str]) -> str | None:
         """Each change-IP link in turn until one agrees; the new IP ("" — the provider didn't say), None — none did.
 
-        The link goes to the provider straight, not through the proxy: it is its API, not the site.
+        The link goes to the provider straight, not through the proxy: it is its API, not the site. Why each link
+        refused goes to the log and to `refusals`, the key scrubbed: a provider may repeat the link in its answer.
         """
         for link in self.links:
             try:
                 response = await self.client.send_request(link, timeout=timedelta(seconds=self.settings.timeout_s))
                 body = await response.read()
             except Exception as exc:
-                log.warning("change-IP link %s failed: %s", urlsplit(link).netloc, why(exc))
+                self._refused(refusals, link, f"failed: {why(exc)}")
                 continue
             if not 200 <= response.status_code < 300:
-                log.warning("change-IP link %s answered %d", urlsplit(link).netloc, response.status_code)
+                self._refused(refusals, link, f"answered {response.status_code}: {body.decode(errors='replace')}")
                 continue
             try:
                 data = json.loads(body)
             except ValueError:
                 return ""  # a plain-text "OK"
             if isinstance(data, dict) and str(data.get("status", "ok")).lower() not in ("ok", "true", "success"):
-                log.warning("change-IP link %s refused: %s", urlsplit(link).netloc, str(data)[:200])
+                self._refused(refusals, link, f"refused: {data}")
                 continue
             return str(data.get("new_ip") or "") if isinstance(data, dict) else ""
         return None
+
+    def _refused(self, refusals: list[str], link: str, reason: str) -> None:
+        text = f"{urlsplit(link).netloc} {reason.replace(self._key, '{key}') if self._key else reason}"[:300]
+        log.warning("change-IP link %s", text)
+        refusals.append(text)
 
     async def _wait_online(self) -> None:
         """Until the proxy answers again (the modem reconnects), at most crawl.proxy_change_ip_wait_s."""

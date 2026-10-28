@@ -2,7 +2,8 @@
 
 For other tools (`spider fetch`, `rb_spider.fetch`), so none of them needs its own HTTP client,
 proxy handling or browser: this reuses the crawl's — impit with a browser fingerprint, proxies
-(password from the keychain, checked before the first URL fetched, crawl.proxy_fallback), User-Agent presets, JS
+(password from the keychain, checked before the first URL fetched and again after crawl.proxy_max_failures URLs in a
+row without an answer through them, crawl.proxy_fallback), User-Agent presets, JS
 rendering that finds an installed browser, and `extract.parse_page` for the SEO data. Nothing is written to the crawl
 tables; results are yielded one by one, in input order, with at most `concurrency` requests in flight, so a list of
 any length runs in flat memory. robots.txt is not consulted: the caller named these URLs, the way `curl` would fetch
@@ -27,14 +28,14 @@ from typing import TYPE_CHECKING
 
 from . import fetch_store
 from .encoding import to_utf8
-from .errors import InvalidArguments
+from .errors import InvalidArguments, ProxyUnavailable
 from .extract import normalize_url, parse_page, visible_text
 from .markdown import html_to_markdown
 from .settings import CrawlSettings
 from .storage import url_keys
 
 if TYPE_CHECKING:
-    from .proxy import IpChanger, Proxies
+    from .proxy import Breaker, IpChanger, Proxies
     from .render import Renderer
 
 MAX_REDIRECTS = 10
@@ -179,14 +180,17 @@ class Fetcher:
         self.timeout = timedelta(seconds=settings.timeout_s)
         self.renderer: Renderer | None = None
         self.changer: IpChanger | None = None
+        self.breaker: Breaker | None = None  # crawl.proxy_max_failures: set by `open` with the proxies
+        self.stopped: ProxyUnavailable | None = None  # the proxy died mid-run, crawl.proxy_fallback = stop
         self.pages = pages  # the page storage that keeps what this fetches
 
     async def open(self, first_url: str, ask: Callable[[str], bool] | None) -> None:
         """Check the proxies (crawl.proxy_fallback, `ask`) and, with `render`, set the browser up to use them."""
-        from .proxy import ip_changer, open_proxies
+        from .proxy import Breaker, ip_changer, open_proxies
 
         self.proxies, _ = await open_proxies(self.settings, self.client, first_url, ask)
         self.changer = ip_changer(self.settings, self.client, self.proxies, first_url)
+        self.breaker = Breaker(self.settings, self.client) if self.proxies else None
         from .fingerprint import prepare
 
         self.fingerprint = await prepare(self.settings, self.fingerprint, self.client,
@@ -223,6 +227,8 @@ class Fetcher:
                 result.error = f"more than {MAX_REDIRECTS} redirects"
                 result.elapsed_ms = round((time.monotonic() - started) * 1000)
                 return result
+        except ProxyUnavailable:
+            raise
         except Exception as exc:  # no response: DNS, refused, timeout, TLS — data, not a failed run
             result.error = f"{type(exc).__name__}: {exc}"[:500]
             result.elapsed_ms = round((time.monotonic() - started) * 1000)
@@ -232,20 +238,52 @@ class Fetcher:
         return result
 
     async def _send(self, url: str):
-        """One request, through the proxy; a blocked answer (crawl.proxy_change_ip_on) gets a new IP and asks again."""
+        """One request, through the proxy; a blocked answer (crawl.proxy_change_ip_on) gets a new IP and asks again,
+        and so does one without an answer after the proxy was found dead and replaced (`_proxy_missed`)."""
+        from .proxy import check_proxy_answer, no_answer
+
         while True:
+            if self.stopped:
+                raise self.stopped
             if self.changer:
                 await self.changer.idle()
             generation = self.changer.generation if self.changer else 0
             proxy = await self.proxies.new_proxy_info(None, None, None) if self.proxies else None
-            response = await self.client.send_request(url, headers=self.headers or None, proxy_info=proxy,
-                                                      timeout=self.timeout)  # fmt: skip
+            sent = time.monotonic()
+            try:
+                response = await self.client.send_request(url, headers=self.headers or None, proxy_info=proxy,
+                                                          timeout=self.timeout)  # fmt: skip
+                if proxy:
+                    check_proxy_answer(response.status_code)
+            except Exception as exc:
+                if proxy and no_answer(exc) and await self._proxy_missed(url, proxy.url):
+                    continue
+                raise
+            if proxy and self.breaker:
+                self.breaker.answered(sent)
             if not (self.changer and proxy and self.changer.blocked(response.status_code)):
                 if self.changer:
                     self.changer.answered(generation)
                 return response
             if not await self.changer.change(generation):
                 return response
+
+    async def _proxy_missed(self, url: str, proxy: str) -> bool:
+        """`url` got no answer through `proxy`: True — the proxy was found dead and replaced (the next address, or
+        none: crawl.proxy_fallback = direct), ask again; False — the answer is `url`'s error. Dead and
+        crawl.proxy_fallback = stop: ProxyUnavailable, for this URL and every later one."""
+        assert self.proxies and self.breaker  # noqa: S101 — a request went through a proxy
+        if self.proxies.replaced(proxy):
+            return True  # sent before that proxy was dropped
+        dead, _ = await self.breaker.missed(url, proxy)
+        if dead is None:
+            return False
+        if not self.proxies.drop(dead, self.settings.proxy_fallback):
+            self.stopped = ProxyUnavailable(dead)
+            raise self.stopped
+        if self.renderer is not None:
+            await self.renderer.use_proxy(self.proxies.active)
+        return True
 
     async def _read(self, result: FetchResult, url: str, status: int, headers: dict, body: bytes) -> None:
         result.final_url, result.status = url, status

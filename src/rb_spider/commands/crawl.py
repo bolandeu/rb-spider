@@ -1,3 +1,5 @@
+"""`spider crawl`: a crawl of a site or of a list of URLs into the crawl database (core/crawl.py), here or detached."""
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -116,13 +118,15 @@ def crawl(
     `spider crawls resume`. Долгий обход — в фоне: `--detach`, прогресс — `spider status`.
 
     Прокси (`crawl.proxy_urls`, удобно — в профиле) несёт весь трафик к сайту:
-    страницы, robots.txt, sitemap, браузер. Перед стартом он проверяется запросом
-    к robots.txt. Не работает (не оплачен, неверный пароль, модем выключен) — по
-    ключу `crawl.proxy_fallback`: `stop` (по умолчанию) — обход остановлен, код 5
-    `PROXY_UNAVAILABLE`, продолжить — `spider crawls resume`; в терминале spider
-    сначала спросит, идти ли без прокси. `direct` — идти без прокси. То же посреди
-    обхода после `crawl.proxy_max_failures` ошибок прокси подряд: упавшие из-за
-    него URL не записываются, а запрашиваются снова.
+    страницы, robots.txt, sitemap, браузер. Перед стартом каждый адрес
+    проверяется за секунды: TCP-соединение с прокси, затем robots.txt через прокси
+    и напрямую. Не работает (не оплачен, неверный пароль, модем выключен), а сайт
+    напрямую отвечает — по ключу `crawl.proxy_fallback`: `stop` (по умолчанию) —
+    обход остановлен, код 5 `PROXY_UNAVAILABLE`, продолжить — `spider crawls resume`;
+    в терминале spider сначала спросит, идти ли без прокси. `direct` — идти без
+    прокси. Посреди обхода после `crawl.proxy_max_failures` запросов подряд без
+    ответа через прокси — та же проверка: прокси умер — то же; упавшие из-за него
+    URL не записываются, а запрашиваются снова.
     Example: spider crawl https://example.com/ --profile mobile-proxy   # свой профиль с crawl.proxy_urls
 
     Человеку — прогресс в stderr каждые 5 с и итог. JSON:
