@@ -2,6 +2,7 @@ schema = 1
 mode = "fast"
 prefix = "SPIDER"
 name = "spider"
+worker = "pi"
 checks = ["python3 scripts/check_command_docstrings.py"]
 heavy = ["rb-release check"]
 
@@ -13,6 +14,7 @@ parallel = 4
 exclude = ["src/rb_spider/core/issues.py", "src/rb_spider/core/settings.py", "src/rb_spider/core/crawl.py"]
 
 [review]
+worker = "pi-glm"  # another model than the author (the Human, 6.11)
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
 
 [publish]
@@ -42,3 +44,7 @@ cancelled = "Cancelled"
 
 [daemon]
 enabled = true
+
+[workers.pi-glm]  # the reviewer: kind pi, model from [model_policy.pi-glm]
+kind = "pi"
+args = []
