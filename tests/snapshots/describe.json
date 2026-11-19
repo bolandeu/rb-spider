@@ -3,7 +3,7 @@
   "info": {
     "title": "spider",
     "version": "<version>",
-    "summary": "SEO-краулер для технического аудита сайтов — аналог Screaming Frog SEO Spider"
+    "summary": "SEO crawler for technical site audits: a Screaming Frog alike."
   },
   "command": {
     "name": "spider",

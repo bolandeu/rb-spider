@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Roman Bolandau" }]
 requires-python = ">=3.14"
 dependencies = [
+    "rb-credentials>=0.3,<1",
     "typer>=0.27,<0.29",
     "rich>=13.7",
     "pydantic>=2.6",
@@ -75,6 +76,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # only the packages named in [tool.uv.sources] are looked up there. Against an
 # unreleased package locally: `uv pip install -e ../<package>`, uncommitted.
 [tool.uv.sources]
+rb-credentials = { index = "gitea" }
 rb-sitemap-xml = { index = "gitea" }
 rb-google-search-console = { index = "gitea" }
 rb-keys = { index = "gitea" }

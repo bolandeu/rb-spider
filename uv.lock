@@ -1811,6 +1811,18 @@ wheels = [
 ]
 
 [[package]]
+name = "rb-credentials"
+version = "0.3.0"
+source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.3.0/rb_credentials-0.3.0.tar.gz", hash = "sha256:a2d72d468342b8e9efa207e58553fa1ab6a2b6434a38f6900b7306878bcf6b39" }
+wheels = [
+    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.3.0/rb_credentials-0.3.0-py3-none-any.whl", hash = "sha256:7e02438d9f1b289dd3f6be4ea18ebfaacfe63f1154be14319b99f48e848dda12" },
+]
+
+[[package]]
 name = "rb-google-oauth"
 version = "0.2.0"
 source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
@@ -1892,6 +1904,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
+    { name = "rb-credentials" },
     { name = "rb-keys" },
     { name = "rich" },
     { name = "selectolax" },
@@ -1963,6 +1976,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
+    { name = "rb-credentials", specifier = ">=0.3,<1", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
     { name = "rb-google-oauth", marker = "extra == 'gsc'", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
     { name = "rb-google-search-console", marker = "extra == 'gsc'", specifier = ">=0.5,<0.6", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
     { name = "rb-keys", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
