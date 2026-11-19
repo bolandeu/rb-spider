@@ -57,7 +57,7 @@ uv tool install "rb-spider[render]" --index https://homeserver.tailee01ab.ts.net
 
 ```bash
 uv sync
-uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" rb-release check   # гейт; тот же шаг, что в .gitea/workflows/ci.yml
+uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" gate check   # гейт; тот же шаг, что в .gitea/workflows/ci.yml
 ```
 
 Правила разработки — в [AGENTS.md](AGENTS.md).

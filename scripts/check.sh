@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Everything CI runs, locally: lock, lint, format, types, tests (with the JS-rendering tests).
-# Other environments than the gate's (`rb-release check`): Linux, PostgreSQL.
+# Other environments than the gate's (`gate check`): Linux, PostgreSQL.
 #   --linux  also the tests on Linux (Docker), Python 3.14.
 #            JS rendering is left to the macOS run: a browser in the container costs hundreds of MB a run.
 #   --pg     also the tests against PostgreSQL: scripts/pg_test.sh (a throwaway postgres:16 container, Docker).
