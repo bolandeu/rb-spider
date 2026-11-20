@@ -72,10 +72,10 @@ fallback-version = "0.0.0"
 # Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
-# Our packages come only from the Gitea registry: a version range in
 # `dependencies` and a source line per package, never a git tag. explicit = true:
 # only the packages named in [tool.uv.sources] are looked up there. Against an
 # unreleased package locally: `uv pip install -e ../<package>`, uncommitted.
+# Siblings resolve from disk: a version range in `dependencies` plus a `path` source, never an index.
 [tool.uv.sources]
 rb-credentials = { path = "../rb-credentials", editable = true }
 rb-sitemap-xml = { path = "../rb-sitemap-xml", editable = true }
