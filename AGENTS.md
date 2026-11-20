@@ -1,7 +1,5 @@
 # AGENTS.md
 
-- Decisions and why: `docs/adr/` (format: `docs/adr/README.md`).
-- Правила разработки spider (стенд, база, TDD, документация команд, соседние пакеты): `docs/dev.md`; решения — `docs/spec.md`, чеклист функций — `docs/features.md`.
 - The package Standard: https://github.com/bolandeu/python-package-gate/blob/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
 - The gate before a commit: `gate check`, on this machine (Standard, CI). It is the only gate: no workflow runs it.
 
