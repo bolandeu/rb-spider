@@ -77,11 +77,11 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # only the packages named in [tool.uv.sources] are looked up there. Against an
 # unreleased package locally: `uv pip install -e ../<package>`, uncommitted.
 [tool.uv.sources]
-rb-credentials = { path = "../rb-credentials" }
-rb-sitemap-xml = { path = "../rb-sitemap-xml" }
-rb-google-search-console = { path = "../rb-google-search-console" }
-rb-keys = { path = "../rb-keys" }
-rb-google-oauth = { path = "../rb-google-oauth" }  # a dependency of rb-google-search-console
+rb-credentials = { path = "../rb-credentials", editable = true }
+rb-sitemap-xml = { path = "../rb-sitemap-xml", editable = true }
+rb-google-search-console = { path = "../rb-google-search-console", editable = true }
+rb-keys = { path = "../rb-keys", editable = true }
+rb-google-oauth = { path = "../rb-google-oauth", editable = true }  # a dependency of rb-google-search-console
 
 [tool.hatch.build.targets.sdist]
 # What a release must not carry: the agent's own files, the forge configs and the dev tooling. The wheel is

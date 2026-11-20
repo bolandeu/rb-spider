@@ -1594,11 +1594,11 @@ wheels = [
 
 [[package]]
 name = "pyasn1"
-version = "0.6.4"
+version = "0.6.5"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a4/9a/23310166d960def5897e91fe20e5b724601b02a22e84ba1f94232c0b7f67/pyasn1-0.6.4.tar.gz", hash = "sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81", size = 151262, upload-time = "2026-07-09T01:12:33.988Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/7e/3c0da41061a2021cac7cd524fd57092adbe5b515e8bf9005702e366802e2/pyasn1-0.6.5.tar.gz", hash = "sha256:6b11616a6bcf3a40e635f082bb232fa57b5e0dd7f517bd7ddd69ec3794508a47", size = 155152, upload-time = "2026-10-27T06:32:49.125Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/3b/6163796d69c3977d1e4287bea4a6979161cbbdd170ebb430511e8e1999ce/pyasn1-0.6.4-py3-none-any.whl", hash = "sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b", size = 84410, upload-time = "2026-07-09T01:12:32.92Z" },
+    { url = "https://files.pythonhosted.org/packages/19/1f/3eefd5c84c35cae44549ce1c7f7e58f7945b34f5a6bce07a135438522073/pyasn1-0.6.5-py3-none-any.whl", hash = "sha256:4017b0fce125096b8573b39c989fdb1a4b19cf761e683398184550fea0e66587", size = 84807, upload-time = "2026-10-27T06:32:48.045Z" },
 ]
 
 [[package]]
@@ -1812,7 +1812,7 @@ wheels = [
 
 [[package]]
 name = "rb-credentials"
-source = { directory = "../rb-credentials" }
+source = { editable = "../rb-credentials" }
 dependencies = [
     { name = "pydantic" },
 ]
@@ -1835,7 +1835,7 @@ dev = [
 
 [[package]]
 name = "rb-google-oauth"
-source = { directory = "../rb-google-oauth" }
+source = { editable = "../rb-google-oauth" }
 dependencies = [
     { name = "google-auth", extra = ["requests"] },
     { name = "keyring" },
@@ -1847,7 +1847,7 @@ dependencies = [
 requires-dist = [
     { name = "google-auth", extras = ["requests"], specifier = ">=2.30" },
     { name = "keyring", specifier = ">=25.0" },
-    { name = "rb-credentials", directory = "../rb-credentials" },
+    { name = "rb-credentials", editable = "../rb-credentials" },
     { name = "typer", specifier = ">=0.27,<0.29" },
 ]
 
@@ -1862,7 +1862,7 @@ dev = [
 
 [[package]]
 name = "rb-google-search-console"
-source = { directory = "../rb-google-search-console" }
+source = { editable = "../rb-google-search-console" }
 dependencies = [
     { name = "httpx" },
     { name = "packaging" },
@@ -1900,7 +1900,7 @@ mutation = [{ name = "mutmut", specifier = ">=3.3" }]
 
 [[package]]
 name = "rb-keys"
-source = { directory = "../rb-keys" }
+source = { editable = "../rb-keys" }
 dependencies = [
     { name = "packaging" },
     { name = "platformdirs" },
@@ -1936,7 +1936,7 @@ mutation = [{ name = "mutmut", specifier = ">=3.3" }]
 
 [[package]]
 name = "rb-sitemap-xml"
-source = { directory = "../rb-sitemap-xml" }
+source = { editable = "../rb-sitemap-xml" }
 dependencies = [
     { name = "defusedxml" },
     { name = "httpx", extra = ["socks"] },
@@ -2059,11 +2059,11 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
-    { name = "rb-credentials", directory = "../rb-credentials" },
-    { name = "rb-google-oauth", marker = "extra == 'gsc'", directory = "../rb-google-oauth" },
-    { name = "rb-google-search-console", marker = "extra == 'gsc'", directory = "../rb-google-search-console" },
-    { name = "rb-keys", directory = "../rb-keys" },
-    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", directory = "../rb-sitemap-xml" },
+    { name = "rb-credentials", editable = "../rb-credentials" },
+    { name = "rb-google-oauth", marker = "extra == 'gsc'", editable = "../rb-google-oauth" },
+    { name = "rb-google-search-console", marker = "extra == 'gsc'", editable = "../rb-google-search-console" },
+    { name = "rb-keys", editable = "../rb-keys" },
+    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", editable = "../rb-sitemap-xml" },
     { name = "rich", specifier = ">=13.7" },
     { name = "selectolax", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },
@@ -2418,11 +2418,11 @@ wheels = [
 
 [[package]]
 name = "soupsieve"
-version = "2.10"
+version = "4.1.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/71/c3/1b817965ac12dc002d7c9cd7dfffdd7d4fbf9b45763ef2ffe7b86ee94670/soupsieve-2.10.tar.gz", hash = "sha256:49e9380d7d2905463583bafe285e818c7366a9ed7b3aee221c1ac79c905d8bc0", size = 124337, upload-time = "2026-09-24T02:36:35.048Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/35/bf779c1cc376bc216a2d94e3b3d9ee48347296af29bedfc6caaf96bc132f/soupsieve-4.1.2.tar.gz", hash = "sha256:c6539a2638f26991463527337e39d630e3cbb86d024f52282a510535b8a7e09f", size = 178884, upload-time = "2026-11-18T17:21:03.858Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/87/5ed59e1d0290564e2027ed066c52b059892c4637741337fc0967183c8d4d/soupsieve-2.10-py3-none-any.whl", hash = "sha256:8596eb8967d744174820280fa62b4542a2e955bfaccca73ed8a13c6eb8e9b502", size = 38019, upload-time = "2026-09-24T02:36:33.709Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/33/f5082b3c480db024453077592057200955aed2a376327b8921d553404ca7/soupsieve-4.1.2-py3-none-any.whl", hash = "sha256:96b4115212a3abee1f572d62da706cca090b088cb5effa278db5702122e63a2c", size = 59295, upload-time = "2026-11-18T17:21:02.593Z" },
 ]
 
 [[package]]
