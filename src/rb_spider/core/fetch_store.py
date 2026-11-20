@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import secrets
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -59,9 +60,28 @@ def now() -> datetime:
 
 
 def cache_dir() -> Path:
+    """Where stored pages live: `SPIDER_CACHE_DIR` when it is writable, else the user cache dir.
+
+    A container's `/data` arrives in the environment of a laptop too (`doppler run` shims export the production
+    container's settings), and writing there fails with a read-only filesystem — so an unwritable directory is not an
+    error, it is a reason to fall back to where this machine keeps its cache.
+    """
     if path := os.environ.get(CACHE_DIR_ENV):
-        return Path(path).expanduser()
+        wanted = Path(path).expanduser()
+        if _writable(wanted):
+            return wanted
+        log.debug("%s=%s is not writable here; using the user cache dir", CACHE_DIR_ENV, wanted)
     return platformdirs.user_cache_path(TOOL, appauthor=False) / "fetch"
+
+
+def _writable(path: Path) -> bool:
+    """Whether this directory can be created and written to (a read-only mount cannot)."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryFile(dir=path):
+            return True
+    except OSError:
+        return False
 
 
 def _env_number(name: str) -> float | None:

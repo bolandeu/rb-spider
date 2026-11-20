@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -265,3 +266,26 @@ def test_cleanup_deletes_files_without_a_row_older_than_a_day(base_url: str, clo
     assert not orphans["old"].exists()
     assert orphans["young"].exists()  # it may be a save in progress
     assert stored["cache_key"] in _files()
+
+
+def test_an_unwritable_cache_dir_falls_back_to_the_user_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`doppler run` shims export a container's `/data`; on a laptop that mount is read-only, and a fetch must still work."""
+    from rb_spider.core import fetch_store
+
+    read_only = Path(tempfile.mkdtemp()) / "data"
+    read_only.mkdir()
+    read_only.chmod(0o500)
+    monkeypatch.setenv(fetch_store.CACHE_DIR_ENV, str(read_only / "cache"))
+    fallback = Path(tempfile.mkdtemp())
+    monkeypatch.setattr(fetch_store.platformdirs, "user_cache_path", lambda *_, **__: fallback)
+
+    chosen = fetch_store.cache_dir()
+    assert chosen != read_only / "cache"
+    assert chosen.name == "fetch" and str(chosen).startswith(str(fallback))
+
+
+def test_a_writable_cache_dir_is_used_as_is(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from rb_spider.core import fetch_store
+
+    monkeypatch.setenv(fetch_store.CACHE_DIR_ENV, str(tmp_path / "cache"))
+    assert fetch_store.cache_dir() == tmp_path / "cache"

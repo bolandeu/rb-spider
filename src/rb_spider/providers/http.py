@@ -63,6 +63,7 @@ class HttpProvider(Provider):
             timeout=self.timeout,
             headers={"User-Agent": user_agent, **self.auth_headers()},
             transport=self.transport,
+            trust_env=False,  # no proxy unless the config asks for one: HTTP(S)_PROXY must not route spider's own calls
         )
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
