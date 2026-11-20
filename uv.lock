@@ -1812,33 +1812,57 @@ wheels = [
 
 [[package]]
 name = "rb-credentials"
-version = "0.7.1"
-source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+source = { directory = "../rb-credentials" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.7.1/rb_credentials-0.7.1.tar.gz", hash = "sha256:8fc5593f2fcc1bed99e6f55e894c9f27470baa2de7a9ee36becded18debfb63d" }
-wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.7.1/rb_credentials-0.7.1-py3-none-any.whl", hash = "sha256:6bcfffe9f6d6f3a7cb848ef9d403d91b432a95ffd106d39f7c857b4b677227d2" },
+
+[package.metadata]
+requires-dist = [
+    { name = "keyring", marker = "extra == 'keyring'", specifier = ">=25.0" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+]
+provides-extras = ["keyring"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "keyring", specifier = ">=25.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "ty" },
 ]
 
 [[package]]
 name = "rb-google-oauth"
-version = "0.2.0"
-source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+source = { directory = "../rb-google-oauth" }
 dependencies = [
     { name = "google-auth", extra = ["requests"] },
     { name = "keyring" },
+    { name = "rb-credentials" },
     { name = "typer" },
 ]
-wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-google-oauth/0.2.0/rb_google_oauth-0.2.0-py3-none-any.whl", hash = "sha256:6b53ae61890b8832e0078c634ceebda5b237aa0a50494fedc5a9867870ba9e5a" },
+
+[package.metadata]
+requires-dist = [
+    { name = "google-auth", extras = ["requests"], specifier = ">=2.30" },
+    { name = "keyring", specifier = ">=25.0" },
+    { name = "rb-credentials", directory = "../rb-credentials" },
+    { name = "typer", specifier = ">=0.27,<0.29" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "syrupy", specifier = ">=4.8" },
+    { name = "ty", specifier = ">=0.0.80" },
 ]
 
 [[package]]
 name = "rb-google-search-console"
-version = "0.5.0"
-source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+source = { directory = "../rb-google-search-console" }
 dependencies = [
     { name = "httpx" },
     { name = "packaging" },
@@ -1849,14 +1873,34 @@ dependencies = [
     { name = "tomli-w" },
     { name = "typer" },
 ]
-wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-google-search-console/0.5.0/rb_google_search_console-0.5.0-py3-none-any.whl", hash = "sha256:fe783eb9e77c6f7d9cea879bc819a2c4bc34a4c2e3ad5954cfa4da02d082b79a" },
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "packaging", specifier = ">=24.0" },
+    { name = "platformdirs", specifier = ">=4.2" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "rb-google-oauth", specifier = ">=0.2,<0.4" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "tomli-w", specifier = ">=1.0" },
+    { name = "typer", specifier = ">=0.27,<0.29" },
 ]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "syrupy", specifier = ">=4.8" },
+    { name = "ty", specifier = ">=0.0.80" },
+]
+mutation = [{ name = "mutmut", specifier = ">=3.3" }]
 
 [[package]]
 name = "rb-keys"
-version = "0.2.0"
-source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+source = { directory = "../rb-keys" }
 dependencies = [
     { name = "packaging" },
     { name = "platformdirs" },
@@ -1866,14 +1910,33 @@ dependencies = [
     { name = "typer" },
     { name = "w3lib" },
 ]
-wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-keys/0.2.0/rb_keys-0.2.0-py3-none-any.whl", hash = "sha256:f5570b1305f3a5f78bc48b47644cad4d6648631eb22d9c8fb553c12a16313cf4" },
+
+[package.metadata]
+requires-dist = [
+    { name = "packaging", specifier = ">=24.0" },
+    { name = "platformdirs", specifier = ">=4.2" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "tomli-w", specifier = ">=1.0" },
+    { name = "typer", specifier = ">=0.27,<0.29" },
+    { name = "w3lib", specifier = ">=2.5.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "syrupy", specifier = ">=4.8" },
+    { name = "ty", specifier = ">=0.0.80" },
+]
+mutation = [{ name = "mutmut", specifier = ">=3.3" }]
 
 [[package]]
 name = "rb-sitemap-xml"
-version = "0.2.0"
-source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
+source = { directory = "../rb-sitemap-xml" }
 dependencies = [
     { name = "defusedxml" },
     { name = "httpx", extra = ["socks"] },
@@ -1885,8 +1948,28 @@ dependencies = [
     { name = "tomli-w" },
     { name = "typer" },
 ]
-wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-sitemap-xml/0.2.0/rb_sitemap_xml-0.2.0-py3-none-any.whl", hash = "sha256:c785438443725708581ae711abfcc7c2986c121ebb1c9c3db9e32d648a4a7a11" },
+
+[package.metadata]
+requires-dist = [
+    { name = "defusedxml", specifier = ">=0.7" },
+    { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
+    { name = "loguru", specifier = ">=0.7" },
+    { name = "packaging", specifier = ">=24.0" },
+    { name = "platformdirs", specifier = ">=4.2" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "tomli-w", specifier = ">=1.0" },
+    { name = "typer", specifier = ">=0.27,<0.29" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "ruff", specifier = ">=0.6" },
+    { name = "syrupy", specifier = ">=4.8" },
+    { name = "ty", specifier = ">=0.0.80" },
 ]
 
 [[package]]
@@ -1976,11 +2059,11 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.6" },
-    { name = "rb-credentials", specifier = ">=0.7.1,<1", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-google-oauth", marker = "extra == 'gsc'", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-google-search-console", marker = "extra == 'gsc'", specifier = ">=0.5,<0.6", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-keys", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
-    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", specifier = ">=0.2,<0.3", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
+    { name = "rb-credentials", directory = "../rb-credentials" },
+    { name = "rb-google-oauth", marker = "extra == 'gsc'", directory = "../rb-google-oauth" },
+    { name = "rb-google-search-console", marker = "extra == 'gsc'", directory = "../rb-google-search-console" },
+    { name = "rb-keys", directory = "../rb-keys" },
+    { name = "rb-sitemap-xml", marker = "extra == 'sitemaps'", directory = "../rb-sitemap-xml" },
     { name = "rich", specifier = ">=13.7" },
     { name = "selectolax", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },

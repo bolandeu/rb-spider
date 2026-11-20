@@ -43,11 +43,12 @@ structured = ["extruct>=0.18"]
 # Custom Extraction by XPath (`custom.extract` with kind = "xpath")
 xpath = ["lxml>=5"]
 # XML sitemaps (`sitemaps.crawl`, `spider sitemaps`): the sibling package rb-sitemap-xml
-sitemaps = ["rb-sitemap-xml>=0.2,<0.3"]
+sitemaps = ["rb-sitemap-xml>=0.2"]
 # kept for old install commands: psycopg is a core dependency now (`SPIDER_DATABASE_URL`)
 postgres = ["psycopg[binary]>=3.2"]
 # PageSpeed Insights (`lighthouse.source = "psi"`): the sibling package gsc — it holds the API key (`gsc auth login`)
-gsc = ["rb-google-search-console>=0.5,<0.6", "rb-google-oauth>=0.2,<0.3"]  # oauth: a source line only applies to a direct dependency
+gsc = ["rb-google-search-console>=0.5", "rb-google-oauth>=0.2"]  # oauth: a source line only applies to a direct dependency
+# без верхних границ: rb-* разрабатываются рядом и резолвятся с диска (path), не из индекса
 
 [project.scripts]
 spider = "rb_spider.cli:main"
@@ -76,15 +77,11 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 # only the packages named in [tool.uv.sources] are looked up there. Against an
 # unreleased package locally: `uv pip install -e ../<package>`, uncommitted.
 [tool.uv.sources]
-rb-credentials = { index = "gitea" }
-rb-sitemap-xml = { index = "gitea" }
-rb-google-search-console = { index = "gitea" }
-rb-keys = { index = "gitea" }
-rb-google-oauth = { index = "gitea" }  # a dependency of rb-google-search-console
-[[tool.uv.index]]
-name = "gitea"
-url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
-explicit = true
+rb-credentials = { path = "../rb-credentials" }
+rb-sitemap-xml = { path = "../rb-sitemap-xml" }
+rb-google-search-console = { path = "../rb-google-search-console" }
+rb-keys = { path = "../rb-keys" }
+rb-google-oauth = { path = "../rb-google-oauth" }  # a dependency of rb-google-search-console
 
 [tool.hatch.build.targets.sdist]
 # What a release must not carry: the agent's own files, the forge configs and the dev tooling. The wheel is
