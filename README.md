@@ -32,8 +32,7 @@ spider crawls prune --keep-last 5   # чистка старых обходов
 ## Установка
 
 ```bash
-uv tool install rb-spider --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple   # на любой машине
-uv tool install "rb-spider @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider.git@vX.Y.Z"   # из git-тега вместо реестра
+uv tool install "rb-spider @ git+https://github.com/bolandeu/rb-spider.git@vX.Y.Z"   # из git-тега вместо реестра
 uv tool upgrade rb-spider                                      # обновить
 spider                                                         # список команд
 ```
@@ -41,7 +40,6 @@ spider                                                         # список к
 JS-рендеринг (`spider crawl --render always`) — дополнительно, с Playwright:
 
 ```bash
-uv tool install "rb-spider[render]" --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
 ```
 
 Браузер отдельно ставить не нужно, если уже есть любой Chromium в кэше Playwright (`ms-playwright`) или Google Chrome — spider найдёт его сам; другой — `--set crawl.render_browser=<путь>`. Если нет ничего: `playwright install --only-shell chromium`.

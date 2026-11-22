@@ -14,13 +14,12 @@ prints this document.
 ## Install (if `spider --version` fails)
 
 ```bash
-uv tool install rb-spider --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
 ```
 
 From the git tag instead:
 
 ```bash
-uv tool install "rb-spider @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/spider.git@vX.Y.Z"
+uv tool install "rb-spider @ git+https://github.com/bolandeu/rb-spider.git@vX.Y.Z"
 ```
 
 Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
