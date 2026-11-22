@@ -225,3 +225,9 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 [tool.ty.src]
 # bench/ is a separate uv project (its own deps, e.g. aiohttp) — not part of the package.
 exclude = ["bench"]
+
+[tool.rb.gate]
+addresses_allow = [
+    { pattern = "http://localhost", reason = "the pattern that finds localhost links in crawled pages" },
+    { pattern = "https://localhost", reason = "the pattern that finds localhost links in crawled pages" },
+]
