@@ -5,7 +5,6 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-REGISTRY = "--index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
 DOCS = {"readme": ROOT / "README.md"}
 DOCS.update(("skill", path) for path in ROOT.glob("src/*/data/SKILL.md"))  # the package skill is an optional part
 
@@ -23,17 +22,6 @@ def test_no_jinja_tag_is_left_in_the_docs():
         assert "{{" not in text and "{%" not in text, name
 
 
-def test_gitea_repository_gets_the_registry_line_and_no_github_advice():
-    url = _repository_url()
-    if not url or url.startswith("https://github.com/"):
-        return
-    for name, text in _texts().items():
-        assert REGISTRY in text, name
-        assert f"git+{url}.git@vX.Y.Z" in text, name
-        assert "git@github.com" not in text, name
-        assert "gh auth" not in text, name
-
-
 def test_github_or_blank_repository_keeps_the_ssh_line_and_gh_advice():
     url = _repository_url()
     if url and not url.startswith("https://github.com/"):
@@ -42,4 +30,3 @@ def test_github_or_blank_repository_keeps_the_ssh_line_and_gh_advice():
     for name, text in _texts().items():
         assert ssh in text, name
         assert "gh auth setup-git" in text, name
-        assert REGISTRY not in text, name

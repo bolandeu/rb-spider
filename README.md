@@ -55,7 +55,7 @@ JS-рендеринг (`spider crawl --render always`) — дополнител�
 
 ```bash
 uv sync
-uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" gate check   # гейт; тот же шаг, что в .gitea/workflows/ci.yml
+uvx --from "git+https://github.com/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" gate check   # гейт; тот же шаг, что в the gate check before a commit
 ```
 
 Правила разработки — в [AGENTS.md](AGENTS.md).
